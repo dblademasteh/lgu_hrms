@@ -2,4 +2,6 @@ node_modules/
 dist/
 .env
 *.log
-.prisma/migrations/
+
+# NOTE: prisma/migrations/ must stay version-controlled (schema history).
+# The old ".prisma/migrations/" pattern here was a root-anchored no-op landmine - removed.
