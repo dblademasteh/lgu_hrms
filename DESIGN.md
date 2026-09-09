@@ -11,6 +11,7 @@
 3. **Cool slate palette, authoritative blue accent** — neutral chrome, one confident action color.
 4. **Accessible by construction** — WCAG 2.1 AA targets, keyboard-first, both themes verified.
 5. **One system** — every screen consumes the same tokens and component classes; page-level styling is composition, not invention.
+6. **Professional-look** - move away from generic ai generated design
 
 ---
 
@@ -59,6 +60,9 @@ Rules:
 
 Use these before writing any new CSS; extend `index.css` only when a pattern repeats ≥3×.
 
+### Icons
+All icons use `lucide-react` (MIT, tree-shakable). No custom SVGs unless the icon set is missing a concept. Icons are decorative unless paired with accessible label. Icon-only buttons require `aria-label`. Size tokens: 16px for inline text, 20px for toolbar, 24px for sidebar. Color follows text tokens: `text-muted` default, `text-ink` on hover/active, semantic on status. Do not stroke icons with hardcoded hex.
+
 ### Buttons — `.btn` + variants
 Inline-flex, gap 0.5rem, Inter 600 @ 0.875rem, radius **10px**, hairline border, padding 0.625rem × 1rem, 150ms transitions, `:active` presses down 1px.
 - `.btn-primary` — blue gradient (`color-mix` accent 88% white → accent), `--accent-ink` text; hover brightens 8%. **One per view.**
@@ -84,7 +88,7 @@ Flex, radius 8px, muted → ink on hover (ink 8% tint), 200ms ease. Active state
 Behavior (docs: *persists until explicit close*): overlay click does **not** close; Escape and the ✕/footer buttons do. Body scroll locks while open. Head = display-font title + close button; foot = right-aligned Cancel/primary.
 
 ### Toasts — `.toast-stack`, `.toast` + `.toast-success/-error/-info`, `.toast-x`
-Fixed bottom-right stack, 18–24rem cards with 3px semantic left border, `toast-in` 200ms entrance, `role="status"` + `aria-live="polite"`, 4s auto-dismiss.
+Fixed bottom-right stack, 18–24rem cards with 3px semantic left border, `toast-in` 200ms entrance, `role="status"` + `aria-live="polite"`, 4s auto-dismiss. Toast notification for all user-initiated actions: create/update/delete, API errors, validation failures, and success confirmations. Never rely on modal alone for feedback.
 
 ### Tabs — `.tabbar`, `.tab`, `.tab-active`
 Underline tab strip (2px accent when active); `role="tablist"/"tab"/"tabpanel"` from the `Tabs` component.
@@ -102,7 +106,7 @@ Command palette list rows and the header bell dropdown (absolute, right-anchored
 | `Sidebar` | Collapsible drawer: `w-64 ↔ w-16` at 200ms ease; icon-rail shows 2-letter hints + tooltips; `aria-expanded` on toggle. `NavLink` + `aria-current`. Hidden below `md` (responsive gap — mobile nav is a known TODO). |
 | `Header` | `h-16` surface bar; route title map; quick-search button (dispatches `lgu:open-palette`), notification bell (unread count badge, outside-click close), theme toggle (`aria-pressed`), Logout. |
 | `Modal` / `ConfirmDialog` | See §4. ConfirmDialog = sm modal with `danger` destructive styling. |
-| `Toast` (`ToastProvider`/`useToast`) | `toast(message, 'success'\|'error'\|'info')`; stacked, auto-dismiss 4s. |
+| `Toast` (`ToastProvider`/`useToast`) | `toast(message, 'success'|'error'|'info')`; stacked, auto-dismiss 4s; required for all mutations, errors, and confirmations. |
 | `Tabs` | Controlled tab strip + hidden panels. |
 | `CommandPalette` | Ctrl/Cmd+K toggle or header button; searches pages + employees; overlay-click closes; navigates on select. |
 | `ErrorBoundary` / `NotFound` | Global crash card + 404 route (`*` in `App.jsx`). |
@@ -144,8 +148,19 @@ Interaction feedback only — **no decorative animation**. Durations: 150ms (but
 - Destructive or audit-relevant actions always pass through `ConfirmDialog`.
 - Sample/placeholder data that will be replaced by the API is labeled (`.mono-label` "Sample figures — wires to the payroll API").
 
+## 10. Settings > Account Spec
+
+**Settings > Account** tab design built from tokens/classes.
+
+- Profile card: avatar placeholder, name/email, role/department scope badge, completeness meter progress bar.
+- Security card: password last changed, Change Password button opens modal with policy + strength meter; 2FA toggle with setup modal placeholder; Sessions list table with Revoke button; Login history mini table.
+- Preferences card: display language, date format, timezone, notification channel consent toggles.
+- Privacy card: Data export / Download my data button, Account deactivation with ConfirmDialog.
+
+All actions toast. Mock data labeled `.mono-label`. Wire-later affordances show “Coming soon”.
+
 ## 10. Do / Don't
 
-**Do:** compose from tokens + classes; verify both themes; keep one `.btn-primary` per view; use `color-mix` tints for hierarchy; label wire-later affordances honestly.
+**Do:** compose from tokens + classes; verify both themes; keep one `.btn-primary` per view; use `color-mix` tints for hierarchy; label wire-later affordances honestly; use `lucide-react` icons with `aria-label` on icon-only buttons; toast on every user action.
 **Don't:** hardcode hex/slate/gray in JSX (lint fails); invent new component classes for one-off needs; add decorative animation; use warning token for body text (AA); close modals on overlay click (spec: explicit close); introduce a second styling system (no CSS-in-JS, no UI kit).
 

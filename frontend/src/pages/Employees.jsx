@@ -1,22 +1,45 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Layout from '../components/Layout.jsx';
 import MasterTable from '../components/MasterTable.jsx';
 import DetailPane from '../components/DetailPane.jsx';
 import EmployeeForm from '../components/EmployeeForm.jsx';
 import Modal from '../components/Modal.jsx';
 import ConfirmDialog from '../components/ConfirmDialog.jsx';
-import { employees } from '../data/mock.js';
+import { listEmployees } from '../api/employees.js';
 import { useToast } from '../components/Toast.jsx';
 
 const blankEmployee = { no: '', name: '', position: '', dept: 'PGO', status: 'Probationary', sg: '', hired: '', email: '', contact: '' };
 
 export default function Employees() {
   const toast = useToast();
-  const [rows, setRows] = useState(employees);
+  const [rows, setRows] = useState([]);
   const [selected, setSelected] = useState(null);
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [confirmDel, setConfirmDel] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    listEmployees({ page: 1, limit: 50 }).then(({ items = [] }) => {
+      const mapped = items.map(e => ({
+        id: e.id,
+        no: e.employeeNumber,
+        name: `${e.lastName}, ${e.firstName}${e.middleName ? ' ' + e.middleName : ''}`,
+        position: e.position?.title ?? '',
+        dept: e.department?.name ?? '',
+        status: e.status,
+        sg: e.position?.salaryGrade ? `SG ${e.position.salaryGrade}` : '',
+        hired: e.hiredDate?.slice(0,10),
+        email: e.email ?? '',
+        contact: e.contactNumber ?? '',
+      }));
+      setRows(mapped);
+      setLoading(false);
+    }).catch(() => {
+      toast('Failed to load employees', 'error');
+      setLoading(false);
+    });
+  }, []);
 
   const openAdd = () => { setEditing(null); setFormOpen(true); };
   const openEdit = e => { setEditing(e); setFormOpen(true); };

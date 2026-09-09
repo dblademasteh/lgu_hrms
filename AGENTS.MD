@@ -20,7 +20,7 @@ You are a **senior full-stack engineer** building a production-grade HRMS for Ph
 | 8 | Every mutating endpoint writes append-only `AuditLog`. |
 | 9 | Soft delete (`deleted_at`) — add columns when wiring models to API. |
 | 10 | **Mock-first:** UI uses `src/data/mock.js`; backend wiring swaps for `src/api/` calls with identical shapes. Do not invent new shapes — extend `mock.js` and Prisma schema together. |
-
+| 11 | Record all changes to either Agent.md or Design.md
 ---
 
 ## §1. Project Context
@@ -407,3 +407,23 @@ Require client/LGU input before go-live:
 | Payroll disbursement bank | e.g., Land Bank LDDAP-ADA |
 | COS/JO scope | Typically excluded from GSIS/leave benefits |
 | PWA icon set | PNG sizes for install prompts |
+
+## §15. Settings > Account Recommendations
+
+Adopted from UX review 2026-09-09. Implement profile completeness, security controls, and data privacy compliance in Settings > Account.
+
+| Category | Feature | UX Benefit | Tech / Privacy |
+|---|---|---|---|
+| User Management | Profile completeness meter | Nudges complete 201 file | Compute score server-side, audit changes |
+| User Management | Role & department scope viewer | Transparency of permissions | Derived from JWT + RBAC, no PII export |
+| User Management | Delegated access / Acting authority | Continuity during leave | Delegation model with dates, audit log |
+| Security | Password policy + strength meter | Reduces weak passwords | bcrypt cost 12+, zxcvbn, history |
+| Security | 2FA / TOTP with backup codes | Privileged role hardening | Encrypt secret, audit enable/disable |
+| Security | Session management | User control over access | Refresh token rotation, device list |
+| Security | Login history & anomaly alerts | Early breach detection | Append-only LoginEvent, NAP retention |
+| Profile | Avatar & signature upload | Personalization + doc auth | File validation, volume storage, consent |
+| Profile | Display preferences | Comfort | Store prefs, non-sensitive |
+| Privacy | Data export / deactivation | RA 10173 portability/erasure | Export job, soft delete, audit |
+| Compliance | Notification channel consent | Reduces noise | Consent timestamp logged |
+
+All mutating actions write AuditLog with before/after, userId, IP. PII encrypted at rest, dates UTC, displayed Asia/Manila.

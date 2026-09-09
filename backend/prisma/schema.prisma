@@ -8,16 +8,26 @@ datasource db {
 }
 
 model User {
-  id           String   @id @default(uuid())
-  username     String   @unique
-  passwordHash String
-  role         Role
-  departmentId String?
-  externalId   String?
-  createdAt    DateTime @default(now()) @db.Timestamptz(6)
-  updatedAt    DateTime @updatedAt @db.Timestamptz(6)
-  department   Department? @relation(fields: [departmentId], references: [id])
-  auditLogs    AuditLog[]
+  id               String    @id @default(uuid())
+  username         String    @unique
+  passwordHash     String
+  role             Role
+  departmentId     String?
+  externalId       String?
+  passwordChangedAt DateTime? @db.Timestamptz(6)
+  twoFactorEnabled Boolean   @default(false)
+  twoFactorSecret  String?
+  displayPrefs     Json?
+  avatarPath       String?
+  signaturePath    String?
+  createdAt        DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt        DateTime  @updatedAt @db.Timestamptz(6)
+  department       Department? @relation(fields: [departmentId], references: [id])
+  auditLogs        AuditLog[]
+  sessions         UserSession[]
+  loginEvents      LoginEvent[]
+  delegationsFrom  Delegation[] @relation("delegator")
+  delegationsTo    Delegation[] @relation("delegatee")
 }
 
 model Department {
@@ -64,6 +74,10 @@ model Employee {
   position         Position @relation(fields: [positionId], references: [id])
   employmentHistory EmploymentHistory[]
   payrollItems     PayrollItem[]
+  leaveRequests    LeaveRequest[]
+  leaveCredits     LeaveCredit[]
+  attendances      Attendance[]
+  appointments     Appointment[]
 }
 
 model EmploymentHistory {
@@ -137,6 +151,41 @@ model AuditLog {
   user      User @relation(fields: [userId], references: [id])
 }
 
+model UserSession {
+  id         String    @id @default(uuid())
+  userId     String
+  deviceHash String
+  ip         String?
+  userAgent  String?
+  lastActive DateTime  @default(now()) @db.Timestamptz(6)
+  revokedAt  DateTime? @db.Timestamptz(6)
+  createdAt  DateTime  @default(now()) @db.Timestamptz(6)
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model LoginEvent {
+  id        String   @id @default(uuid())
+  userId    String
+  ip        String?
+  userAgent String?
+  success   Boolean
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Delegation {
+  id         String   @id @default(uuid())
+  delegatorId String
+  delegateeId String
+  scope      String?
+  reason     String?
+  startsAt   DateTime @db.Timestamptz(6)
+  endsAt     DateTime @db.Timestamptz(6)
+  createdAt  DateTime @default(now()) @db.Timestamptz(6)
+  delegator  User     @relation("delegator", fields: [delegatorId], references: [id])
+  delegatee  User     @relation("delegatee", fields: [delegateeId], references: [id])
+}
+
 model LeaveRequest {
   id          String   @id @default(uuid())
   employeeId  String
@@ -180,7 +229,7 @@ model Appointment {
   itemNumber  String
   startDate   DateTime @db.Date
   endDate     DateTime? @db.Date
-  status      String @default('ACTIVE')
+  status      String @default("ACTIVE")
   createdAt   DateTime @default(now()) @db.Timestamptz(6)
   employee    Employee @relation(fields: [employeeId], references: [id])
 }

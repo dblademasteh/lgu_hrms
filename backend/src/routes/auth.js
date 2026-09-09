@@ -1,9 +1,11 @@
 import { Router } from 'express';
-import { loginHandler, refreshHandler } from '../controllers/authController.js';
+import { authController } from '../controllers/authController.js';
+import { validate } from '../middleware/validate.js';
+import { loginSchema, refreshSchema } from '../shared/contracts/auth.js';
 
 const router = Router();
 
-router.post('/login', loginHandler);
-router.post('/refresh', refreshHandler);
+router.post('/login', validate(loginSchema), authController.login);
+router.post('/refresh', validate(refreshSchema), authController.refresh);
 
 export default router;

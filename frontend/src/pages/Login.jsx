@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore.js';
+import { useToast } from '../components/Toast.jsx';
 
 export default function Login() {
   const [username, setUsername] = useState('');
@@ -8,6 +9,7 @@ export default function Login() {
   const [errors, setErrors] = useState({});
   const navigate = useNavigate();
   const { login } = useAuthStore();
+  const toast = useToast();
 
   const validate = () => {
     const e = {};
@@ -23,7 +25,12 @@ export default function Login() {
     setErrors(v);
     if (Object.keys(v).length === 0) {
       const ok = await login(username, password);
-      if (ok) navigate('/dashboard');
+      if (ok) {
+        toast('Signed in successfully', 'success');
+        navigate('/dashboard');
+      } else {
+        toast('Invalid credentials', 'error');
+      }
     }
   };
 
@@ -51,7 +58,7 @@ export default function Login() {
           </div>
           <button type="submit" className="btn btn-primary w-full">Sign In</button>
         </form>
-        <p className="mono-label text-center mt-6">On-prem &middot; COA compliant &middot; RBAC protected</p>
+        <p className="mono-label text-center mt-6">On-prem &middot; CSC compliant &middot; RBAC protected</p>
       </div>
     </div>
   );

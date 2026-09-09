@@ -11,6 +11,7 @@ import Reports from './pages/Reports.jsx';
 import Users from './pages/Users.jsx';
 import Attendance from './pages/Attendance.jsx';
 import Appointments from './pages/Appointments.jsx';
+import Settings from './pages/Settings.jsx';
 import NotFound from './components/NotFound.jsx';
 import ErrorBoundary from './components/ErrorBoundary.jsx';
 import CommandPalette from './components/CommandPalette.jsx';
@@ -44,6 +45,7 @@ export default function App() {
             <Route path="/users" element={<Protected><Users /></Protected>} />
             <Route path="/attendance" element={<Protected><Attendance /></Protected>} />
             <Route path="/appointments" element={<Protected><Appointments /></Protected>} />
+            <Route path="/settings" element={<Protected><Settings /></Protected>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
           <CommandPalette />
