@@ -1,15 +1,26 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Layout from '../components/Layout.jsx';
 import Modal from '../components/Modal.jsx';
-import { auditLogs, auditDetails, badgeTone } from '../data/mock.js';
-
-const entities = ['all', ...new Set(auditLogs.map(l => l.entity))];
+import { useToast } from '../components/Toast.jsx';
+import { auditApi } from '../api/audit.js';
+import { badgeTone } from '../data/mock.js';
 
 export default function Audit() {
+  const toast = useToast();
   const [entity, setEntity] = useState('all');
+  const [logs, setLogs] = useState([]);
   const [detail, setDetail] = useState(null);
-  const filtered = entity === 'all' ? auditLogs : auditLogs.filter(l => l.entity === entity);
-  const detailInfo = detail ? auditDetails[detail.ts] ?? { before: null, after: null } : null;
+  const [entities, setEntities] = useState(['all']);
+
+  useEffect(() => {
+    auditApi.list({ entity }).then(r => {
+      setLogs(r.data.data);
+      const ents = ['all', ...Array.from(new Set(r.data.data.map(l => l.entity)))];
+      setEntities(ents);
+    }).catch(()=>toast('Failed to load audit logs','error'));
+  }, [entity]);
+
+  const detailInfo = detail ? { before: detail.before, after: detail.after } : null;
 
   return (
     <Layout>
@@ -37,10 +48,10 @@ export default function Audit() {
               <tr><th>Timestamp</th><th>User</th><th>Action</th><th>Entity</th><th>IP</th><th></th></tr>
             </thead>
             <tbody>
-              {filtered.map(l => (
-                <tr key={l.ts + l.entity}>
-                  <td className="font-mono">{l.ts}</td>
-                  <td className="font-mono">{l.user}</td>
+              {logs.map(l => (
+                <tr key={l.id}>
+                  <td className="font-mono">{new Date(l.timestamp).toLocaleString()}</td>
+                  <td className="font-mono">{l.user?.username ?? l.user ?? '—'}</td>
                   <td><span className={`badge ${badgeTone(l.action)}`}>{l.action}</span></td>
                   <td className="font-mono">{l.entity}</td>
                   <td className="font-mono text-muted">{l.ip}</td>
@@ -63,7 +74,7 @@ export default function Audit() {
         {detail && (
           <div>
             <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm mb-4">
-              <div><dt className="mono-label">Timestamp</dt><dd className="font-mono mt-0.5">{detail.ts}</dd></div>
+              <div><dt className="mono-label">Timestamp</dt><dd className="font-mono mt-0.5">{new Date(detail.timestamp).toLocaleString()}</dd></div>
               <div><dt className="mono-label">User</dt><dd className="font-mono mt-0.5">{detail.user}</dd></div>
               <div><dt className="mono-label">Action</dt><dd className="mt-0.5"><span className={`badge ${badgeTone(detail.action)}`}>{detail.action}</span></dd></div>
               <div><dt className="mono-label">IP Address</dt><dd className="font-mono mt-0.5">{detail.ip}</dd></div>

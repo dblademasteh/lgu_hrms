@@ -1,40 +1,57 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Layout from '../components/Layout.jsx';
 import Modal from '../components/Modal.jsx';
 import ConfirmDialog from '../components/ConfirmDialog.jsx';
-import { users, departments, roleMatrix, badgeTone } from '../data/mock.js';
 import { useToast } from '../components/Toast.jsx';
+import { usersApi } from '../api/users.js';
+import { departmentsApi } from '../api/departments.js';
+import { listEmployees } from '../api/employees.js';
+import { roleMatrix, badgeTone } from '../data/mock.js';
 
 const ROLES = ['ADMIN', 'HR_MANAGER', 'PAYROLL_OFFICER', 'DEPARTMENT_HEAD', 'AUDITOR'];
-const emptyForm = { username: '', role: 'HR_MANAGER', department: '' };
+const emptyForm = { username: '', role: 'HR_MANAGER', departmentId: '', externalId: '' };
 
 export default function Users() {
   const toast = useToast();
-  const [list, setList] = useState(users);
+  const [list, setList] = useState([]);
+  const [deptList, setDeptList] = useState([]);
+  const [employees, setEmployees] = useState([]);
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(emptyForm);
   const [confirm, setConfirm] = useState(null);
 
+  useEffect(() => {
+    usersApi.list().then(r => setList(r.data)).catch(()=>toast('Failed to load users','error'));
+    departmentsApi.list().then(r => setDeptList(r.data)).catch(()=>{});
+    listEmployees({ page: 1, limit: 200 }).then(({ items = [] }) => setEmployees(items)).catch(()=>{});
+  }, []);
+
   const openAdd = () => { setEditing(null); setForm(emptyForm); setFormOpen(true); };
   const openEdit = u => {
     setEditing(u);
-    setForm({ username: u.username, role: u.role, department: u.department ?? '' });
+    setForm({ username: u.username, role: u.role, departmentId: u.departmentId ?? '', externalId: u.externalId ?? '' });
     setFormOpen(true);
   };
 
-  const submit = e => {
+  const submit = async e => {
     e.preventDefault();
     if (!form.username.trim()) { toast('Username is required.', 'error'); return; }
-    if (editing) {
-      setList(l => l.map(u => (u.id === editing.id ? { ...u, ...form, department: form.department || null } : u)));
-      toast(`User ${form.username} updated.`, 'success');
-    } else {
-      if (list.some(u => u.username === form.username.trim())) { toast('Username already exists.', 'error'); return; }
-      setList(l => [...l, { id: Math.max(0, ...l.map(x => x.id)) + 1, ...form, department: form.department || null, status: 'Active' }]);
-      toast(`User ${form.username} created.`, 'success');
+    try {
+      if (editing) {
+        const r = await usersApi.update(editing.id, form);
+        setList(l => l.map(u => u.id === editing.id ? r.data : u));
+        toast(`User ${form.username} updated.`, 'success');
+      } else {
+        const r = await usersApi.create(form);
+        setList(l => [...l, r.data]);
+        toast(`User ${form.username} created.`, 'success');
+      }
+      setFormOpen(false);
+    } catch (e) {
+      const msg = e?.response?.data?.error?.message;
+      toast(msg || 'Operation failed', 'error');
     }
-    setFormOpen(false);
   };
 
   const toggleStatus = u => {
@@ -61,14 +78,19 @@ export default function Users() {
         <div className="overflow-auto">
           <table className="data-table">
             <thead>
-              <tr><th>Username</th><th>Role</th><th>Department</th><th>Status</th><th className="text-right">Actions</th></tr>
+              <tr><th>Username</th><th>Role</th><th>Department</th><th>Linked Employee (ESS)</th><th>Status</th><th className="text-right">Actions</th></tr>
             </thead>
             <tbody>
               {list.map(u => (
                 <tr key={u.id}>
                   <td className="font-mono">{u.username}</td>
                   <td><span className="badge badge-accent">{u.role}</span></td>
-                  <td className="font-mono">{u.department ?? '—'}</td>
+                  <td className="font-mono">{u.department?.name ?? u.department ?? '—'}</td>
+                  <td>
+                    {u.linkedEmployee
+                      ? <span className="font-mono text-xs">{u.linkedEmployee.employeeNumber} · {u.linkedEmployee.lastName}, {u.linkedEmployee.firstName}</span>
+                      : <span className="text-muted text-xs">—</span>}
+                  </td>
                   <td><span className={`badge ${badgeTone(u.status)}`}>{u.status}</span></td>
                   <td className="text-right">
                     <span className="inline-flex gap-2">
@@ -134,10 +156,22 @@ export default function Users() {
           </div>
           <div>
             <label htmlFor="u-dept" className="block text-sm font-medium text-ink mb-1">Department scope</label>
-            <select id="u-dept" className="input" value={form.department} onChange={e => setForm(f => ({ ...f, department: e.target.value }))}>
+            <select id="u-dept" className="input" value={form.departmentId || ''} onChange={e => setForm(f => ({ ...f, departmentId: e.target.value }))}>
               <option value="">All departments (central)</option>
-              {departments.map(d => <option key={d.code} value={d.code}>{d.code} · {d.name}</option>)}
+              {deptList.map(d => <option key={d.id} value={d.id}>{d.code} · {d.name}</option>)}
             </select>
+          </div>
+          <div>
+            <label htmlFor="u-employee" className="block text-sm font-medium text-ink mb-1">Linked employee (ESS access)</label>
+            <select id="u-employee" className="input" value={form.externalId || ''} onChange={e => setForm(f => ({ ...f, externalId: e.target.value || null }))}>
+              <option value="">None (staff account only)</option>
+              {employees.map(emp => (
+                <option key={emp.id} value={emp.employeeNumber}>
+                  {emp.employeeNumber} · {emp.lastName}, {emp.firstName}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-muted mt-1">Links this account to an employee record so they can use the ESS portal (payslips, leave filing, attendance).</p>
           </div>
         </form>
       </Modal>

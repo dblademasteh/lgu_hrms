@@ -1,0 +1,11 @@
+import { Router } from 'express';
+import * as ctrl from '../controllers/trainingController.js';
+const router = Router();
+router.get('/programs', ctrl.listProgramsHandler);
+router.get('/programs/:id', ctrl.getProgramHandler);
+router.post('/programs', ctrl.createProgramHandler);
+router.patch('/programs/:id', ctrl.updateProgramHandler);
+router.delete('/programs/:id', ctrl.deleteProgramHandler);
+router.get('/enrollments', ctrl.listEnrollmentsHandler);
+router.post('/enrollments', ctrl.createEnrollmentHandler);
+export default router;

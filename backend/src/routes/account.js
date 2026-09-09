@@ -14,6 +14,12 @@ router.patch('/me', validate(updateProfileSchema), auditLog, accountController.u
 router.post('/password/change', validate(changePasswordSchema), auditLog, accountController.changePassword);
 router.get('/sessions', accountController.getSessions);
 router.post('/sessions/:id/revoke', validate(revokeSessionSchema), auditLog, accountController.revokeSession);
+router.get('/login-events', accountController.getLoginEvents);
+router.get('/delegations', accountController.getDelegations);
+router.post('/delegations', auditLog, accountController.createDelegation);
+router.delete('/delegations/:id', auditLog, accountController.deleteDelegation);
+router.post('/deactivate', auditLog, accountController.deactivateAccount);
+router.post('/export', auditLog, accountController.exportData);
 router.post('/2fa/setup', accountController.setup2FA);
 router.post('/2fa/verify', accountController.verify2FA);
 

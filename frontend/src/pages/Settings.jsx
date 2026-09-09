@@ -4,6 +4,8 @@ import { useTheme, toggleTheme } from '../theme.js';
 import { Moon, Sun, LayoutGrid, Bell, User, ShieldCheck, Info, Settings as SettingsIcon, Code2, Sparkles, Type, Palette } from 'lucide-react';
 import { useToast } from '../components/Toast.jsx';
 import { accountApi } from '../api/account.js';
+import Modal from '../components/Modal.jsx';
+import ConfirmDialog from '../components/ConfirmDialog.jsx';
 
 const tabs = [
   { id: 'appearance', label: 'Appearance', icon: LayoutGrid },
@@ -29,11 +31,32 @@ export default function Settings() {
   const [fontFamily, setFontFamily] = useState(() => localStorage.getItem('lgu-font-family') || 'Inter');
   const [uiScale, setUiScale] = useState(() => Number(localStorage.getItem('lgu-ui-scale') || 100));
   const [profile, setProfile] = useState(null);
+  const [sessions, setSessions] = useState([]);
+  const [loginEvents, setLoginEvents] = useState([]);
+  const [delegations, setDelegations] = useState([]);
+  const [showProfileEdit, setShowProfileEdit] = useState(false);
+  const [showDeactivateConfirm, setShowDeactivateConfirm] = useState(false);
+  const [show2FAModal, setShow2FAModal] = useState(false);
+  const [twoFASecret, setTwoFASecret] = useState(null);
+  const [twoFACode, setTwoFACode] = useState('');
+  const [showDelegationModal, setShowDelegationModal] = useState(false);
+  const [delegationForm, setDelegationForm] = useState({ delegateeId:'', scope:'', reason:'', startsAt:'', endsAt:'' });
+  const [editDisplayName, setEditDisplayName] = useState('');
+  const [editEmail, setEditEmail] = useState('');
+  const [editContact, setEditContact] = useState('');
+  const [editEmergency, setEditEmergency] = useState('');
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [pwdCurrent, setPwdCurrent] = useState('');
+  const [pwdNew, setPwdNew] = useState('');
+  const [pwdConfirm, setPwdConfirm] = useState('');
   const { push } = useToast();
 
   useEffect(() => {
     if (active === 'account') {
-      accountApi.getProfile().then(res => setProfile(res.data)).catch(() => setProfile({user:{username:'admin@lgu.gov.ph', role:'ADMIN'}, completeness:78}));
+      accountApi.getProfile().then(res => setProfile(res.data)).catch(() => setProfile(null));
+      accountApi.getSessions().then(res => setSessions(res.data || [])).catch(() => setSessions([]));
+      accountApi.getLoginEvents().then(res => setLoginEvents(res.data || [])).catch(() => setLoginEvents([]));
+      accountApi.getDelegations().then(res => setDelegations(res.data || [])).catch(() => setDelegations([]));
     }
   }, [active]);
 
@@ -48,6 +71,51 @@ export default function Settings() {
   useEffect(() => { localStorage.setItem('lgu-ui-scale', String(uiScale)); document.documentElement.style.setProperty('--ui-scale', `${uiScale}%`); }, [uiScale]);
 
   const save = (msg) => push({ title: 'Saved', body: msg, variant: 'success' });
+
+  const passwordStrength = (pwd) => {
+    let score = 0;
+    if (pwd.length >= 8) score++;
+    if (/[A-Z]/.test(pwd)) score++;
+    if (/[0-9]/.test(pwd)) score++;
+    if (/[^A-Za-z0-9]/.test(pwd)) score++;
+    return score;
+  };
+
+  const handlePasswordChange = async () => {
+    if (!pwdCurrent || !pwdNew || !pwdConfirm) { push({title:'Missing fields', body:'Fill all fields', variant:'error'}); return; }
+    if (pwdNew !== pwdConfirm) { push({title:'Mismatch', body:'New passwords do not match', variant:'error'}); return; }
+    if (passwordStrength(pwdNew) < 3) { push({title:'Weak password', body:'Use 8+ chars with upper, number, symbol', variant:'error'}); return; }
+    try {
+      await accountApi.changePassword({ currentPassword: pwdCurrent, newPassword: pwdNew });
+      push({title:'Success', body:'Password changed', variant:'success'});
+      setShowPasswordModal(false);
+      setPwdCurrent(''); setPwdNew(''); setPwdConfirm('');
+      accountApi.getProfile().then(res => setProfile(res.data)).catch(()=>{});
+    } catch (e) {
+      push({title:'Error', body:'Current password incorrect', variant:'error'});
+    }
+  };
+
+  const handleProfileUpdate = async () => {
+    try {
+      await accountApi.updateProfile({ displayName: editDisplayName, email: editEmail, contactNumber: editContact, emergencyContact: editEmergency });
+      push({title:'Saved', body:'Profile updated', variant:'success'});
+      setShowProfileEdit(false);
+      accountApi.getProfile().then(res => setProfile(res.data)).catch(()=>{});
+    } catch {
+      push({title:'Error', body:'Could not update profile', variant:'error'});
+    }
+  };
+
+  const handlePrefsSave = async () => {
+    try {
+      await accountApi.updateProfile({ displayPrefs: profile?.user?.displayPrefs || {} });
+      push({title:'Saved', body:'Preferences saved', variant:'success'});
+      accountApi.getProfile().then(res => setProfile(res.data)).catch(()=>{});
+    } catch {
+      push({title:'Error', body:'Could not save preferences', variant:'error'});
+    }
+  };
 
   const handleCodeAssist = () => {
     if (!codePrompt.trim()) { push({ title: 'Empty prompt', body: 'Enter a description', variant: 'error' }); return; }
@@ -190,37 +258,53 @@ export default function Settings() {
 
             {active === 'account' && (
               <section className="card p-6 space-y-6">
-                <h2 className="font-display font-semibold text-ink flex items-center gap-2"><User size={18} className="text-accent"/> Account</h2>
+                <div className="flex items-center justify-between">
+                  <h2 className="font-display font-semibold text-ink flex items-center gap-2"><User size={18} className="text-accent"/> Account</h2>
+                  <button className="btn btn-ghost text-sm" onClick={() => { setEditDisplayName(profile?.user?.displayName || ''); setEditEmail(profile?.user?.email || ''); setEditContact(profile?.user?.contactNumber || ''); setEditEmergency(profile?.user?.emergencyContact || ''); setShowProfileEdit(true); }}>Edit profile</button>
+                </div>
 
                 <div className="grid md:grid-cols-3 gap-4">
                   <div className="md:col-span-2 p-5 border border-line rounded-[12px] bg-bg/50 space-y-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-full bg-accent/15 flex items-center justify-center text-accent font-display font-bold">AB</div>
-                      <div>
-                        <p className="text-sm font-medium text-ink">A. Bautista</p>
-                        <p className="text-xs text-muted">admin@lgu.gov.ph</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="badge badge-accent">ADMIN</span>
-                      <span className="badge">HRMO</span>
-                      <span className="mono-label text-[10px]">Dept: HR Admin</span>
-                    </div>
-                    <div className="space-y-2">
-                      <div className="flex justify-between text-xs"><span className="text-muted">Profile completeness</span><span className="mono-label">78%</span></div>
-                      <div className="h-2 rounded-full bg-line overflow-hidden">
-                        <div className="h-full bg-accent" style={{width:'78%'}}></div>
-                      </div>
-                      <p className="text-[11px] text-muted">Complete avatar, contact number, and emergency contact to reach 100%</p>
-                    </div>
+                    {(() => {
+                      const u = profile?.user;
+                      const initials = (u?.username || 'AB').slice(0,2).toUpperCase();
+                      const displayName = u?.username || '—';
+                      const email = u?.username?.includes('@') ? u.username : `${u?.username || 'admin'}@lgu.gov.ph`;
+                      const role = u?.role || 'ADMIN';
+                      const dept = u?.department?.name || 'HR Admin';
+                      const completeness = profile?.completeness ?? 78;
+                      return (
+                        <>
+                          <div className="flex items-center gap-3">
+                            <div className="w-12 h-12 rounded-full bg-accent/15 flex items-center justify-center text-accent font-display font-bold">{initials}</div>
+                            <div>
+                              <p className="text-sm font-medium text-ink">{displayName}</p>
+                              <p className="text-xs text-muted">{email}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="badge badge-accent">{role}</span>
+                            <span className="badge">HRMO</span>
+                            <span className="mono-label text-[10px]">Dept: {dept}</span>
+                          </div>
+                          <div className="space-y-2">
+                            <div className="flex justify-between text-xs"><span className="text-muted">Profile completeness</span><span className="mono-label">{completeness}%</span></div>
+                            <div className="h-2 rounded-full bg-line overflow-hidden">
+                              <div className="h-full bg-accent" style={{width:`${completeness}%`}}></div>
+                            </div>
+                            <p className="text-[11px] text-muted">Complete avatar, contact number, and emergency contact to reach 100%</p>
+                          </div>
+                        </>
+                      );
+                    })()}
                   </div>
                   <div className="p-5 border border-line rounded-[12px] bg-bg/50 space-y-2">
                     <p className="text-sm font-medium text-ink">Role & Scope</p>
                     <p className="text-xs text-muted">Effective permissions derived from JWT</p>
                     <ul className="text-xs text-muted list-disc pl-4 space-y-1">
-                      <li>Full HR module access</li>
-                      <li>Payroll approve</li>
-                      <li>Department: HR Admin</li>
+                      <li>Role: {profile?.user?.role || '—'}</li>
+                      <li>Department: {profile?.user?.department?.name || '—'}</li>
+                      <li>Two-factor: {profile?.user?.twoFactorEnabled ? 'Enabled' : 'Disabled'}</li>
                     </ul>
                   </div>
                 </div>
@@ -230,12 +314,22 @@ export default function Settings() {
                     <p className="text-sm font-medium text-ink flex items-center gap-2"><ShieldCheck size={16} className="text-accent"/> Security</p>
                     <div className="space-y-3 text-sm">
                       <div className="flex items-center justify-between">
-                        <div><p className="text-ink">Password</p><p className="text-xs text-muted">Last changed 2026-08-01</p></div>
-                        <button className="btn btn-ghost text-sm" onClick={() => { push({title:'Password change', body:'Password change flow – coming soon', variant:'info'}); }}>Change</button>
+                        <div>
+                          <p className="text-ink">Password</p>
+                          <p className="text-xs text-muted">
+                            Last changed {profile?.user?.passwordChangedAt ? new Date(profile.user.passwordChangedAt).toLocaleDateString() : 'Never'}
+                          </p>
+                        </div>
+                        <button className="btn btn-ghost text-sm" onClick={() => setShowPasswordModal(true)}>Change</button>
                       </div>
                       <div className="flex items-center justify-between">
-                        <div><p className="text-ink">Two-factor authentication</p><p className="text-xs text-muted">TOTP for privileged roles</p></div>
-                        <button className="btn btn-ghost text-sm" onClick={() => push({title:'2FA', body:'2FA setup – coming soon', variant:'info'})}>Setup</button>
+                        <div>
+                          <p className="text-ink">Two-factor authentication</p>
+                          <p className="text-xs text-muted">{profile?.user?.twoFactorEnabled ? 'Enabled' : 'TOTP for privileged roles'}</p>
+                        </div>
+                        <button className="btn btn-ghost text-sm" onClick={async()=>{ const r = await accountApi.setup2FA(); setTwoFASecret(r.data); setShow2FAModal(true); }}>
+                          {profile?.user?.twoFactorEnabled ? 'Manage' : 'Setup'}
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -243,16 +337,65 @@ export default function Settings() {
                     <p className="text-sm font-medium text-ink">Sessions</p>
                     <p className="text-xs text-muted">Active sessions</p>
                     <div className="space-y-2 text-xs">
-                      {[
-                        {device:'Chrome · Windows', ip:'192.168.1.10', last:'Now'},
-                        {device:'Safari · iPhone', ip:'192.168.1.22', last:'2h ago'}
-                      ].map((s,i)=>(
-                        <div key={i} className="flex items-center justify-between p-2 rounded-[8px] bg-bg/60 border border-line">
-                          <div><p className="text-ink">{s.device}</p><p className="mono-label">{s.ip} · {s.last}</p></div>
-                          <button className="btn btn-ghost text-xs" onClick={()=>push({title:'Revoked', body:'Session revoked – mock', variant:'success'})}>Revoke</button>
+                      {sessions.map((s,i)=>(
+                        <div key={s.id || i} className="flex items-center justify-between p-2 rounded-[8px] bg-bg/60 border border-line">
+                          <div>
+                            <p className="text-ink">{s.userAgent || s.device || 'Unknown device'}</p>
+                            <p className="mono-label">{s.ip || '—'} · {s.lastActive ? new Date(s.lastActive).toLocaleString() : 'Now'}</p>
+                          </div>
+                          <button className="btn btn-ghost text-xs" onClick={async ()=>{
+                            try {
+                              await accountApi.revokeSession(s.id);
+                              push({title:'Revoked', body:'Session revoked', variant:'success'});
+                              setSessions(prev => prev.filter(x => x.id !== s.id));
+                            } catch { push({title:'Error', body:'Could not revoke', variant:'error'}); }
+                          }}>Revoke</button>
                         </div>
                       ))}
                     </div>
+                  </div>
+                </div>
+
+                <div className="p-5 border border-line rounded-[12px] bg-bg/50 space-y-3">
+                  <p className="text-sm font-medium text-ink">Login history</p>
+                  <p className="text-xs text-muted">Recent sign-ins</p>
+                  <div className="space-y-2 text-xs">
+                    {loginEvents.length === 0 ? (
+                      <div className="p-2 rounded-[8px] bg-bg/60 border border-line">
+                        <p className="text-ink mono-label">No login events yet</p>
+                      </div>
+                    ) : (
+                      loginEvents.map((e, i) => (
+                        <div key={i} className="p-2 rounded-[8px] bg-bg/60 border border-line">
+                          <p className="text-ink mono-label">{new Date(e.createdAt).toLocaleString()} · {e.ipAddress || e.ip || '—'} · {e.success ? 'Success' : 'Failed'} · {e.userAgent || e.device || ''}</p>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                <div className="p-5 border border-line rounded-[12px] bg-bg/50 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-medium text-ink">Delegated access</p>
+                    <button className="btn btn-ghost text-xs" onClick={()=>setShowDelegationModal(true)}>Create</button>
+                  </div>
+                  <p className="text-xs text-muted">Acting authority during leave</p>
+                  <div className="space-y-2 text-xs">
+                    {delegations.length === 0 ? (
+                      <div className="p-2 rounded-[8px] bg-bg/60 border border-line">
+                        <p className="text-ink mono-label">No delegations active</p>
+                      </div>
+                    ) : (
+                      delegations.map((d, i) => (
+                        <div key={i} className="p-2 rounded-[8px] bg-bg/60 border border-line flex justify-between items-center">
+                          <div>
+                            <p className="text-ink mono-label">{d.delegator?.displayName || d.delegator?.username} → {d.delegatee?.displayName || d.delegatee?.username}</p>
+                            <p className="text-muted">{new Date(d.startsAt).toLocaleDateString()} to {new Date(d.endsAt).toLocaleDateString()} · {d.scope || 'All'}</p>
+                          </div>
+                          <button className="btn btn-ghost text-xs" onClick={async()=>{ await accountApi.deleteDelegation(d.id); const r = await accountApi.getDelegations(); setDelegations(r.data||[]); }}>Revoke</button>
+                        </div>
+                      ))
+                    )}
                   </div>
                 </div>
 
@@ -264,16 +407,17 @@ export default function Settings() {
                       <label className="text-xs text-muted">Date format<div className="mt-1 p-2 border border-line rounded-[8px] bg-bg/60">MM/DD/YYYY</div></label>
                       <label className="text-xs text-muted">Timezone<div className="mt-1 p-2 border border-line rounded-[8px] bg-bg/60">Asia/Manila</div></label>
                     </div>
+                    <button className="btn btn-ghost text-xs" onClick={handlePrefsSave}>Save preferences</button>
                   </div>
                   <div className="p-5 border border-line rounded-[12px] bg-bg/50 space-y-3">
                     <p className="text-sm font-medium text-ink">Privacy & Data</p>
                     <div className="flex items-center justify-between text-sm">
                       <div><p className="text-ink">Data export</p><p className="text-xs text-muted">RA 10173 portability</p></div>
-                      <button className="btn btn-ghost text-sm" onClick={()=>push({title:'Export', body:'Export job queued – mock', variant:'info'})}>Download</button>
+                      <button className="btn btn-ghost text-sm" onClick={async()=>{ const r = await accountApi.exportData(); push({title:'Export', body:r.data.message, variant:'info'}); }}>Download</button>
                     </div>
                     <div className="flex items-center justify-between text-sm">
                       <div><p className="text-ink">Deactivation</p><p className="text-xs text-muted">Soft delete account</p></div>
-                      <button className="btn btn-danger text-sm" onClick={()=>push({title:'Deactivate', body:'Requires confirmation – coming soon', variant:'error'})}>Deactivate</button>
+                      <button className="btn btn-danger text-sm" onClick={()=>setShowDeactivateConfirm(true)}>Deactivate</button>
                     </div>
                     <p className="mono-label text-[10px]">All mutating actions are audited. PII encrypted at rest.</p>
                   </div>
@@ -304,6 +448,88 @@ export default function Settings() {
             )}
           </div>
         </div>
+        <Modal open={showPasswordModal} onClose={() => setShowPasswordModal(false)} title="Change Password" size="sm" footer={
+          <div className="flex justify-end gap-2">
+            <button className="btn btn-ghost" onClick={() => setShowPasswordModal(false)}>Cancel</button>
+            <button className="btn btn-primary" onClick={handlePasswordChange}>Save</button>
+          </div>
+        }>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-ink mb-1">Current password</label>
+              <input type="password" className="input" value={pwdCurrent} onChange={e=>setPwdCurrent(e.target.value)} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-ink mb-1">New password</label>
+              <input type="password" className="input" value={pwdNew} onChange={e=>setPwdNew(e.target.value)} />
+              <div className="mt-2 h-1.5 rounded-full bg-line overflow-hidden">
+                <div className="h-full bg-accent transition-all" style={{width:`${(passwordStrength(pwdNew)/4)*100}%`}}></div>
+              </div>
+              <p className="text-[11px] text-muted mt-1">Min 8 chars, upper, number, symbol recommended</p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-ink mb-1">Confirm new password</label>
+              <input type="password" className="input" value={pwdConfirm} onChange={e=>setPwdConfirm(e.target.value)} />
+            </div>
+          </div>
+        </Modal>
+        <Modal open={showProfileEdit} onClose={() => setShowProfileEdit(false)} title="Edit profile" size="sm" footer={
+          <div className="flex justify-end gap-2">
+            <button className="btn btn-ghost" onClick={() => setShowProfileEdit(false)}>Cancel</button>
+            <button className="btn btn-primary" onClick={handleProfileUpdate}>Save</button>
+          </div>
+        }>
+          <div className="space-y-4 text-sm">
+            <div>
+              <label className="block text-sm font-medium text-ink mb-1">Display name</label>
+              <input className="input" value={editDisplayName} onChange={e=>setEditDisplayName(e.target.value)} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-ink mb-1">Email</label>
+              <input className="input" value={editEmail} onChange={e=>setEditEmail(e.target.value)} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-ink mb-1">Contact number</label>
+              <input className="input" value={editContact} onChange={e=>setEditContact(e.target.value)} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-ink mb-1">Emergency contact</label>
+              <input className="input" value={editEmergency} onChange={e=>setEditEmergency(e.target.value)} />
+            </div>
+          </div>
+        </Modal>
+        <Modal open={show2FAModal} onClose={()=>{setShow2FAModal(false); setTwoFASecret(null);}} title="Two-factor authentication" size="sm" footer={
+          <div className="flex justify-end gap-2">
+            <button className="btn btn-ghost" onClick={()=>{setShow2FAModal(false); setTwoFASecret(null);}}>Close</button>
+            <button className="btn btn-primary" onClick={async()=>{ await accountApi.verify2FA(twoFACode); push({title:'2FA', body:'2FA enabled', variant:'success'}); setShow2FAModal(false); accountApi.getProfile().then(r=>setProfile(r.data)); }}>Verify</button>
+          </div>
+        }>
+          <div className="space-y-3 text-sm">
+            <p className="text-muted text-xs">Scan the QR code or enter secret manually.</p>
+            <div className="p-3 bg-bg/60 border border-line rounded-[8px] font-mono text-xs break-words">{twoFASecret?.secret}</div>
+            <div>
+              <label className="block text-sm font-medium text-ink mb-1">Code</label>
+              <input className="input" value={twoFACode} onChange={e=>setTwoFACode(e.target.value)} placeholder="123456" />
+            </div>
+          </div>
+        </Modal>
+        <Modal open={showDelegationModal} onClose={()=>setShowDelegationModal(false)} title="Create delegation" size="sm" footer={
+          <div className="flex justify-end gap-2">
+            <button className="btn btn-ghost" onClick={()=>setShowDelegationModal(false)}>Cancel</button>
+            <button className="btn btn-primary" onClick={async()=>{ await accountApi.createDelegation(delegationForm); setShowDelegationModal(false); const r = await accountApi.getDelegations(); setDelegations(r.data||[]); push({title:'Created', body:'Delegation created', variant:'success'}); }}>Create</button>
+          </div>
+        }>
+          <div className="space-y-3 text-sm">
+            <div><label className="block text-sm font-medium text-ink mb-1">Delegatee ID</label><input className="input" value={delegationForm.delegateeId} onChange={e=>setDelegationForm({...delegationForm, delegateeId:e.target.value})} /></div>
+            <div><label className="block text-sm font-medium text-ink mb-1">Scope</label><input className="input" value={delegationForm.scope} onChange={e=>setDelegationForm({...delegationForm, scope:e.target.value})} /></div>
+            <div><label className="block text-sm font-medium text-ink mb-1">Reason</label><input className="input" value={delegationForm.reason} onChange={e=>setDelegationForm({...delegationForm, reason:e.target.value})} /></div>
+            <div className="grid grid-cols-2 gap-2">
+              <div><label className="block text-sm font-medium text-ink mb-1">Starts</label><input type="date" className="input" value={delegationForm.startsAt} onChange={e=>setDelegationForm({...delegationForm, startsAt:e.target.value})} /></div>
+              <div><label className="block text-sm font-medium text-ink mb-1">Ends</label><input type="date" className="input" value={delegationForm.endsAt} onChange={e=>setDelegationForm({...delegationForm, endsAt:e.target.value})} /></div>
+            </div>
+          </div>
+        </Modal>
+        <ConfirmDialog open={showDeactivateConfirm} onClose={()=>setShowDeactivateConfirm(false)} title="Deactivate account" description="This will soft-delete your account. Continue?" confirmText="Deactivate" variant="danger" onConfirm={async()=>{ await accountApi.deactivateAccount(); push({title:'Deactivated', body:'Account deactivated', variant:'success'}); setShowDeactivateConfirm(false); }} />
     </Layout>
   );
 }

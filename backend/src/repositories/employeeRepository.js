@@ -1,7 +1,7 @@
 import { prisma } from '../lib/prisma.js';
 
 export async function findEmployees({ page = 1, limit = 50, search, departmentId, status }) {
-  const where = {};
+  const where = { deletedAt: null };
   if (search) {
     where.OR = [
       { firstName: { contains: search, mode: 'insensitive' } },
@@ -27,8 +27,24 @@ export async function findEmployees({ page = 1, limit = 50, search, departmentId
 }
 
 export async function findEmployeeById(id) {
-  return prisma.employee.findUnique({
-    where: { id },
+  return prisma.employee.findFirst({
+    where: { id, deletedAt: null },
     include: { department: true, position: true, employmentHistory: true },
   });
+}
+
+export async function insertEmployee(data) {
+  return prisma.employee.create({ data, include: { department: true, position: true } });
+}
+
+export async function patchEmployee(id, data) {
+  return prisma.employee.update({
+    where: { id },
+    data,
+    include: { department: true, position: true },
+  });
+}
+
+export async function softDeleteEmployee(id) {
+  return prisma.employee.update({ where: { id }, data: { deletedAt: new Date() } });
 }

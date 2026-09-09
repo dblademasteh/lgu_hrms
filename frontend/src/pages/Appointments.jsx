@@ -1,28 +1,54 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Layout from '../components/Layout.jsx';
 import Modal from '../components/Modal.jsx';
-import { appointments, departments, badgeTone } from '../data/mock.js';
+import { departmentsApi } from '../api/departments.js';
+import { badgeTone } from '../data/mock.js';
+import { appointmentsApi } from '../api/appointments.js';
 import { useToast } from '../components/Toast.jsx';
 
 const TYPES = ['Permanent', 'Temporary', 'Casual', 'Contractual'];
-const emptyForm = { no: '', name: '', position: '', dept: 'PGO', type: 'Permanent', itemNo: '', start: '' };
+const emptyForm = { name: '', position: '', dept: 'PGO', type: 'Permanent', itemNo: '', start: '' };
 
 export default function Appointments() {
   const toast = useToast();
-  const [list, setList] = useState(appointments);
+  const [list, setList] = useState([]);
+  const [deptList, setDeptList] = useState([]);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
 
-  const submit = e => {
+  useEffect(() => {
+    appointmentsApi.list().then(r => setList(r.data)).catch(() => toast('Failed to load appointments', 'error'));
+    departmentsApi.list().then(r => setDeptList(r.data)).catch(() => {});
+  }, []);
+
+  const submit = async e => {
     e.preventDefault();
-    if (!form.no.trim() || !form.name.trim() || !form.position.trim() || !form.itemNo.trim() || !form.start) {
-      toast('Employee no., name, position, item no. and start date are required.', 'error');
+    if (!form.name.trim() || !form.position.trim() || !form.itemNo.trim() || !form.start) {
+      toast('Name, position, item no. and start date are required.', 'error');
       return;
     }
-    setList(l => [...l, { ...form, status: 'Active' }]);
-    toast(`Appointment for ${form.name} recorded.`, 'success');
-    setForm(emptyForm);
-    setOpen(false);
+    try {
+      const r = await appointmentsApi.create({
+        name: form.name,
+        position: form.position,
+        dept: form.dept,
+        type: form.type,
+        itemNo: form.itemNo,
+        start: form.start
+      });
+      setList(l => [r.data, ...l]);
+      toast(`Appointment for ${form.name} recorded.`, 'success');
+      setForm(emptyForm);
+      setOpen(false);
+    } catch { toast('Failed to record appointment', 'error'); }
+  };
+
+  const remove = async (id) => {
+    try {
+      await appointmentsApi.remove(id);
+      setList(l => l.filter(x => x.id !== id));
+      toast('Appointment removed.', 'info');
+    } catch { toast('Failed to remove appointment', 'error'); }
   };
 
   return (
@@ -46,18 +72,27 @@ export default function Appointments() {
               <tr><th>No.</th><th>Name</th><th>Position</th><th>Dept</th><th>Type</th><th>Plantilla Item</th><th>Start</th><th>Status</th></tr>
             </thead>
             <tbody>
-              {list.map(a => (
-                <tr key={`${a.no}-${a.itemNo}`}>
-                  <td className="font-mono">{a.no}</td>
-                  <td className="font-medium">{a.name}</td>
-                  <td>{a.position}</td>
-                  <td className="font-mono">{a.dept}</td>
-                  <td><span className="badge badge-accent">{a.type}</span></td>
-                  <td className="font-mono">{a.itemNo}</td>
-                  <td className="font-mono">{a.start}</td>
-                  <td><span className={`badge ${badgeTone(a.status)}`}>{a.status}</span></td>
-                </tr>
-              ))}
+              {list.map(a => {
+                const emp = a.employee ?? {};
+                const no = emp.employeeNumber ?? '';
+                const name = `${emp.firstName ?? ''} ${emp.lastName ?? ''}`.trim() || '—';
+                const start = a.startDate ? new Date(a.startDate).toLocaleDateString() : '';
+                return (
+                  <tr key={a.id}>
+                    <td className="font-mono">{no}</td>
+                    <td className="font-medium">{name}</td>
+                    <td>{a.position}</td>
+                    <td className="font-mono">{a.dept ?? a.department?.code ?? ''}</td>
+                    <td><span className="badge badge-accent">{a.type}</span></td>
+                    <td className="font-mono">{a.itemNo}</td>
+                    <td className="font-mono">{start}</td>
+                    <td>
+                      <span className={`badge ${badgeTone(a.status)}`}>{a.status}</span>
+                      <button type="button" className="btn btn-ghost text-xs ml-2" onClick={() => remove(a.id)}>Remove</button>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -77,23 +112,19 @@ export default function Appointments() {
         <form id="appt-form" onSubmit={submit} className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label htmlFor="a-no" className="block text-sm font-medium text-ink mb-1">Employee No.</label>
-              <input id="a-no" className="input" value={form.no} onChange={e => setForm(f => ({ ...f, no: e.target.value }))} placeholder="EMP-0xx" />
-            </div>
-            <div>
               <label htmlFor="a-name" className="block text-sm font-medium text-ink mb-1">Full Name</label>
               <input id="a-name" className="input" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
             </div>
-          </div>
-          <div>
-            <label htmlFor="a-pos" className="block text-sm font-medium text-ink mb-1">Position</label>
-            <input id="a-pos" className="input" value={form.position} onChange={e => setForm(f => ({ ...f, position: e.target.value }))} />
+            <div>
+              <label htmlFor="a-pos" className="block text-sm font-medium text-ink mb-1">Position</label>
+              <input id="a-pos" className="input" value={form.position} onChange={e => setForm(f => ({ ...f, position: e.target.value }))} />
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label htmlFor="a-dept" className="block text-sm font-medium text-ink mb-1">Department</label>
               <select id="a-dept" className="input" value={form.dept} onChange={e => setForm(f => ({ ...f, dept: e.target.value }))}>
-                {departments.map(d => <option key={d.code} value={d.code}>{d.code} · {d.name}</option>)}
+                {deptList.map(d => <option key={d.id} value={d.code}>{d.code} · {d.name}</option>)}
               </select>
             </div>
             <div>

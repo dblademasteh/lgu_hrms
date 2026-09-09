@@ -1,6 +1,6 @@
 import React from 'react';
 import Layout from '../components/Layout.jsx';
-import { reports } from '../data/mock.js';
+import { reports } from '../data/reports.js';
 import { useToast } from '../components/Toast.jsx';
 
 export default function Reports() {

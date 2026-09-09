@@ -20,7 +20,7 @@ export const setup2FASchema = z.object({
 });
 
 export const revokeSessionSchema = z.object({
-  params: z.object({ id: z.string().uuid() })
+  params: z.object({ id: z.string() })
 });
 
 export const delegationSchema = z.object({

@@ -6,7 +6,8 @@ export function validate(schema) {
       if (schema.query) req.query = schema.query.parse(req.query);
       next();
     } catch (e) {
-      res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: e.errors?.[0]?.message || 'Invalid input' } });
+      const issues = e.issues || e.errors || [];
+      res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: issues[0]?.message || 'Invalid input', details: issues.map(i => ({ path: i.path?.join('.'), message: i.message })) } });
     }
   };
 }

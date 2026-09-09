@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Layout from '../components/Layout.jsx';
 import Modal from '../components/Modal.jsx';
-import { payrollRuns, ledgerEntries, deductionLines, badgeTone } from '../data/mock.js';
+import { ledgerEntries, deductionLines, badgeTone } from '../data/mock.js';
+import { payrollApi } from '../api/payroll.js';
 import { useToast } from '../components/Toast.jsx';
 
 const peso = n => `₱ ${n.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -10,23 +11,26 @@ const totalDeductions = deductionLines.reduce((s, d) => s + d.amount, 0);
 
 export default function Payroll() {
   const toast = useToast();
-  const [runs, setRuns] = useState(payrollRuns);
+  const [runs, setRuns] = useState([]);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [step, setStep] = useState(1);
   const [period, setPeriod] = useState('');
   const [detail, setDetail] = useState(null);
   const [payslip, setPayslip] = useState(null);
 
-  const previewNet = ledgerEntries.reduce((s, e) => s + parsePeso(e.net), 0);
-  const previewGross = ledgerEntries.reduce((s, e) => s + parsePeso(e.gross), 0);
+  useEffect(() => {
+    payrollApi.listRuns().then(r => setRuns(r.data)).catch(() => toast('Failed to load payroll runs', 'error'));
+  }, []);
 
-  const createRun = () => {
-    const id = `PR-2026-${String(runs.length + 1).padStart(3, '0')}`;
-    setRuns(r => [{ id, period: period.trim() || 'Custom period', status: 'Draft', headcount: ledgerEntries.length, net: peso(previewNet) }, ...r]);
-    toast(`Payroll run ${id} created as DRAFT.`, 'success');
-    setWizardOpen(false);
-    setStep(1);
-    setPeriod('');
+  const createRun = async () => {
+    try {
+      const r = await payrollApi.createRun({ period: period.trim() || 'Custom period' });
+      setRuns(rr => [r.data, ...rr]);
+      toast(`Payroll run ${r.data.id} created as DRAFT.`, 'success');
+      setWizardOpen(false);
+      setStep(1);
+      setPeriod('');
+    } catch { toast('Failed to create payroll run', 'error'); }
   };
 
   const detailEntries = detail ? ledgerEntries.filter(e => e.run === detail.id) : [];
@@ -65,16 +69,22 @@ export default function Payroll() {
               <tr><th>Run</th><th>Period</th><th>Status</th><th className="text-right">Employees</th><th className="text-right">Net Pay</th><th></th></tr>
             </thead>
             <tbody>
-              {runs.map(r => (
-                <tr key={r.id}>
-                  <td className="font-mono">{r.id}</td>
-                  <td className="font-medium">{r.period}</td>
-                  <td><span className={`badge ${badgeTone(r.status)}`}>{r.status}</span></td>
-                  <td className="font-mono text-right">{r.headcount.toLocaleString()}</td>
-                  <td className="font-mono text-right">{r.net}</td>
-                  <td className="text-right"><button type="button" className="btn btn-ghost px-3 text-xs" onClick={() => setDetail(r)}>View</button></td>
-                </tr>
-              ))}
+              {runs.map(r => {
+                const period = r.period ?? {};
+                const periodName = period.name ?? r.periodName ?? '';
+                const headcount = r.items ? r.items.length : (r.headcount ?? 0);
+                const net = r.netPay != null ? peso(Number(r.netPay)) : (r.net ?? '—');
+                return (
+                  <tr key={r.id}>
+                    <td className="font-mono">{r.id}</td>
+                    <td className="font-medium">{periodName}</td>
+                    <td><span className={`badge ${badgeTone(r.status)}`}>{r.status}</span></td>
+                    <td className="font-mono text-right">{headcount.toLocaleString()}</td>
+                    <td className="font-mono text-right">{net}</td>
+                    <td className="text-right"><button type="button" className="btn btn-ghost px-3 text-xs" onClick={() => setDetail(r)}>View</button></td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

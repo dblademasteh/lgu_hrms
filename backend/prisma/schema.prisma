@@ -28,6 +28,7 @@ model User {
   createdAt        DateTime  @default(now()) @db.Timestamptz(6)
   updatedAt        DateTime  @updatedAt @db.Timestamptz(6)
   department       Department? @relation(fields: [departmentId], references: [id])
+  linkedEmployee   Employee?   @relation("UserEmployeeLink", fields: [externalId], references: [employeeNumber])
   auditLogs        AuditLog[]
   sessions         UserSession[]
   loginEvents      LoginEvent[]
@@ -77,6 +78,7 @@ model Employee {
   departmentId     String
   positionId       String
   hiredDate        DateTime @db.Date
+  deletedAt        DateTime? @db.Timestamptz(6)
   createdAt        DateTime @default(now()) @db.Timestamptz(6)
   updatedAt        DateTime @updatedAt @db.Timestamptz(6)
   department       Department @relation(fields: [departmentId], references: [id])
@@ -94,6 +96,51 @@ model Employee {
   bonuses          Bonus[]
   loans            Loan[]
   idps             IDP[]
+  familyMembers    FamilyMember[]
+  educationRecords EducationRecord[]
+  awards           Award[]
+  linkedUsers      User[] @relation("UserEmployeeLink")
+}
+
+model FamilyMember {
+  id          String   @id @default(uuid())
+  employeeId  String
+  relationship String
+  firstName   String
+  lastName    String
+  middleName  String?
+  birthDate   DateTime? @db.Date
+  occupation  String?
+  isDependent Boolean  @default(false)
+  createdAt   DateTime @default(now()) @db.Timestamptz(6)
+  employee    Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+}
+
+model EducationRecord {
+  id          String   @id @default(uuid())
+  employeeId  String
+  level       String
+  school      String
+  degree      String?
+  fromDate    DateTime? @db.Date
+  toDate      DateTime? @db.Date
+  unitsEarned Float?
+  yearGraduated Int?
+  scholarships String?
+  honors      String?
+  createdAt   DateTime @default(now()) @db.Timestamptz(6)
+  employee    Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+}
+
+model Award {
+  id          String   @id @default(uuid())
+  employeeId  String
+  title       String
+  issuer      String?
+  dateGiven   DateTime? @db.Date
+  remarks     String?
+  createdAt   DateTime @default(now()) @db.Timestamptz(6)
+  employee    Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
 }
 
 model EmploymentHistory {

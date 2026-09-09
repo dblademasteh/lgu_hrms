@@ -1,0 +1,10 @@
+import { Router } from 'express';
+import * as ctrl from '../controllers/rulesController.js';
+const router = Router();
+router.get('/contributions', ctrl.listContributionRulesHandler);
+router.post('/contributions', ctrl.createContributionRuleHandler);
+router.get('/tax-brackets', ctrl.listTaxBracketsHandler);
+router.post('/tax-brackets', ctrl.createTaxBracketHandler);
+router.get('/leave-rules', ctrl.listLeaveRuleConfigsHandler);
+router.post('/leave-rules', ctrl.createLeaveRuleConfigHandler);
+export default router;

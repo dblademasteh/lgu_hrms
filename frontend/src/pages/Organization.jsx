@@ -1,14 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Layout from '../components/Layout.jsx';
 import Modal from '../components/Modal.jsx';
 import ConfirmDialog from '../components/ConfirmDialog.jsx';
-import { departments } from '../data/mock.js';
+import { departmentsApi } from '../api/departments.js';
 import { useToast } from '../components/Toast.jsx';
 
-const childrenOf = (list, code) => list.filter(d => d.parent === code);
+const childrenOf = (list, parentId) => list.filter(d => d.parentId === parentId);
 
 function Node({ list, dept, depth, onRename, onRemove }) {
-  const children = childrenOf(list, dept.code);
+  const children = childrenOf(list, dept.id);
   return (
     <li>
       <div
@@ -17,7 +17,7 @@ function Node({ list, dept, depth, onRename, onRemove }) {
       >
         <span className="mono-label">{dept.code}</span>
         <span className="font-display font-semibold text-ink text-sm">{dept.name}</span>
-        <span className="ml-auto mono-label">Head · {dept.head}</span>
+        <span className="ml-auto mono-label">Level {dept.level}</span>
         <span className="inline-flex gap-1">
           <button type="button" className="btn btn-ghost px-2 text-xs" onClick={() => onRename(dept)}>Rename</button>
           <button type="button" className="btn btn-ghost px-2 text-xs" onClick={() => onRemove(dept)}>Remove</button>
@@ -26,7 +26,7 @@ function Node({ list, dept, depth, onRename, onRemove }) {
       {children.length > 0 && (
         <ul className="mt-2 space-y-2">
           {children.map(c => (
-            <Node key={c.code} list={list} dept={c} depth={depth + 1} onRename={onRename} onRemove={onRemove} />
+            <Node key={c.id} list={list} dept={c} depth={depth + 1} onRename={onRename} onRemove={onRemove} />
           ))}
         </ul>
       )}
@@ -36,42 +36,55 @@ function Node({ list, dept, depth, onRename, onRemove }) {
 
 export default function Organization() {
   const toast = useToast();
-  const [list, setList] = useState(departments);
+  const [list, setList] = useState([]);
   const [addOpen, setAddOpen] = useState(false);
   const [rename, setRename] = useState(null);
   const [renameName, setRenameName] = useState('');
   const [confirmDel, setConfirmDel] = useState(null);
   const [form, setForm] = useState({ code: '', name: '', parent: '' });
 
-  const addDept = e => {
+  useEffect(() => {
+    departmentsApi.list().then(r => setList(r.data)).catch(() => toast('Failed to load departments', 'error'));
+  }, []);
+
+  const addDept = async e => {
     e.preventDefault();
     const code = form.code.trim().toUpperCase();
     if (!code || !form.name.trim()) { toast('Code and name are required.', 'error'); return; }
     if (list.some(d => d.code === code)) { toast(`Department code ${code} already exists.`, 'error'); return; }
-    setList(l => [...l, { code, name: form.name.trim(), parent: form.parent || null, head: '—' }]);
-    toast(`Department ${code} added.`, 'success');
-    setForm({ code: '', name: '', parent: '' });
-    setAddOpen(false);
+    try {
+      const r = await departmentsApi.create({ code, name: form.name.trim(), parentId: form.parent || null });
+      setList(l => [...l, r.data]);
+      toast(`Department ${code} added.`, 'success');
+      setForm({ code: '', name: '', parent: '' });
+      setAddOpen(false);
+    } catch { toast('Failed to add department', 'error'); }
   };
 
-  const submitRename = e => {
+  const submitRename = async e => {
     e.preventDefault();
     if (!renameName.trim()) { toast('Name is required.', 'error'); return; }
-    setList(l => l.map(d => (d.code === rename.code ? { ...d, name: renameName.trim() } : d)));
-    toast(`Department ${rename.code} renamed.`, 'success');
-    setRename(null);
+    try {
+      const r = await departmentsApi.update(rename.id, { name: renameName.trim() });
+      setList(l => l.map(d => (d.id === rename.id ? r.data : d)));
+      toast(`Department ${rename.code} renamed.`, 'success');
+      setRename(null);
+    } catch { toast('Failed to rename department', 'error'); }
   };
 
-  const removeDept = dept => {
-    if (childrenOf(list, dept.code).length > 0) {
+  const removeDept = async dept => {
+    if (childrenOf(list, dept.id).length > 0) {
       toast(`${dept.code} has child departments — move or remove them first.`, 'error');
       return;
     }
-    setList(l => l.filter(d => d.code !== dept.code));
-    toast(`Department ${dept.code} removed.`, 'info');
+    try {
+      await departmentsApi.remove(dept.id);
+      setList(l => l.filter(d => d.id !== dept.id));
+      toast(`Department ${dept.code} removed.`, 'info');
+    } catch { toast('Failed to remove department', 'error'); }
   };
 
-  const roots = list.filter(d => !d.parent);
+  const roots = list.filter(d => !d.parentId);
 
   return (
     <Layout>
@@ -86,7 +99,7 @@ export default function Organization() {
       <ul className="space-y-2">
         {roots.map(r => (
           <Node
-            key={r.code}
+            key={r.id}
             list={list}
             dept={r}
             depth={0}
@@ -121,7 +134,7 @@ export default function Organization() {
             <label htmlFor="d-parent" className="block text-sm font-medium text-ink mb-1">Parent Unit</label>
             <select id="d-parent" className="input" value={form.parent} onChange={e => setForm(f => ({ ...f, parent: e.target.value }))}>
               <option value="">None (top level)</option>
-              {list.map(d => <option key={d.code} value={d.code}>{d.code} · {d.name}</option>)}
+              {list.map(d => <option key={d.id} value={d.id}>{d.code} · {d.name}</option>)}
             </select>
           </div>
         </form>

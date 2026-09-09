@@ -1,20 +1,36 @@
-import React, { useMemo, useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import Layout from '../components/Layout.jsx';
-import { attendance, badgeTone } from '../data/mock.js';
-
-const dates = [...new Set(attendance.map(a => a.date))];
+import { attendanceApi } from '../api/attendance.js';
+import { badgeTone } from '../data/mock.js';
+import { useToast } from '../components/Toast.jsx';
 
 export default function Attendance() {
-  const [date, setDate] = useState(dates[0]);
-  const rows = useMemo(() => attendance.filter(a => a.date === date), [date]);
+  const toast = useToast();
+  const [date, setDate] = useState('');
+  const [rows, setRows] = useState([]);
+  const [dates, setDates] = useState([]);
+
+  useEffect(() => {
+    attendanceApi.list().then(r => {
+      const all = r.data;
+      setRows(all);
+      setDates([...new Set(all.map(a => a.date ? new Date(a.date).toISOString().slice(0, 10) : ''))].filter(Boolean).sort());
+    }).catch(() => toast('Failed to load attendance', 'error'));
+  }, []);
+
+  useEffect(() => {
+    attendanceApi.list(date || undefined).then(r => setRows(r.data)).catch(() => toast('Failed to load attendance', 'error'));
+  }, [date]);
 
   const summary = useMemo(() => {
     const onTime = rows.filter(r => r.remark === 'On time').length;
     const late = rows.filter(r => r.remark === 'Tardiness').length;
-    const ot = rows.filter(r => r.remark === 'Overtime').reduce((s, r) => s + r.hours - 8, 0);
+    const ot = rows.filter(r => r.remark === 'Overtime').reduce((s, r) => s + (r.hours ?? 0) - 8, 0);
     const onLeave = rows.filter(r => r.remark === 'On leave').length;
     return { onTime, late, ot: Math.round(ot * 10) / 10, onLeave };
   }, [rows]);
+
+  const fmtTime = (d) => d ? new Date(d).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—';
 
   return (
     <Layout>
@@ -26,6 +42,7 @@ export default function Attendance() {
         <label className="flex items-center gap-2">
           <span className="mono-label">Date</span>
           <select className="input w-auto" value={date} onChange={e => setDate(e.target.value)} aria-label="Filter by date">
+            <option value="">All dates</option>
             {dates.map(d => <option key={d} value={d}>{d}</option>)}
           </select>
         </label>
@@ -56,16 +73,21 @@ export default function Attendance() {
               <tr><th>No.</th><th>Name</th><th>Time In</th><th>Time Out</th><th className="text-right">Hours</th><th>Remark</th></tr>
             </thead>
             <tbody>
-              {rows.map(r => (
-                <tr key={r.no}>
-                  <td className="font-mono">{r.no}</td>
-                  <td className="font-medium">{r.name}</td>
-                  <td className="font-mono">{r.in}</td>
-                  <td className="font-mono">{r.out}</td>
-                  <td className="font-mono text-right">{r.hours.toFixed(1)}</td>
-                  <td><span className={`badge ${badgeTone(r.remark)}`}>{r.remark}</span></td>
-                </tr>
-              ))}
+              {rows.map(r => {
+                const emp = r.employee ?? {};
+                const name = `${emp.firstName ?? ''} ${emp.lastName ?? ''}`.trim() || '—';
+                const no = emp.employeeNumber ?? '';
+                return (
+                  <tr key={r.id}>
+                    <td className="font-mono">{no}</td>
+                    <td className="font-medium">{name}</td>
+                    <td className="font-mono">{fmtTime(r.timeIn)}</td>
+                    <td className="font-mono">{fmtTime(r.timeOut)}</td>
+                    <td className="font-mono text-right">{(r.hours ?? 0).toFixed(1)}</td>
+                    <td><span className={`badge ${badgeTone(r.remark)}`}>{r.remark}</span></td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
