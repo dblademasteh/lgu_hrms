@@ -14,12 +14,17 @@ model User {
   role             Role
   departmentId     String?
   externalId       String?
+  displayName      String?
+  email            String?
+  contactNumber    String?
+  emergencyContact String?
   passwordChangedAt DateTime? @db.Timestamptz(6)
   twoFactorEnabled Boolean   @default(false)
   twoFactorSecret  String?
   displayPrefs     Json?
   avatarPath       String?
   signaturePath    String?
+  status           String    @default("ACTIVE")
   createdAt        DateTime  @default(now()) @db.Timestamptz(6)
   updatedAt        DateTime  @updatedAt @db.Timestamptz(6)
   department       Department? @relation(fields: [departmentId], references: [id])
@@ -41,6 +46,8 @@ model Department {
   employees Employee[]
   parent    Department? @relation("DeptHierarchy", fields: [parentId], references: [id])
   children  Department[] @relation("DeptHierarchy")
+  plantillaItems PlantillaItem[]
+  applicants Applicant[]
 }
 
 model Position {
@@ -50,6 +57,8 @@ model Position {
   step        Int?
   createdAt   DateTime @default(now()) @db.Timestamptz(6)
   employees   Employee[]
+  plantillaItems PlantillaItem[]
+  applicants  Applicant[]
 }
 
 model Employee {
@@ -78,6 +87,13 @@ model Employee {
   leaveCredits     LeaveCredit[]
   attendances      Attendance[]
   appointments     Appointment[]
+  performanceReviews PerformanceReview[]
+  designationOrders DesignationOrder[]
+  trainingEnrollments TrainingEnrollment[]
+  eligibilities    Eligibility[]
+  bonuses          Bonus[]
+  loans            Loan[]
+  idps             IDP[]
 }
 
 model EmploymentHistory {
@@ -124,6 +140,26 @@ model PayrollItem {
   createdAt   DateTime @default(now()) @db.Timestamptz(6)
   employee    Employee @relation(fields: [employeeId], references: [id])
   run         PayrollRun @relation(fields: [runId], references: [id])
+  deductionLines PayrollDeductionLine[]
+  payslip Payslip?
+}
+
+model PayrollDeductionLine {
+  id          String   @id @default(uuid())
+  payrollItemId String
+  code        String
+  description String?
+  employeeShare Decimal @db.Decimal(12,2) @default(0)
+  employerShare Decimal @db.Decimal(12,2) @default(0)
+  payrollItem PayrollItem @relation(fields: [payrollItemId], references: [id])
+}
+
+model Payslip {
+  id          String   @id @default(uuid())
+  payrollItemId String @unique
+  generatedAt DateTime @default(now()) @db.Timestamptz(6)
+  pdfUrl      String?
+  payrollItem PayrollItem @relation(fields: [payrollItemId], references: [id])
 }
 
 model LedgerEntry {
@@ -230,8 +266,211 @@ model Appointment {
   startDate   DateTime @db.Date
   endDate     DateTime? @db.Date
   status      String @default("ACTIVE")
+  position    String?
+  dept        String?
+  name        String?
   createdAt   DateTime @default(now()) @db.Timestamptz(6)
   employee    Employee @relation(fields: [employeeId], references: [id])
+  designationOrders DesignationOrder[]
+}
+
+model PerformanceReview {
+  id          String   @id @default(uuid())
+  employeeId  String
+  reviewYear  Int
+  reviewType  String
+  rating      Float?
+  comments    String?
+  status      ReviewStatus @default(DRAFT)
+  reviewedBy  String?
+  reviewedAt  DateTime? @db.Timestamptz(6)
+  createdAt   DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @db.Timestamptz(6)
+  employee    Employee @relation(fields: [employeeId], references: [id])
+}
+
+model PlantillaItem {
+  id           String          @id @default(uuid())
+  itemNumber   String          @unique
+  positionId   String
+  departmentId String
+  status       PlantillaStatus @default(VACANT)
+  createdAt    DateTime        @default(now()) @db.Timestamptz(6)
+  position     Position        @relation(fields: [positionId], references: [id])
+  department   Department      @relation(fields: [departmentId], references: [id])
+  vacancies    Vacancy[]
+}
+
+model Vacancy {
+  id              String        @id @default(uuid())
+  plantillaItemId String
+  title           String
+  description     String?
+  qualifications  String?
+  status          VacancyStatus @default(OPEN)
+  publishedAt     DateTime?     @db.Timestamptz(6)
+  closesAt        DateTime?     @db.Date
+  createdAt       DateTime      @default(now()) @db.Timestamptz(6)
+  plantillaItem   PlantillaItem @relation(fields: [plantillaItemId], references: [id])
+  publications     VacancyPublication[]
+  designationOrders DesignationOrder[]
+}
+
+model VacancyPublication {
+  id           String   @id @default(uuid())
+  vacancyId    String
+  channel      String
+  publishedAt  DateTime @default(now()) @db.Timestamptz(6)
+  link         String?
+  vacancy      Vacancy  @relation(fields: [vacancyId], references: [id])
+}
+
+model DesignationOrder {
+  id            String   @id @default(uuid())
+  employeeId    String
+  appointmentId String?
+  vacancyId     String?
+  orderNumber   String   @unique
+  issuedDate    DateTime @db.Date
+  signedBy      String?
+  status        String   @default("ACTIVE")
+  createdAt     DateTime @default(now()) @db.Timestamptz(6)
+  employee      Employee @relation(fields: [employeeId], references: [id])
+  appointment   Appointment? @relation(fields: [appointmentId], references: [id])
+  vacancy       Vacancy? @relation(fields: [vacancyId], references: [id])
+}
+
+model TrainingProgram {
+  id           String   @id @default(uuid())
+  code         String   @unique
+  title        String
+  description  String?
+  durationHours Int?
+  createdAt    DateTime @default(now()) @db.Timestamptz(6)
+  enrollments  TrainingEnrollment[]
+}
+
+model TrainingEnrollment {
+  id         String   @id @default(uuid())
+  employeeId String
+  programId  String
+  status     EnrollmentStatus @default(ENROLLED)
+  enrolledAt DateTime @default(now()) @db.Timestamptz(6)
+  completedAt DateTime? @db.Timestamptz(6)
+  employee   Employee @relation(fields: [employeeId], references: [id])
+  program    TrainingProgram @relation(fields: [programId], references: [id])
+}
+
+model Eligibility {
+  id          String   @id @default(uuid())
+  employeeId  String
+  eligibilityType String
+  rating      String?
+  examDate    DateTime? @db.Date
+  validUntil  DateTime? @db.Date
+  remarks     String?
+  createdAt   DateTime @default(now()) @db.Timestamptz(6)
+  employee    Employee @relation(fields: [employeeId], references: [id])
+}
+
+model Applicant {
+  id            String   @id @default(uuid())
+  firstName     String
+  lastName      String
+  middleName    String?
+  email         String?
+  phone         String?
+  status        ApplicantStatus @default(APPLIED)
+  appliedPositionId String?
+  appliedDepartmentId String?
+  resumeUrl     String?
+  createdAt     DateTime @default(now()) @db.Timestamptz(6)
+  position      Position? @relation(fields: [appliedPositionId], references: [id])
+  department    Department? @relation(fields: [appliedDepartmentId], references: [id])
+  interviews    Interview[]
+}
+
+model ContributionRule {
+  id          String   @id @default(uuid())
+  type        String
+  employeeRate Decimal @db.Decimal(5,4)
+  employerRate Decimal @db.Decimal(5,4)
+  effectiveFrom DateTime @db.Date
+  effectiveTo DateTime? @db.Date
+  createdAt   DateTime @default(now()) @db.Timestamptz(6)
+}
+
+model TaxBracket {
+  id          String   @id @default(uuid())
+  minIncome   Decimal @db.Decimal(12,2)
+  maxIncome   Decimal? @db.Decimal(12,2)
+  rate        Decimal @db.Decimal(5,4)
+  effectiveFrom DateTime @db.Date
+  effectiveTo DateTime? @db.Date
+  createdAt   DateTime @default(now()) @db.Timestamptz(6)
+}
+
+model LeaveRuleConfig {
+  id          String   @id @default(uuid())
+  leaveType   LeaveType
+  accrualPerMonth Decimal @db.Decimal(4,2)
+  maxCarryOver Decimal? @db.Decimal(6,2)
+  effectiveFrom DateTime @db.Date
+  effectiveTo DateTime? @db.Date
+  createdAt   DateTime @default(now()) @db.Timestamptz(6)
+}
+
+enum BonusType {
+  THIRTEENTH_MONTH
+  CASH_GIFT
+  YEAR_END_BONUS
+}
+
+model Bonus {
+  id          String   @id @default(uuid())
+  employeeId  String
+  type        BonusType
+  amount      Decimal @db.Decimal(12,2)
+  periodYear  Int
+  periodMonth Int?
+  status      String @default("PENDING")
+  createdAt   DateTime @default(now()) @db.Timestamptz(6)
+  employee    Employee @relation(fields: [employeeId], references: [id])
+}
+
+enum ApplicantStatus {
+  APPLIED
+  SCREENED
+  SHORTLISTED
+  INTERVIEWED
+  OFFERED
+  HIRED
+  REJECTED
+}
+
+enum EnrollmentStatus {
+  ENROLLED
+  COMPLETED
+  CANCELLED
+}
+
+enum PlantillaStatus {
+  VACANT
+  FILLED
+  FROZEN
+}
+
+enum VacancyStatus {
+  OPEN
+  CLOSED
+  CANCELLED
+}
+
+enum ReviewStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
 }
 
 enum Role {
@@ -288,3 +527,74 @@ enum AppointmentType {
   COS
   COTERMINOUS
 }
+
+enum LoanType {
+  SALARY_ADVANCE
+  CASH_LOAN
+  HOUSING_LOAN
+  EDUCATION_LOAN
+}
+
+enum LoanStatus {
+  PENDING
+  APPROVED
+  DISBURSED
+  PAID
+  CANCELLED
+}
+
+model Loan {
+  id          String    @id @default(uuid())
+  employeeId  String
+  type        LoanType
+  amount      Decimal   @db.Decimal(12,2)
+  termMonths  Int
+  startDate   DateTime  @db.Date
+  status      LoanStatus @default(PENDING)
+  createdAt   DateTime  @default(now()) @db.Timestamptz(6)
+  employee    Employee  @relation(fields: [employeeId], references: [id])
+  amortizations LoanAmortization[]
+}
+
+model LoanAmortization {
+  id        String   @id @default(uuid())
+  loanId    String
+  dueDate   DateTime @db.Date
+  amount    Decimal  @db.Decimal(12,2)
+  paid      Boolean  @default(false)
+  loan      Loan     @relation(fields: [loanId], references: [id])
+}
+
+model AttendanceRule {
+  id            String  @id @default(uuid())
+  name          String
+  tardinessMin  Int
+  deductionRate Decimal @db.Decimal(12,2)
+  active        Boolean @default(true)
+}
+
+model Competency {
+  id          String @id @default(uuid())
+  code        String @unique
+  name        String
+  description String?
+}
+
+model IDP {
+  id          String   @id @default(uuid())
+  employeeId  String
+  year        Int
+  goals       Json?
+  createdAt   DateTime @default(now()) @db.Timestamptz(6)
+  employee    Employee @relation(fields: [employeeId], references: [id])
+}
+
+model Interview {
+  id          String   @id @default(uuid())
+  applicantId String
+  scheduledAt DateTime @db.Timestamptz(6)
+  status      String   @default("SCHEDULED")
+  notes       String?
+  applicant   Applicant @relation(fields: [applicantId], references: [id])
+}
+

@@ -12,6 +12,14 @@ import Users from './pages/Users.jsx';
 import Attendance from './pages/Attendance.jsx';
 import Appointments from './pages/Appointments.jsx';
 import Settings from './pages/Settings.jsx';
+import Performance from './pages/Performance.jsx';
+import Plantilla from './pages/Plantilla.jsx';
+import Vacancy from './pages/Vacancy.jsx';
+import Designation from './pages/Designation.jsx';
+import Learning from './pages/Learning.jsx';
+import Recruitment from './pages/Recruitment.jsx';
+import ESS from './pages/ESS.jsx';
+import IPCR from './pages/IPCR.jsx';
 import NotFound from './components/NotFound.jsx';
 import ErrorBoundary from './components/ErrorBoundary.jsx';
 import CommandPalette from './components/CommandPalette.jsx';
@@ -32,7 +40,7 @@ export default function App() {
   return (
     <ErrorBoundary>
       <ToastProvider>
-        <BrowserRouter>
+        <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
           <Routes>
             <Route path="/" element={<Login />} />
             <Route path="/dashboard" element={<Protected><UserDashboard /></Protected>} />
@@ -45,6 +53,14 @@ export default function App() {
             <Route path="/users" element={<Protected><Users /></Protected>} />
             <Route path="/attendance" element={<Protected><Attendance /></Protected>} />
             <Route path="/appointments" element={<Protected><Appointments /></Protected>} />
+            <Route path="/performance" element={<Protected><Performance /></Protected>} />
+            <Route path="/plantilla" element={<Protected><Plantilla /></Protected>} />
+            <Route path="/vacancy" element={<Protected><Vacancy /></Protected>} />
+            <Route path="/designation" element={<Protected><Designation /></Protected>} />
+            <Route path="/learning" element={<Protected><Learning /></Protected>} />
+            <Route path="/recruitment" element={<Protected><Recruitment /></Protected>} />
+            <Route path="/ess" element={<Protected><ESS /></Protected>} />
+            <Route path="/ipcr" element={<Protected><IPCR /></Protected>} />
             <Route path="/settings" element={<Protected><Settings /></Protected>} />
             <Route path="*" element={<NotFound />} />
           </Routes>

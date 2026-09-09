@@ -7,32 +7,49 @@ import {
 
 const groups = [
   {
-    label: 'Personnel',
+    label: 'Workforce',
     items: [
       { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
       { name: 'Employees', path: '/employees', icon: Users },
       { name: 'Organization', path: '/organization', icon: Building2 },
-      { name: 'Appointments', path: '/appointments', icon: FileBadge },
+      { name: 'Employee Self-Service', path: '/ess', icon: UserCog },
     ]
   },
   {
-    label: 'Payroll',
+    label: 'RSP',
     items: [
-      { name: 'Payroll', path: '/payroll', icon: Banknote },
+      { name: 'Appointments', path: '/appointments', icon: FileBadge },
+      { name: 'Plantilla', path: '/plantilla', icon: FileBadge },
+      { name: 'Vacancy', path: '/vacancy', icon: BarChart3 },
+      { name: 'Designation', path: '/designation', icon: UserCog },
+      { name: 'Recruitment', path: '/recruitment', icon: UserCog },
+    ]
+  },
+  {
+    label: 'Performance & L&D',
+    items: [
+      { name: 'Performance', path: '/performance', icon: BarChart3 },
+      { name: 'Learning', path: '/learning', icon: Landmark },
       { name: 'Attendance DTR', path: '/attendance', icon: Clock },
     ]
   },
   {
-    label: 'Compliance',
+    label: 'Payroll & Benefits',
     items: [
+      { name: 'Payroll', path: '/payroll', icon: Banknote },
       { name: 'Leave', path: '/leave', icon: CalendarDays },
+    ]
+  },
+  {
+    label: 'Compliance & Audit',
+    items: [
       { name: 'Audit Trail', path: '/audit', icon: ShieldCheck },
+      { name: 'Reports', path: '/reports', icon: BarChart3 },
     ]
   },
   {
     label: 'Administration',
     items: [
-      { name: 'Reports', path: '/reports', icon: BarChart3 },
       { name: 'Users & Roles', path: '/users', icon: UserCog },
       { name: 'Settings', path: '/settings', icon: SettingsIcon },
     ]
