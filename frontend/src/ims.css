@@ -1,0 +1,9 @@
+:root{--bg:#f4f6fb;--surface:#ffffff;--accent:#1d4ed8;--error:#dc2626}
+body{margin:0;background:var(--bg);font-family:Inter,system-ui}
+.card{max-width:420px;margin:80px auto;background:var(--surface);padding:32px;border-radius:10px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+h1{font-family:Sora,system-ui;font-weight:700;font-size:24px;margin:0}
+label{display:block;font-weight:500;margin:.75rem 0 .25rem}
+input{width:100%;padding:.6rem .75rem;border:1px solid #cbd5e1;border-radius:10px;background:#fff}
+input:focus{outline:none;box-shadow:0 0 0 2px var(--accent)}
+button{width:100%;margin-top:1rem;padding:.6rem;background:var(--accent);color:#fff;border:none;border-radius:10px;font-weight:600}
+.error{color:var(--error);font-size:.875rem;margin-top:.25rem}

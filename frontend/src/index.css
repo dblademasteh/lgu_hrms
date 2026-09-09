@@ -1,0 +1,380 @@
+@import 'tailwindcss';
+
+/* ============================================================
+   LGU HRMS Design Tokens — source of truth (Design_Documentation.md §2.2–2.6)
+   Light: bg #f4f6fb · surface #ffffff · accent #1d4ed8
+   Dark:  bg #0b1120 · surface #111a2e · accent #60a5fa
+   ============================================================ */
+:root {
+  --bg: #f4f6fb;
+  --surface: #ffffff;
+  --accent: #1d4ed8;
+  --accent-ink: #ffffff;
+  --error-ink: #ffffff;
+  --success: #059669;
+  --warning: #d97706;
+  --error: #dc2626;
+  --ink: #0f172a;
+  --muted: #475569;
+  --line: #e2e8f0;
+  color-scheme: light;
+}
+
+[data-theme='dark'] {
+  --bg: #0b1120;
+  --surface: #111a2e;
+  --accent: #60a5fa;
+  --accent-ink: #0b1120;
+  --error-ink: #0b1120;
+  --success: #34d399;
+  --warning: #fbbf24;
+  --error: #f87171;
+  --ink: #e2e8f0;
+  --muted: #94a3b8;
+  --line: #1e293b;
+  color-scheme: dark;
+}
+
+/* Expose tokens as Tailwind utilities (bg-surface, text-muted, border-line, …).
+   `inline` keeps var() references live so data-theme switching works at runtime. */
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-error-ink: var(--error-ink);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-error: var(--error);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --font-sans: 'Inter Variable', 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-display: 'Sora Variable', 'Sora', 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, monospace;
+}
+
+@layer base {
+  body {
+    margin: 0;
+    background-color: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+  h1, h2, h3, h4, h5, h6 { font-family: var(--font-display); }
+  pre, code, kbd { font-family: var(--font-mono); }
+  ::selection { background: color-mix(in oklab, var(--accent) 25%, transparent); }
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, ::before, ::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+/* ============ Component class system (docs §2.5 — no UI library) ============ */
+@layer components {
+  .mono-label {
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  /* btn — Inter 600, hairline, primary blue gradient, 150ms hover */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    font-weight: 600;
+    font-size: 0.875rem;
+    line-height: 1;
+    border-radius: 10px;
+    border: 1px solid var(--line);
+    padding: 0.625rem 1rem;
+    cursor: pointer;
+    transition: filter 150ms ease, background-color 150ms ease,
+      border-color 150ms ease, transform 150ms ease;
+  }
+  .btn:active { transform: translateY(1px); }
+  .btn-primary {
+    background-image: linear-gradient(180deg,
+      color-mix(in oklab, var(--accent) 88%, white), var(--accent));
+    border-color: color-mix(in oklab, var(--accent) 80%, black);
+    color: var(--accent-ink);
+  }
+  .btn-primary:hover { filter: brightness(1.08); }
+  .btn-ghost { background: transparent; border-color: transparent; color: var(--muted); }
+  .btn-ghost:hover { background: color-mix(in oklab, var(--ink) 6%, transparent); color: var(--ink); }
+
+  /* input — surface fill, 10px radius, accent focus ring */
+  .input {
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 0.5rem 0.75rem;
+    font: inherit;
+    font-size: 0.875rem;
+    color: var(--ink);
+    transition: border-color 150ms ease, box-shadow 150ms ease;
+  }
+  .input::placeholder { color: color-mix(in oklab, var(--muted) 75%, transparent); }
+  .input:hover { border-color: color-mix(in oklab, var(--accent) 35%, var(--line)); }
+  .input:focus-visible {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px color-mix(in oklab, var(--accent) 30%, transparent);
+  }
+  .input[aria-invalid='true'] { border-color: var(--error); }
+  .input[aria-invalid='true']:focus-visible {
+    box-shadow: 0 0 0 2px color-mix(in oklab, var(--error) 30%, transparent);
+  }
+
+  /* card / stat — theme-aware surfaces */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    box-shadow: 0 1px 2px rgb(15 23 42 / 0.06), 0 8px 24px -12px rgb(15 23 42 / 0.12);
+  }
+  .stat { padding: 1rem; display: flex; flex-direction: column; gap: 0.375rem; }
+  .stat-value {
+    font-family: var(--font-mono);
+    font-size: 1.5rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: var(--ink);
+  }
+
+  /* badge — tinted fill via color-mix; set --badge-color per variant */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    width: fit-content;
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    border-radius: 999px;
+    padding: 0.25rem 0.625rem;
+    color: var(--badge-color, var(--muted));
+    border: 1px solid color-mix(in oklab, var(--badge-color, var(--muted)) 30%, transparent);
+    background: color-mix(in oklab, var(--badge-color, var(--muted)) 10%, transparent);
+  }
+  .badge-success { --badge-color: var(--success); }
+  .badge-warning { --badge-color: var(--warning); }
+  .badge-error   { --badge-color: var(--error); }
+  .badge-accent  { --badge-color: var(--accent); }
+
+  /* table — sticky mono uppercase thead, hover tint 5% */
+  .data-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+  .data-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: var(--surface);
+    text-align: left;
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding: 0.625rem 0.75rem;
+    border-bottom: 1px solid var(--line);
+  }
+  .data-table tbody td {
+    padding: 0.625rem 0.75rem;
+    border-bottom: 1px solid color-mix(in oklab, var(--line) 60%, transparent);
+  }
+  .data-table tbody tr { transition: background-color 150ms ease; }
+  .data-table tbody tr:hover { background: color-mix(in oklab, var(--accent) 5%, transparent); }
+  .data-table tbody tr[data-selectable='true'] { cursor: pointer; }
+  .data-table tbody tr[data-selected='true'] {
+    background: color-mix(in oklab, var(--accent) 10%, transparent);
+  }
+
+  /* sidebar link — 200ms ease */
+  .sidebar-link {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    border-radius: 8px;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--muted);
+    text-decoration: none;
+    transition: background-color 200ms ease, color 200ms ease;
+  }
+  .sidebar-link:hover {
+    background: color-mix(in oklab, var(--ink) 8%, transparent);
+    color: var(--ink);
+  }
+  .sidebar-link[aria-current='page'] {
+    background: color-mix(in oklab, var(--accent) 15%, transparent);
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  /* btn-danger — destructive confirmations */
+  .btn-danger {
+    background-image: linear-gradient(180deg,
+      color-mix(in oklab, var(--error) 88%, white), var(--error));
+    border-color: color-mix(in oklab, var(--error) 80%, black);
+    color: var(--error-ink);
+  }
+  .btn-danger:hover { filter: brightness(1.08); }
+
+  /* modal — persists until explicitly closed (docs §2.5) */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    background: rgb(2 6 23 / 0.55);
+  }
+  .modal-box {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    width: 100%;
+    max-height: min(85vh, 48rem);
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 24px 64px -16px rgb(2 6 23 / 0.35);
+  }
+  .modal-sm { max-width: 26rem; }
+  .modal-md { max-width: 36rem; }
+  .modal-lg { max-width: 56rem; }
+  .modal-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--line);
+  }
+  .modal-body { padding: 1.25rem; overflow: auto; }
+  .modal-foot {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    padding: 1rem 1.25rem;
+    border-top: 1px solid var(--line);
+  }
+
+  /* toast — in-app notifications (docs §4.6) */
+  .toast-stack {
+    position: fixed;
+    right: 1rem;
+    bottom: 1rem;
+    z-index: 60;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  .toast {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    min-width: 18rem;
+    max-width: 24rem;
+    background: var(--surface);
+    color: var(--ink);
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--toast-color, var(--accent));
+    border-radius: 10px;
+    padding: 0.75rem 1rem;
+    font-size: 0.875rem;
+    box-shadow: 0 12px 32px -12px rgb(2 6 23 / 0.3);
+    animation: toast-in 200ms ease;
+  }
+  .toast-success { --toast-color: var(--success); }
+  .toast-error   { --toast-color: var(--error); }
+  .toast-info    { --toast-color: var(--accent); }
+  .toast-x {
+    margin-left: auto;
+    background: none;
+    border: 0;
+    color: var(--muted);
+    cursor: pointer;
+    padding: 0.125rem;
+  }
+  .toast-x:hover { color: var(--ink); }
+  @keyframes toast-in {
+    from { opacity: 0; transform: translateY(0.5rem); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* tabs — multi-tab detail panes */
+  .tabbar {
+    display: flex;
+    gap: 0.25rem;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+  }
+  .tab {
+    background: none;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--muted);
+    cursor: pointer;
+    transition: color 150ms ease, border-color 150ms ease;
+  }
+  .tab:hover { color: var(--ink); }
+  .tab-active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+
+  /* command palette */
+  .palette { padding: 0.75rem; }
+  .palette-list { list-style: none; margin: 0; padding: 0; max-height: 18rem; overflow: auto; }
+  .palette-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    width: 100%;
+    text-align: left;
+    background: none;
+    border: 0;
+    border-radius: 8px;
+    padding: 0.5rem 0.75rem;
+    cursor: pointer;
+    transition: background-color 150ms ease;
+  }
+  .palette-item:hover { background: color-mix(in oklab, var(--ink) 6%, transparent); }
+
+  /* header dropdown */
+  .dropdown { position: relative; }
+  .dropdown-panel {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 0.5rem);
+    z-index: 40;
+    width: 20rem;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    box-shadow: 0 16px 48px -16px rgb(2 6 23 / 0.3);
+    overflow: hidden;
+  }
+}
