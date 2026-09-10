@@ -70,7 +70,9 @@ export default function BiometricAttendance() {
   const canPunchIn = !isPunchedIn || isPunchedOut;
 
   const fmtTime = (d) => d ? new Date(d).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—';
-  const hours = status ? ((status.timeOut || new Date()) - status.timeIn) / (1000 * 60 * 60) : 0;
+  const hours = status && status.timeOut && status.timeIn 
+    ? ((new Date(status.timeOut).getTime() - new Date(status.timeIn).getTime()) / (1000 * 60 * 60)).toFixed(1) 
+    : '0.0';
 
   // Calculate summary stats
   const summary = {
@@ -124,7 +126,7 @@ export default function BiometricAttendance() {
                 <div className="text-center p-4 bg-bg rounded-lg">
                   <p className="text-sm text-muted">Time Out / Hours</p>
                   <p className="font-bold text-lg text-ink mt-1">
-                    {fmtTime(status.timeOut || '')} • {hours.toFixed(1)} hrs
+                    {fmtTime(status.timeOut || '')} • {hours} hrs
                   </p>
                 </div>
               </>

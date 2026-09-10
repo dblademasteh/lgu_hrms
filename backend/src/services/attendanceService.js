@@ -64,15 +64,12 @@ export const attendanceService = {
       if (record?.timeOut) {
         return { message: 'Already punched out', record };
       }
+      // Calculate hours from timeIn to now
+      const timeInDate = new Date(record.timeIn);
+      const hours = (now - timeInDate) / (1000 * 60 * 60);
       record = await prisma.attendance.update({
         where: { id: record.id },
-        data: { timeOut: now, remark: 'Completed' }
-      });
-      // Calculate hours
-      const hours = (record.timeOut - record.timeIn) / (1000 * 60 * 60);
-      record = await prisma.attendance.update({
-        where: { id: record.id },
-        data: { hours }
+        data: { timeOut: now, hours, remark: 'Completed' }
       });
     }
 
