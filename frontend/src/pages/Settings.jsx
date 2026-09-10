@@ -449,8 +449,14 @@ export default function Settings() {
         </div>
         <Modal open={showPasswordModal} onClose={() => setShowPasswordModal(false)} title="Change Password" size="sm" footer={
           <div className="flex justify-end gap-2">
-            <button className="btn btn-ghost" onClick={() => setShowPasswordModal(false)}>Cancel</button>
-            <button className="btn btn-primary" onClick={handlePasswordChange}>Save</button>
+            <button className="btn btn-ghost gap-2" onClick={() => setShowPasswordModal(false)}>
+              <X size={16} />
+              Cancel
+            </button>
+            <button className="btn btn-primary gap-2" onClick={handlePasswordChange}>
+              <Save size={16} />
+              Save
+            </button>
           </div>
         }>
           <div className="space-y-4">
