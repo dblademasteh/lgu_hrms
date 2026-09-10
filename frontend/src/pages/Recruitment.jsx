@@ -172,7 +172,7 @@ export default function Recruitment(){
               <div>
                 <label className="block text-sm font-medium text-ink mb-1">Position</label>
                 <select 
-                  className="input" 
+                  className="select" 
                   value={form.appliedPositionId} 
                   onChange={e=>setForm({...form, appliedPositionId:e.target.value})}
                 >
@@ -187,7 +187,7 @@ export default function Recruitment(){
               <div>
                 <label className="block text-sm font-medium text-ink mb-1">Department</label>
                 <select 
-                  className="input" 
+                  className="select" 
                   value={form.appliedDepartmentId} 
                   onChange={e=>setForm({...form, appliedDepartmentId:e.target.value})}
                 >

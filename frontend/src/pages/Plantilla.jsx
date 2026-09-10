@@ -135,7 +135,7 @@ export default function Plantilla() {
               <label htmlFor="pi-pos" className="block text-sm font-medium text-ink mb-1">Position *</label>
               <select 
                 id="pi-pos" 
-                className="input" 
+                className="select" 
                 value={form.positionId} 
                 onChange={e=>setForm({...form,positionId:e.target.value})}
               >
@@ -152,7 +152,7 @@ export default function Plantilla() {
             <label htmlFor="pi-dept" className="block text-sm font-medium text-ink mb-1">Department *</label>
             <select 
               id="pi-dept" 
-              className="input" 
+              className="select" 
               value={form.departmentId} 
               onChange={e=>setForm({...form,departmentId:e.target.value})}
             >
