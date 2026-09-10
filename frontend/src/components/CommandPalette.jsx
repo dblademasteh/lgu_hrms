@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Badge, Search as SearchIcon, User, Home, BarChart3, FileText, Calendar, ShieldCheck, Users, Settings, Clock, Fingerprint } from 'lucide-react';
+import { Badge, Search as SearchIcon, User, Home, BarChart3, FileText, Calendar, ShieldCheck, ShieldAlert, Users, Settings, Clock, Fingerprint } from 'lucide-react';
 
 const pages = [
   { label: 'Dashboard', path: '/dashboard', icon: Home },
@@ -18,6 +18,7 @@ const pages = [
   { label: 'Performance', path: '/performance', icon: BarChart3 },
   { label: 'Learning', path: '/learning', icon: Users },
   { label: 'Audit Trail', path: '/audit', icon: ShieldCheck },
+  { label: 'DIBAR Records', path: '/disqualifications', icon: ShieldAlert },
   { label: 'Reports', path: '/reports', icon: BarChart3 },
   { label: 'Users & Roles', path: '/users', icon: Users },
   { label: 'Settings', path: '/settings', icon: Settings },

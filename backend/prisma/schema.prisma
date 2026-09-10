@@ -100,6 +100,7 @@ model Employee {
   educationRecords EducationRecord[]
   awards           Award[]
   linkedUsers      User[] @relation("UserEmployeeLink")
+  disqualifications Disqualification[]
 }
 
 model FamilyMember {
@@ -418,6 +419,41 @@ model Eligibility {
   remarks     String?
   createdAt   DateTime @default(now()) @db.Timestamptz(6)
   employee    Employee @relation(fields: [employeeId], references: [id])
+}
+
+// DIBAR - Disqualified, Barred, or Disqualified Individuals
+enum DisqualificationType {
+  VIOLATION_OF_CSC_RULES
+  CRIMINAL_CONVICTION
+  MORAL_TURPITUDE
+  FRAUD
+  MISCONDUCT
+  OTHER
+}
+
+enum DisqualificationReason {
+  GROSS_MISCONDUCT
+  HARRASSMENT
+  EMBEZZLEMENT
+  FRAUDULENT_MISREPRESENTATION
+  SUBSTANCE_ABUSE
+  POLITICAL_PARTISANISM
+  OTHER_GROUNDS
+}
+
+model Disqualification {
+  id                    String           @id @default(uuid())
+  employeeId            String
+  type                  DisqualificationType
+  reason                DisqualificationReason
+  date                  DateTime         @db.Date
+  validity              DateTime?        @db.Date
+  remarks               String?
+  evidenceDocument      String?          // URL or path to supporting document
+  isBarred              Boolean          @default(false)
+  createdAt             DateTime         @default(now()) @db.Timestamptz(6)
+  createdBy             String?
+  employee              Employee         @relation(fields: [employeeId], references: [id])
 }
 
 model Applicant {

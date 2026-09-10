@@ -21,6 +21,7 @@ import Learning from './pages/Learning.jsx';
 import Recruitment from './pages/Recruitment.jsx';
 import ESS from './pages/ESS.jsx';
 import IPCR from './pages/IPCR.jsx';
+import Disqualifications from './pages/Disqualifications.jsx';
 import NotFound from './components/NotFound.jsx';
 import ErrorBoundary from './components/ErrorBoundary.jsx';
 import CommandPalette from './components/CommandPalette.jsx';
@@ -69,6 +70,7 @@ export default function App() {
             <Route path="/recruitment" element={<Protected roles={['ADMIN', 'HR_MANAGER']}><Recruitment /></Protected>} />
             <Route path="/ess" element={<Protected><ESS /></Protected>} />
             <Route path="/ipcr" element={<Protected roles={['ADMIN', 'HR_MANAGER', 'DEPARTMENT_HEAD']}><IPCR /></Protected>} />
+            <Route path="/disqualifications" element={<Protected roles={['ADMIN', 'HR_MANAGER']}><Disqualifications /></Protected>} />
             <Route path="/settings" element={<Protected><Settings /></Protected>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
