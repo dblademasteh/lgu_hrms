@@ -1,6 +1,6 @@
 # DESIGN.md — LGU HRMS Design System
 
-> **Single source of design truth.** Updated 2026-09-09 to match the implementation in `frontend/src/index.css` (tokens + component classes) and the live pages. Supersedes the removed `Design_Documentation.md`; `DESIGN_DOCUMENT.md` remains the architecture/data spec. Agents and designers: consume tokens/classes as documented here — never introduce parallel styling.
+> **Single source of design truth.** Updated 2026-09-10 to match the implementation in `frontend/src/index.css` (tokens + component classes) and the live pages. Supersedes the removed `Design_Documentation.md`; `DESIGN_DOCUMENT.md` remains the architecture/data spec. Agents and designers: consume tokens/classes as documented here — never introduce parallel styling.
 
 ---
 
@@ -85,7 +85,7 @@ Full-width, 0.875rem. **Sticky thead** (mono 0.6875rem uppercase, muted, surface
 Flex, radius 8px, muted → ink on hover (ink 8% tint), 200ms ease. Active state via `aria-current='page'` (React Router `NavLink` supplies it automatically): accent 15% tint + accent text, weight 600.
 
 ### Modal — `.modal-overlay`, `.modal-box` (+`.modal-sm` 26rem / `.modal-md` 36rem / `.modal-lg` 56rem), `.modal-head/-body/-foot`
-Behavior (docs: *persists until explicit close*): overlay click does **not** close; Escape and the ✕/footer buttons do. Body scroll locks while open. Head = display-font title + close button; foot = right-aligned Cancel/primary.
+Behavior (docs: *persists until explicit close*): overlay click does **not** close; Escape and the ✕/footer buttons do. Body scroll locks while open. Head = display-font title + X close button (size 16-18px); foot = right-aligned footer with gap-2 buttons, using X icon for cancel/clear, Save/Check for primary actions. Footer buttons always have icons for visual clarity on mutation actions. Forms submit via footer button with `onClick` handler (form uses `id` attribute referenced by `form` prop).
 
 ### Toasts — `.toast-stack`, `.toast` + `.toast-success/-error/-info`, `.toast-x`
 Fixed bottom-right stack, 18–24rem cards with 3px semantic left border, `toast-in` 200ms entrance, `role="status"` + `aria-live="polite"`, 4s auto-dismiss. Toast notification for all user-initiated actions: create/update/delete, API errors, validation failures, and success confirmations. Never rely on modal alone for feedback.
@@ -114,16 +114,18 @@ Command palette list rows and the header bell dropdown (absolute, right-anchored
 ## 6. Page Design Specs (as implemented)
 
 - **Pattern — page header:** `font-display text-xl font-bold text-ink` title + `text-sm text-muted` subtitle left; `.mono-label` metadata right (e.g. "As of Sep 9, 2026", record counts); primary action button top-right.
-- **Pattern — dashboard grid:** KPI `grid-cols-1 md:grid-cols-2 lg:grid-cols-4`; content rows `lg:grid-cols-3` with `lg:col-span-2` master pane.
+- **Pattern — dashboard grid:** KPI `grid-cols-1 md:grid-cols-2 lg:grid-cols-3`; content rows `lg:grid-cols-3` with `lg:col-span-2` master pane.
+- **Pattern — table with filters:** Search input (left), filter dropdowns (middle), record count (right); table with Actions column for row operations.
 - **Login** — centered `.card max-w-md p-8` on `bg-bg`; accent logo tile; `.input` fields with inline `text-error` messages; full-width `.btn-primary`.
 - **Dashboard** — 4 KPI `.stat` cards (icon chip `bg-accent/10`, `.stat-value`, delta badges), Payroll Runs table, Headcount CSS bars (`bg-line` track / `bg-accent` fill), Recent Activity.
-- **Employees** — master-detail: master card (search + dept filter + paginated `.data-table`, row Edit/Delete) + `DetailPane` with `Tabs` = Profile / Employment History / Payroll Breakdown → payslip modal. Add/Edit = full-PII `EmployeeForm` in `modal-lg`.
+- **Employees** — master-detail layout with inline table: search + department/status filters, pagination (50/page), Actions column (Edit/Delete buttons); DetailPane with Tabs = Profile / Employment History / Payroll Breakdown / etc.; Add/Edit = full-PII `EmployeeForm` in `modal-lg` with modal footer (X/Cancel, Save/Create buttons with icons).
 - **Organization** — recursive tree of `.card` nodes (indent via `marginLeft`), per-node Rename/Remove; Add Department modal (code/name/parent); child-guard on removal.
-- **Payroll** — stat row, runs table (status badges incl. DRAFT), ledger entries; **New Payroll Run = 3-step wizard modal** (period → items preview → review) creating a DRAFT run; run detail modal; payslip modal with deduction line-items.
+- **Payroll** — stat row, runs table with status badges (DRAFT/APPROVED/POSTED), Actions column (View, Approve for DRAFT); **New Payroll Run = 3-step wizard modal** with footer buttons (X/Back, Check/Next, Plus/Create Run); run detail modal with Close button (X icon); payslip modal with Close button.
 - **Leave** — master-detail: applications table (row select) + **approval pane** (request facts, leave credits, Approve/Deny behind `ConfirmDialog`).
 - **Attendance (DTR)** — date filter + summary stat cards + `.data-table` with remark badges.
 - **Appointments** — records table (CSC types, plantilla items) + New Appointment modal.
-- **Audit** — filterable log; Details modal with **Before/After JSON** side-by-side `pre` cards.
+- **Designation** — search bar + summary cards (Active/Suspended counts), Orders table with Actions column (Remove button), New Order modal with form and footer (X/Cancel, Save/Create Order buttons with icons).
+- **Audit** — filterable log; Details modal with **Before/After JSON** side-by-side `pre` cards; Close button with X icon.
 - **Users & Roles** — accounts table (role badges, activate/deactivate confirm) + permissions matrix (✓ per role).
 - **Reports** — card grid (type mono-label, Generate/Preview → toasts until wired).
 - **404 / Error** — centered `.card` with mono error label + recovery button.

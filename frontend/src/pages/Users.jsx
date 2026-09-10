@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Plus, Save, X, Edit, UserCheck, Shield } from 'lucide-react';
 import Layout from '../components/Layout.jsx';
 import Modal from '../components/Modal.jsx';
 import ConfirmDialog from '../components/ConfirmDialog.jsx';
@@ -77,7 +78,10 @@ export default function Users() {
           <h1 className="font-display text-xl font-bold text-ink">Users &amp; Roles</h1>
           <p className="text-sm text-muted mt-0.5">RBAC administration and permission matrix</p>
         </div>
-        <button type="button" className="btn btn-primary" onClick={openAdd}>Add User</button>
+        <button type="button" className="btn btn-primary gap-2" onClick={openAdd}>
+            <Plus size={16} />
+            Add User
+          </button>
       </div>
 
       <div className="card p-5 mb-4">
@@ -103,10 +107,13 @@ export default function Users() {
                   </td>
                   <td><span className={`badge ${badgeTone(u.status)}`}>{u.status}</span></td>
                   <td className="text-right">
-                    <span className="inline-flex gap-2">
-                      <button type="button" className="btn btn-ghost px-3 text-xs" onClick={() => openEdit(u)}>Edit</button>
-                      <button type="button" className="btn btn-ghost px-3 text-xs" onClick={() => setConfirm(u)}>
-                        {isActive(u) ? 'Deactivate' : 'Activate'}
+                    <span className="inline-flex gap-1">
+                      <button type="button" className="btn btn-ghost px-2 text-xs" onClick={() => openEdit(u)}>
+                        <Edit size={14} />
+                        Edit
+                      </button>
+                      <button type="button" className="btn btn-ghost px-2 text-xs" onClick={() => setConfirm(u)}>
+                        {isActive(u) ? <><UserCheck size={14} /> Deactivate</> : <><Shield size={14} /> Activate</>}
                       </button>
                     </span>
                   </td>
@@ -148,8 +155,14 @@ export default function Users() {
         title={editing ? `Edit User · ${editing.username}` : 'Add User'}
         footer={
           <>
-            <button type="button" className="btn btn-ghost" onClick={() => setFormOpen(false)}>Cancel</button>
-            <button type="submit" form="user-form" className="btn btn-primary">{editing ? 'Save Changes' : 'Create User'}</button>
+            <button type="button" className="btn btn-ghost gap-2" onClick={() => setFormOpen(false)}>
+              <X size={16} />
+              Cancel
+            </button>
+            <button type="submit" form="user-form" className="btn btn-primary gap-2">
+              <Save size={16} />
+              {editing ? 'Save Changes' : 'Create User'}
+            </button>
           </>
         }
       >
