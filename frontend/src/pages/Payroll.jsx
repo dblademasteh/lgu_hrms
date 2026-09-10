@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X } from 'lucide-react';
+import { X, Plus, Check, ExternalLink } from 'lucide-react';
 import Layout from '../components/Layout.jsx';
 import Modal from '../components/Modal.jsx';
 import ConfirmDialog from '../components/ConfirmDialog.jsx';
@@ -107,7 +107,10 @@ export default function Payroll() {
           <h1 className="font-display text-xl font-bold text-ink">Payroll</h1>
           <p className="text-sm text-muted mt-0.5">Payroll periods, runs and ledger entries</p>
         </div>
-        <button type="button" className="btn btn-primary" onClick={() => { setStep(1); setWizardOpen(true); }}>New Payroll Run</button>
+        <button type="button" className="btn btn-primary gap-2" onClick={() => { setStep(1); setWizardOpen(true); }}>
+            <Plus size={16} />
+            New Payroll Run
+          </button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
@@ -147,9 +150,15 @@ export default function Payroll() {
                     <td className="font-mono text-right">{peso(net)}</td>
                     <td className="text-right">
                       <span className="inline-flex gap-1">
-                        <button type="button" className="btn btn-ghost px-3 text-xs" onClick={() => openDetail(r)}>View</button>
+                        <button type="button" className="btn btn-ghost gap-1 px-2 text-xs" onClick={() => openDetail(r)}>
+                          <ExternalLink size={14} />
+                          View
+                        </button>
                         {r.status === 'DRAFT' && (
-                          <button type="button" className="btn btn-ghost px-3 text-xs" onClick={() => setConfirmApprove(r)}>Approve</button>
+                          <button type="button" className="btn btn-ghost gap-1 px-2 text-xs" onClick={() => setConfirmApprove(r)}>
+                            <Check size={14} />
+                            Approve
+                          </button>
                         )}
                       </span>
                     </td>
@@ -181,7 +190,12 @@ export default function Payroll() {
                   <td className="font-mono text-right">{peso(item.allowances)}</td>
                   <td className="font-mono text-right">{peso(item.deductions)}</td>
                   <td className="font-mono text-right font-medium">{peso(item.netPay)}</td>
-                  <td className="text-right"><button type="button" className="btn btn-ghost px-3 text-xs" onClick={() => setPayslip(item)}>Payslip</button></td>
+                  <td className="text-right">
+                    <button type="button" className="btn btn-ghost gap-1 px-2 text-xs" onClick={() => setPayslip(item)}>
+                      <ExternalLink size={14} />
+                      Payslip
+                    </button>
+                  </td>
                 </tr>
               ))}
               {!(latestRun?.items?.length) && (
@@ -199,13 +213,14 @@ export default function Payroll() {
         size="lg"
         footer={
           <>
-            {step > 1 && <button type="button" className="btn btn-ghost" onClick={() => setStep(s => s - 1)}>Back</button>}
+            {step > 1 && <button type="button" className="btn btn-ghost gap-2" onClick={() => setStep(s => s - 1)}><X size={16} />Back</button>}
             {step < 2 && (
-              <button type="button" className="btn btn-primary" onClick={() => setStep(s => s + 1)} disabled={!periodId || !runDate}>
+              <button type="button" className="btn btn-primary gap-2" onClick={() => setStep(s => s + 1)} disabled={!periodId || !runDate}>
+                <Check size={16} />
                 Next
               </button>
             )}
-            {step === 2 && <button type="button" className="btn btn-primary" onClick={createRun}>Create Run</button>}
+            {step === 2 && <button type="button" className="btn btn-primary gap-2" onClick={createRun}><Plus size={16} />Create Run</button>}
           </>
         }
       >
@@ -241,7 +256,10 @@ export default function Payroll() {
         footer={
           <>
             {detail?.status === 'DRAFT' && (
-              <button type="button" className="btn btn-ghost" onClick={() => { setConfirmApprove(detail); }}>Approve Run</button>
+              <button type="button" className="btn btn-ghost gap-2" onClick={() => { setConfirmApprove(detail); }}>
+                <Check size={16} />
+                Approve Run
+              </button>
             )}
             <button type="button" className="btn btn-primary gap-2" onClick={() => setDetail(null)}><X size={16} /> Close</button>
           </>
@@ -261,7 +279,12 @@ export default function Payroll() {
                         <td className="font-mono text-right">{peso(item.allowances)}</td>
                         <td className="font-mono text-right">{peso(item.deductions)}</td>
                         <td className="font-mono text-right font-medium">{peso(item.netPay)}</td>
-                        <td className="text-right"><button type="button" className="btn btn-ghost px-3 text-xs" onClick={() => { setDetail(null); setPayslip(item); }}>Payslip</button></td>
+                        <td className="text-right">
+                          <button type="button" className="btn btn-ghost gap-1 px-2 text-xs" onClick={() => { setDetail(null); setPayslip(item); }}>
+                            <ExternalLink size={14} />
+                            Payslip
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -279,7 +302,7 @@ export default function Payroll() {
         onClose={() => setPayslip(null)}
         title="Payslip"
         size="sm"
-        footer={<button type="button" className="btn btn-primary" onClick={() => setPayslip(null)}>Close</button>}
+        footer={<button type="button" className="btn btn-primary gap-2" onClick={() => setPayslip(null)}><X size={16} /> Close</button>}
       >
         {payslip && (
           <div>
