@@ -295,7 +295,7 @@ export default function ESS(){
         <form id="ess-leave-form" onSubmit={fileLeave} className="space-y-4">
           <div>
             <label htmlFor="ess-type" className="block text-sm font-medium text-ink mb-1">Leave Type *</label>
-            <select id="ess-type" className="input" value={leaveForm.type} onChange={e => setLeaveForm(f => ({ ...f, type: e.target.value }))}>
+            <select id="ess-type" className="select" value={leaveForm.type} onChange={e => setLeaveForm(f => ({ ...f, type: e.target.value }))}>
               {LEAVE_TYPES.map(t => (
                 <option key={t.value} value={t.value}>{t.label}</option>
               ))}

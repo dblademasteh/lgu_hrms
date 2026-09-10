@@ -45,7 +45,7 @@ export default function Attendance() {
         </div>
         <label className="flex items-center gap-2">
           <span className="mono-label">Date</span>
-          <select className="input w-auto" value={date} onChange={e => setDate(e.target.value)} aria-label="Filter by date">
+          <select className="select w-auto" value={date} onChange={e => setDate(e.target.value)} aria-label="Filter by date">
             <option value="">All dates</option>
             {dates.map(d => <option key={d} value={d}>{d}</option>)}
           </select>

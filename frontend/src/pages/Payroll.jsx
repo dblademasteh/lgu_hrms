@@ -212,7 +212,7 @@ export default function Payroll() {
           <div className="space-y-3">
             <div>
               <label htmlFor="pr-period" className="block text-sm font-medium text-ink mb-1">Payroll Period *</label>
-              <select id="pr-period" className="input" value={periodId} onChange={e => setPeriodId(e.target.value)}>
+              <select id="pr-period" className="select" value={periodId} onChange={e => setPeriodId(e.target.value)}>
                 <option value="" disabled>Select a period...</option>
                 {periods.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
               </select>

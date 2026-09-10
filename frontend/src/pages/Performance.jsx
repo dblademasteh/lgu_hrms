@@ -270,7 +270,7 @@ export default function Performance() {
             </div>
             <div>
               <label className="mono-label">Type</label>
-              <select className="input" value={form.reviewType} onChange={e => setForm({ ...form, reviewType: e.target.value })} required>
+              <select className="select" value={form.reviewType} onChange={e => setForm({ ...form, reviewType: e.target.value })} required>
                 {TYPE_OPTIONS.map(t => (
                   <option key={t.value} value={t.value}>{t.label}</option>
                 ))}

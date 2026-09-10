@@ -64,7 +64,7 @@ export default function Audit() {
           <h3 className="font-display font-semibold text-ink">Audit Log</h3>
           <label className="flex items-center gap-2">
             <span className="mono-label">Entity</span>
-            <select className="input w-auto" value={entity} onChange={e => setEntity(e.target.value)} aria-label="Filter by entity">
+            <select className="select w-auto" value={entity} onChange={e => setEntity(e.target.value)} aria-label="Filter by entity">
               {entities.map(en => <option key={en} value={en}>{en}</option>)}
             </select>
           </label>

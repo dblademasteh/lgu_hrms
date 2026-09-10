@@ -243,6 +243,7 @@ export default function EmployeeForm({ formId, initial, submitLabel = 'Save', on
       if (errors.includes(key)) setFieldErrors(e => ({ ...e, [section]: errors.filter(k => k !== key) }));
     };
     const inputClass = key => `input${errors.includes(key) ? ' border-error' : ''}`;
+    const selectClass = key => `select${errors.includes(key) ? ' border-error' : ''}`;
     return (
       <div className="space-y-3">
         {!employeeId && (
@@ -266,17 +267,17 @@ export default function EmployeeForm({ formId, initial, submitLabel = 'Save', on
                       <span className="text-xs text-muted">{f.checkboxLabel ?? f.label}</span>
                     </label>
                   ) : f.type === 'select' ? (
-                    <select className={inputClass(f.key)} aria-invalid={errors.includes(f.key)} value={d[f.key] ?? ''} onChange={e => setDraftKey(f.key, e.target.value)}>
+                    <select className={selectClass(f.key)} aria-invalid={errors.includes(f.key)} value={d[f.key] ?? ''} onChange={e => setDraftKey(f.key, e.target.value)}>
                       <option value="" disabled>Select...</option>
                       {f.options.map(o => <option key={o} value={o}>{o.replace(/_/g, ' ')}</option>)}
                     </select>
                   ) : f.type === 'dept' ? (
-                    <select className={inputClass(f.key)} aria-invalid={errors.includes(f.key)} value={d[f.key] ?? ''} onChange={e => setDraftKey(f.key, e.target.value)}>
+                    <select className={selectClass(f.key)} aria-invalid={errors.includes(f.key)} value={d[f.key] ?? ''} onChange={e => setDraftKey(f.key, e.target.value)}>
                       <option value="" disabled>Select...</option>
                       {departments.map(dep => <option key={dep.id} value={dep.id}>{dep.code} - {dep.name}</option>)}
                     </select>
                   ) : f.type === 'position' ? (
-                    <select className={inputClass(f.key)} aria-invalid={errors.includes(f.key)} value={d[f.key] ?? ''} onChange={e => setDraftKey(f.key, e.target.value)}>
+                    <select className={selectClass(f.key)} aria-invalid={errors.includes(f.key)} value={d[f.key] ?? ''} onChange={e => setDraftKey(f.key, e.target.value)}>
                       <option value="" disabled>Select...</option>
                       {positions.map(p => <option key={p.id} value={p.id}>{p.title} (SG {p.salaryGrade})</option>)}
                     </select>

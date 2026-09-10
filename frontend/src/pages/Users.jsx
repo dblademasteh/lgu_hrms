@@ -160,20 +160,20 @@ export default function Users() {
           </div>
           <div>
             <label htmlFor="u-role" className="block text-sm font-medium text-ink mb-1">Role</label>
-            <select id="u-role" className="input" value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value }))}>
+            <select id="u-role" className="select" value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value }))}>
               {ROLES.map(r => <option key={r} value={r}>{r.replaceAll('_', ' ')}</option>)}
             </select>
           </div>
           <div>
             <label htmlFor="u-dept" className="block text-sm font-medium text-ink mb-1">Department scope</label>
-            <select id="u-dept" className="input" value={form.departmentId || ''} onChange={e => setForm(f => ({ ...f, departmentId: e.target.value }))}>
+            <select id="u-dept" className="select" value={form.departmentId || ''} onChange={e => setForm(f => ({ ...f, departmentId: e.target.value }))}>
               <option value="">All departments (central)</option>
               {deptList.map(d => <option key={d.id} value={d.id}>{d.code} · {d.name}</option>)}
             </select>
           </div>
           <div>
             <label htmlFor="u-employee" className="block text-sm font-medium text-ink mb-1">Linked employee (ESS access)</label>
-            <select id="u-employee" className="input" value={form.externalId || ''} onChange={e => setForm(f => ({ ...f, externalId: e.target.value || null }))}>
+            <select id="u-employee" className="select" value={form.externalId || ''} onChange={e => setForm(f => ({ ...f, externalId: e.target.value || null }))}>
               <option value="">None (staff account only)</option>
               {employees.map(emp => (
                 <option key={emp.id} value={emp.employeeNumber}>

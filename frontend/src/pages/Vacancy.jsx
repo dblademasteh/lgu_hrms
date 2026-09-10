@@ -68,7 +68,7 @@ export default function Vacancy() {
         </div>
         <div className="flex gap-2">
           <select 
-            className="input w-auto" 
+            className="select w-auto" 
             value={statusFilter} 
             onChange={e => setStatusFilter(e.target.value)}
             aria-label="Filter by status"

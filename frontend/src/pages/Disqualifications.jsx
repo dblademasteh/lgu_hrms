@@ -181,7 +181,7 @@ export default function Disqualifications() {
           </div>
           
           <select 
-            className="input w-auto"
+            className="select w-auto"
             value={statusFilter}
             onChange={e => { setStatusFilter(e.target.value); handleFilterChange(); }}
           >
@@ -191,7 +191,7 @@ export default function Disqualifications() {
           </select>
 
           <select
-            className="input w-auto"
+            className="select w-auto"
             value={typeFilter}
             onChange={e => { setTypeFilter(e.target.value); handleFilterChange(); }}
           >
@@ -202,7 +202,7 @@ export default function Disqualifications() {
           </select>
 
           <select
-            className="input w-auto"
+            className="select w-auto"
             value={reasonFilter}
             onChange={e => { setReasonFilter(e.target.value); handleFilterChange(); }}
           >
@@ -314,7 +314,7 @@ export default function Disqualifications() {
                 <div>
                   <label className="block text-sm text-muted mb-1">Type</label>
                   <select
-                    className="input w-full"
+                    className="select w-full"
                     value={formData.type}
                     onChange={e => setFormData({ ...formData, type: e.target.value })}
                     required
@@ -330,7 +330,7 @@ export default function Disqualifications() {
               <div>
                 <label className="block text-sm text-muted mb-1">Reason</label>
                 <select
-                  className="input w-full"
+                  className="select w-full"
                   value={formData.reason}
                   onChange={e => setFormData({ ...formData, reason: e.target.value })}
                   required

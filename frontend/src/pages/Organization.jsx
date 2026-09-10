@@ -179,7 +179,7 @@ export default function Organization() {
           </div>
           <div>
             <label htmlFor="d-parent" className="block text-sm font-medium text-ink mb-1">Parent Unit</label>
-            <select id="d-parent" className="input" value={form.parent} onChange={e => setForm(f => ({ ...f, parent: e.target.value }))}>
+            <select id="d-parent" className="select" value={form.parent} onChange={e => setForm(f => ({ ...f, parent: e.target.value }))}>
               <option value="">None (top level)</option>
               {list.map(d => <option key={d.id} value={d.id}>{d.code} · {d.name}</option>)}
             </select>

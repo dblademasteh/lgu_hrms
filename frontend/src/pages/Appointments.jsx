@@ -226,7 +226,7 @@ export default function Appointments() {
               <label htmlFor="a-dept" className="block text-sm font-medium text-ink mb-1">Department</label>
               <select 
                 id="a-dept" 
-                className="input" 
+                className="select" 
                 value={form.dept} 
                 onChange={e => setForm(f => ({ ...f, dept: e.target.value }))}
               >
@@ -241,7 +241,7 @@ export default function Appointments() {
               <label htmlFor="a-type" className="block text-sm font-medium text-ink mb-1">Appointment Type</label>
               <select 
                 id="a-type" 
-                className="input" 
+                className="select" 
                 value={form.type} 
                 onChange={e => setForm(f => ({ ...f, type: e.target.value }))}
               >

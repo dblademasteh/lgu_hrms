@@ -201,7 +201,7 @@ export default function Header({ onToggleSidebar }) {
           <div className="dropdown" ref={userRef}>
             <button
               type="button"
-              className="flex items-center gap-2 pl-2 pr-1 py-1 rounded-[10px] hover:bg-bg/60 border border-transparent hover:border-line transition"
+              className="flex items-center gap-2 pl-2 pr-2.5 py-1 rounded-[10px] hover:bg-bg/60 border border-transparent hover:border-line transition"
               onClick={() => setUserOpen(o => !o)}
               aria-expanded={userOpen}
               aria-label="User menu"

@@ -400,12 +400,92 @@
     right: 0;
     top: calc(100% + 0.5rem);
     z-index: 200;
-    width: 20rem;
+    min-width: 20rem;
+    max-width: 40rem;
     background: var(--surface);
     border: 1px solid var(--line);
     border-radius: 12px;
     box-shadow: 0 16px 48px -16px rgb(2 6 23 / 0.3);
     overflow: hidden;
+  }
+  .dropdown-divider {
+    height: 1px;
+    background: var(--line);
+    margin: 0.5rem 0;
+  }
+  .dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    width: 100%;
+    padding: 0.625rem 1rem;
+    font-size: 0.875rem;
+    background: none;
+    border: none;
+    border-radius: 0;
+    cursor: pointer;
+    text-align: left;
+    color: var(--ink);
+    transition: background-color 150ms ease;
+  }
+  .dropdown-item:hover {
+    background: color-mix(in oklab, var(--accent) 8%, transparent);
+  }
+  .dropdown-item[aria-current='true'],
+  .dropdown-item.active {
+    background: color-mix(in oklab, var(--accent) 15%, transparent);
+    color: var(--accent);
+    font-weight: 600;
+  }
+  .dropdown-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--line);
+  }
+  .dropdown-footer {
+    padding: 0.75rem 1rem;
+    border-top: 1px solid var(--line);
+  }
+
+  /* select — polished native select */
+  .select {
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 0.5rem 0.75rem;
+    font: inherit;
+    font-size: 0.875rem;
+    color: var(--ink);
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.75rem center;
+    background-size: 0.75rem;
+    cursor: pointer;
+    transition: border-color 150ms ease, box-shadow 150ms ease;
+  }
+  .select:hover {
+    border-color: color-mix(in oklab, var(--accent) 35%, var(--line));
+  }
+  .select:focus-visible {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px color-mix(in oklab, var(--accent) 30%, transparent);
+  }
+  .select[aria-invalid='true'] {
+    border-color: var(--error);
+  }
+  .select[aria-invalid='true']:focus-visible {
+    box-shadow: 0 0 0 2px color-mix(in oklab, var(--error) 30%, transparent);
+  }
+  .select option {
+    background: var(--surface);
+    color: var(--ink);
   }
 }
 
