@@ -9,6 +9,7 @@ export const createUserSchema = {
     email: z.string().email().optional().nullable(),
     contactNumber: z.string().max(30).optional().nullable(),
     externalId: z.string().min(1).max(50).optional().nullable(),
+    status: z.enum(['ACTIVE', 'INACTIVE']).optional(),
   }),
 };
 

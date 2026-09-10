@@ -1,14 +1,12 @@
 import { Router } from 'express';
 import { departmentsController } from '../controllers/departmentsController.js';
-import { requireAuth } from '../middleware/auth.js';
-import { auditLog } from '../middleware/audit.js';
 
+// NOTE: requireAuth + auditLog are mounted globally in routes/index.js.
 const router = Router();
-router.use(requireAuth);
 
 router.get('/', departmentsController.list);
-router.post('/', auditLog, departmentsController.create);
-router.patch('/:id', auditLog, departmentsController.update);
-router.delete('/:id', auditLog, departmentsController.remove);
+router.post('/', departmentsController.create);
+router.patch('/:id', departmentsController.update);
+router.delete('/:id', departmentsController.remove);
 
 export default router;

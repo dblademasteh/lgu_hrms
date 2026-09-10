@@ -1,5 +1,11 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import Layout from '../components/Layout.jsx';
+import { useToast } from '../components/Toast.jsx';
+import { badgeTone } from '../data/mock.js';
+import { listEmployees } from '../api/employees.js';
+import { payrollApi } from '../api/payroll.js';
+import { leaveApi } from '../api/leave.js';
+import { auditApi } from '../api/audit.js';
 
 /* Inline icons — stroke follows currentColor, so they inherit token colors */
 const UsersIcon = () => (
@@ -15,43 +21,58 @@ const ShieldIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" /></svg>
 );
 
-const kpis = [
-  { title: 'Total Employees', value: '1,248', change: '+12', Icon: UsersIcon },
-  { title: 'Active Payroll Runs', value: '3', change: 'This month', Icon: WalletIcon },
-  { title: 'Pending Approvals', value: '27', change: '-5', Icon: CheckIcon },
-  { title: 'Audit Log Entries', value: '4,102', change: '+320', Icon: ShieldIcon },
-];
+const kpiIcons = { employees: UsersIcon, payroll: WalletIcon, leave: CheckIcon, audit: ShieldIcon };
 
-const payrollRuns = [
-  { period: 'Sep 1–15, 2026', status: 'Processing', badge: 'badge-accent', net: '₱ 18,420,500' },
-  { period: 'Aug 16–31, 2026', status: 'Approved', badge: 'badge-success', net: '₱ 18,102,275' },
-  { period: 'Aug 1–15, 2026', status: 'Posted', badge: '', net: '₱ 17,988,400' },
-];
-
-const headcount = [
-  { code: 'PGO', name: "Governor's Office", count: 312 },
-  { code: 'HEA', name: 'Health Services', count: 297 },
-  { code: 'ENG', name: 'Engineering', count: 231 },
-  { code: 'ACC', name: 'Accounting', count: 126 },
-  { code: 'TRE', name: 'Treasury', count: 98 },
-  { code: 'HR', name: 'Human Resources', count: 84 },
-];
-const maxHeadcount = Math.max(...headcount.map(d => d.count));
-
-const activity = [
-  { who: 'EMP001 · Dela Cruz', action: 'Payroll Approved', badge: 'badge-success', date: '2026-09-08' },
-  { who: 'EMP042 · Santos', action: 'Leave Submitted', badge: 'badge-accent', date: '2026-09-07' },
-  { who: 'EMP015 · Reyes', action: 'Profile Updated', badge: '', date: '2026-09-07' },
-  { who: 'EMP007 · Mendoza', action: 'Overtime Filed', badge: 'badge-warning', date: '2026-09-06' },
-];
-
-function toneFor(change) {
-  if (change.startsWith('+')) return 'badge-success';
-  if (change.startsWith('-')) return 'badge-error';
-  return '';
-}
+const peso = n => `₱ ${Number(n ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export default function UserDashboard() {
+  const toast = useToast();
+  const [headcount, setHeadcount] = useState(0);
+  const [deptBreakdown, setDeptBreakdown] = useState([]);
+  const [runs, setRuns] = useState([]);
+  const [pendingLeave, setPendingLeave] = useState(0);
+  const [activity, setActivity] = useState([]);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const [{ items = [], total = 0 }, runsRes, leaveRes, auditRes] = await Promise.all([
+          listEmployees({ page: 1, limit: 200 }),
+          payrollApi.listRuns(),
+          leaveApi.listRequests().catch(() => ({ data: [] })),
+          auditApi.list({ limit: 8 }).catch(() => ({ data: { data: [] } })),
+        ]);
+        setHeadcount(total || items.length);
+        const byDept = new Map();
+        for (const e of items) {
+          const key = e.department?.code ?? '?';
+          const entry = byDept.get(key) ?? { code: key, name: e.department?.name ?? key, count: 0 };
+          entry.count += 1;
+          byDept.set(key, entry);
+        }
+        const breakdown = [...byDept.values()].sort((a, b) => b.count - a.count);
+        setDeptBreakdown(breakdown);
+        const runList = Array.isArray(runsRes.data) ? runsRes.data : [];
+        setRuns(runList.slice(0, 5));
+        const reqs = Array.isArray(leaveRes.data) ? leaveRes.data : [];
+        setPendingLeave(reqs.filter(r => r.status === 'PENDING').length);
+        const logs = auditRes?.data?.data ?? auditRes?.data ?? [];
+        setActivity((Array.isArray(logs) ? logs : []).slice(0, 8));
+      } catch {
+        setFailed(true);
+        toast('Failed to load dashboard data', 'error');
+      }
+    })();
+  }, []);
+
+  const maxDept = Math.max(1, ...deptBreakdown.map(d => d.count));
+  const kpis = [
+    { title: 'Total Employees', value: headcount.toLocaleString(), sub: `${deptBreakdown.length} departments`, Icon: kpiIcons.employees },
+    { title: 'Payroll Runs', value: String(runs.length), sub: runs[0]?.status ?? 'No runs', Icon: kpiIcons.payroll },
+    { title: 'Pending Leave', value: String(pendingLeave), sub: 'Awaiting approval', Icon: kpiIcons.leave },
+    { title: 'Recent Audit Events', value: String(activity.length), sub: 'Latest 8', Icon: kpiIcons.audit },
+  ];
   return (
     <Layout>
       <div className="flex items-end justify-between gap-4 mb-6">
@@ -63,17 +84,20 @@ export default function UserDashboard() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-        {kpis.map(({ title, value, change, Icon }) => (
+        {kpis.map(({ title, value, sub, Icon }) => (
           <div key={title} className="card stat p-5">
             <div className="flex items-center justify-between">
               <p className="text-sm text-muted">{title}</p>
               <span className="w-9 h-9 rounded-lg bg-accent/10 text-accent flex items-center justify-center" aria-hidden="true"><Icon /></span>
             </div>
             <p className="stat-value">{value}</p>
-            <span className={`badge ${toneFor(change)}`}>{change}</span>
+            <span className="mono-label">{sub}</span>
           </div>
         ))}
       </div>
+      {failed && (
+        <p className="text-sm text-error card p-4 mb-4">Some dashboard sections failed to load — check your role permissions.</p>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
         <div className="card p-5 lg:col-span-2 min-w-0">
@@ -87,13 +111,19 @@ export default function UserDashboard() {
                 <tr><th>Period</th><th>Status</th><th className="text-right">Net Pay</th></tr>
               </thead>
               <tbody>
-                {payrollRuns.map(r => (
-                  <tr key={r.period}>
-                    <td className="font-medium">{r.period}</td>
-                    <td><span className={`badge ${r.badge}`}>{r.status}</span></td>
-                    <td className="font-mono text-right">{r.net}</td>
-                  </tr>
-                ))}
+                {runs.map(r => {
+                  const net = (r.items ?? []).reduce((s, i) => s + Number(i?.netPay ?? 0), 0);
+                  return (
+                    <tr key={r.id}>
+                      <td className="font-medium">{r.period?.name ?? '—'}</td>
+                      <td><span className={`badge ${badgeTone(r.status)}`}>{r.status}</span></td>
+                      <td className="font-mono text-right">{peso(net)}</td>
+                    </tr>
+                  );
+                })}
+                {runs.length === 0 && (
+                  <tr><td colSpan={3} className="text-muted text-sm">No payroll runs yet.</td></tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -105,17 +135,20 @@ export default function UserDashboard() {
             <span className="mono-label">By department</span>
           </div>
           <ul className="space-y-3">
-            {headcount.map(d => (
+            {deptBreakdown.map(d => (
               <li key={d.code}>
                 <div className="flex items-center justify-between text-sm mb-1">
                   <span className="text-ink"><span className="font-mono text-muted mr-2">{d.code}</span>{d.name}</span>
                   <span className="font-mono text-muted">{d.count.toLocaleString()}</span>
                 </div>
                 <div className="h-1.5 rounded-full bg-line overflow-hidden">
-                  <div className="h-full rounded-full bg-accent" style={{ width: `${Math.round((d.count / maxHeadcount) * 100)}%` }} />
+                  <div className="h-full rounded-full bg-accent" style={{ width: `${Math.round((d.count / maxDept) * 100)}%` }} />
                 </div>
               </li>
             ))}
+            {deptBreakdown.length === 0 && (
+              <li className="text-muted text-sm">No employees on file.</li>
+            )}
           </ul>
         </div>
       </div>
@@ -128,16 +161,19 @@ export default function UserDashboard() {
         <div className="overflow-auto max-h-80 rounded-lg border border-line">
           <table className="data-table">
             <thead>
-              <tr><th>Employee</th><th>Action</th><th>Date</th></tr>
+              <tr><th>User</th><th>Action</th><th>Date</th></tr>
             </thead>
             <tbody>
               {activity.map(a => (
-                <tr key={a.who + a.date}>
-                  <td className="font-medium">{a.who}</td>
-                  <td><span className={`badge ${a.badge}`}>{a.action}</span></td>
-                  <td className="font-mono">{a.date}</td>
+                <tr key={a.id}>
+                  <td className="font-mono">{a.user?.username ?? '—'}</td>
+                  <td><span className={`badge ${badgeTone(a.action)}`}>{a.action}</span></td>
+                  <td className="font-mono">{a.timestamp ? new Date(a.timestamp).toLocaleString() : '—'}</td>
                 </tr>
               ))}
+              {activity.length === 0 && (
+                <tr><td colSpan={3} className="text-muted text-sm">No recent activity.</td></tr>
+              )}
             </tbody>
           </table>
         </div>

@@ -1,18 +1,30 @@
 import React, { useMemo, useState } from 'react';
-import { departments, badgeTone } from '../data/mock.js';
+import { badgeTone } from '../data/mock.js';
 
 const PAGE_SIZE = 5;
 
-export default function MasterTable({ rows, selected, onSelect, onEdit, onDelete }) {
+export default function MasterTable({ rows = [], selected = null, onSelect = () => {}, onEdit = () => {}, onDelete = () => {} }) {
   const [search, setSearch] = useState('');
   const [dept, setDept] = useState('all');
   const [page, setPage] = useState(1);
 
+  // Department options derived from the live rows (mock codes don't match the DB).
+  const deptOptions = useMemo(() => {
+    const seen = new Map();
+    for (const e of rows) {
+      const key = e.dept || e.department || '';
+      if (key && !seen.has(key)) seen.set(key, e.department || key);
+    }
+    return [...seen.entries()];
+  }, [rows]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return rows.filter(e => {
-      const matchQ = !q || e.name.toLowerCase().includes(q) || e.no.toLowerCase().includes(q) || e.position.toLowerCase().includes(q);
-      const matchD = dept === 'all' || e.dept === dept;
+      const hay = `${e.name ?? ''} ${e.no ?? ''} ${e.position ?? ''}`.toLowerCase();
+      const matchQ = !q || hay.includes(q);
+      const rowDept = e.dept ?? e.department ?? '';
+      const matchD = dept === 'all' || rowDept === dept;
       return matchQ && matchD;
     });
   }, [rows, search, dept]);
@@ -44,7 +56,7 @@ export default function MasterTable({ rows, selected, onSelect, onEdit, onDelete
           onChange={e => { setDept(e.target.value); setPage(1); }}
         >
           <option value="all">All departments</option>
-          {departments.map(d => <option key={d.code} value={d.code}>{d.code} · {d.name}</option>)}
+          {deptOptions.map(([code, name]) => <option key={code} value={code}>{name === code ? code : `${code} · ${name}`}</option>)}
         </select>
       </div>
 

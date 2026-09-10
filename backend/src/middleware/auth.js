@@ -13,11 +13,5 @@ export function requireAuth(req, res, next) {
   }
 }
 
-export function requireRole(...roles) {
-  return (req, res, next) => {
-    if (!req.user || !roles.includes(req.user.role)) {
-      return res.status(403).json({ error: 'Forbidden' });
-    }
-    next();
-  };
-}
+// NOTE: role gating lives in middleware/rbac.js `requireRole` (single source).
+// Do not re-add a second copy here; the envelopes drifted before.

@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 
-/** Accessible tab strip; pass [{ id, label, content }] */
-export default function Tabs({ tabs, label = 'Detail sections' }) {
-  const [active, setActive] = useState(tabs[0]?.id);
+/** Accessible tab strip; pass [{ id, label, content }]. Supports controlled active/onChange. */
+export default function Tabs({ tabs, label = 'Detail sections', active: controlledActive, onChange }) {
+  const [internal, setInternal] = useState(null);
+  const active = controlledActive ?? internal ?? tabs[0]?.id;
+  const setActive = v => { setInternal(v); onChange?.(v); };
   return (
     <div>
       <div className="tabbar" role="tablist" aria-label={label}>

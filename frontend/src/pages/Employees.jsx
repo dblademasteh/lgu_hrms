@@ -12,6 +12,7 @@ const blankEmployee = { employeeNumber: '', firstName: '', lastName: '', middleN
 
 function mapEmployee(e) {
   const fullName = `${e.lastName}, ${e.firstName}${e.middleName ? ' ' + e.middleName : ''}`;
+  const toDateInput = v => (v ? String(v).slice(0, 10) : '');
   return {
     id: e.id,
     employeeNumber: e.employeeNumber,
@@ -29,6 +30,17 @@ function mapEmployee(e) {
     hired: e.hiredDate?.slice(0, 10),
     email: e.email ?? '',
     contact: e.contactNumber ?? '',
+    // Raw fields the edit form needs (date inputs want YYYY-MM-DD).
+    // Seed rows store gender/civilStatus as 'Male'/'Single'; the API contract
+    // requires MALE/SINGLE so normalize here to keep the selects + validation happy.
+    departmentId: e.departmentId ?? '',
+    positionId: e.positionId ?? '',
+    birthDate: toDateInput(e.birthDate),
+    hiredDate: toDateInput(e.hiredDate),
+    gender: (e.gender ?? '').toUpperCase(),
+    civilStatus: (e.civilStatus ?? '').toUpperCase(),
+    address: e.address ?? '',
+    contactNumber: e.contactNumber ?? '',
     raw: e
   };
 }
@@ -44,6 +56,9 @@ export default function Employees() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  // Bumped whenever a CSC section entry is added/removed in the edit modal,
+  // so the detail pane refetches its relation tabs.
+  const [sectionsVersion, setSectionsVersion] = useState(0);
 
   const load = async (q) => {
     setLoading(true);
@@ -52,6 +67,11 @@ export default function Employees() {
       const mapped = items.map(mapEmployee);
       setRows(mapped);
       setFiltered(mapped);
+      // Keep the detail pane populated: select the first row when nothing is selected.
+      setSelected(prev => {
+        if (prev && mapped.some(m => m.id === prev.id)) return prev;
+        return mapped[0] ?? null;
+      });
     } catch {
       toast('Failed to load employees', 'error');
     } finally {
@@ -59,9 +79,8 @@ export default function Employees() {
     }
   };
 
-  useEffect(() => { load(); }, []);
-
-  // Debounced server-side search (backend filters by no/name)
+  // Debounced server-side search (backend filters by no/name).
+  // Single effect: initial '' query loads the full list on mount.
   useEffect(() => {
     const t = setTimeout(() => setSearchQuery(search.trim()), 350);
     return () => clearTimeout(t);
@@ -71,19 +90,28 @@ export default function Employees() {
   const openAdd = () => { setEditing(null); setFormOpen(true); };
   const openEdit = e => { setEditing(e); setFormOpen(true); };
 
+  // The edit form writes back raw fields (birthDate/hiredDate as YYYY-MM-DD,
+  // departmentId/positionId). Strip the mapped display fields so Zod doesn't choke.
+  const EDITABLE_FIELDS = ['employeeNumber', 'firstName', 'lastName', 'middleName', 'birthDate', 'gender', 'civilStatus', 'address', 'contactNumber', 'email', 'status', 'departmentId', 'positionId', 'hiredDate'];
+  const toPayload = emp => Object.fromEntries(
+    EDITABLE_FIELDS.filter(k => emp[k] !== undefined).map(k => [k, emp[k] === '' && !['employeeNumber', 'firstName', 'lastName', 'birthDate', 'gender', 'civilStatus', 'address', 'departmentId', 'positionId', 'hiredDate'].includes(k) ? null : emp[k]])
+  );
+
   const submit = async emp => {
     try {
       if (editing) {
-        await updateEmployee(editing.id, emp);
+        await updateEmployee(editing.id, toPayload(emp));
         toast(`Employee ${emp.lastName} updated.`, 'success');
       } else {
-        await createEmployee(emp);
+        await createEmployee(toPayload(emp));
         toast(`Employee ${emp.lastName} added.`, 'success');
       }
       setFormOpen(false);
+      setEditing(null);
       await load(searchQuery);
     } catch (e) {
-      const msg = e?.response?.data?.error?.message;
+      const details = e?.response?.data?.error?.details?.map(d => `${d.path}: ${d.message}`).join('; ');
+      const msg = details || e?.response?.data?.error?.message;
       toast(msg || 'Save failed', 'error');
     }
   };
@@ -92,8 +120,12 @@ export default function Employees() {
     try {
       await deleteEmployee(emp.id);
       setRows(l => l.filter(r => r.id !== emp.id));
-      setFiltered(l => l.filter(r => r.id !== emp.id));
-      setSelected(prev => (prev?.id === emp.id ? null : prev));
+      setFiltered(l => {
+        const next = l.filter(r => r.id !== emp.id);
+        // Keep the detail pane on a live row after delete.
+        setSelected(prev => (prev?.id === emp.id ? (next[0] ?? null) : prev));
+        return next;
+      });
       toast(`Employee ${emp.name} deleted.`, 'info');
     } catch (e) {
       const msg = e?.response?.data?.error?.message;
@@ -125,27 +157,29 @@ export default function Employees() {
           />
         </div>
         <div className="min-w-0">
-          <DetailPane employee={selected} />
+          <DetailPane employee={selected} onEdit={openEdit} refreshKey={sectionsVersion} />
         </div>
       </div>
 
       <Modal
         open={formOpen}
-        onClose={() => setFormOpen(false)}
+        onClose={() => { setFormOpen(false); setEditing(null); }}
         title={editing ? `Edit Employee · ${editing.name}` : 'Add Employee'}
         size="lg"
         footer={
           <>
-            <button type="button" className="btn btn-ghost" onClick={() => setFormOpen(false)}>Cancel</button>
+            <button type="button" className="btn btn-ghost" onClick={() => { setFormOpen(false); setEditing(null); }}>Cancel</button>
             <button type="submit" form="employee-form" className="btn btn-primary">{editing ? 'Save Changes' : 'Add Employee'}</button>
           </>
         }
       >
         <EmployeeForm
+          key={editing?.id ?? 'new'}
           formId="employee-form"
           initial={editing ?? blankEmployee}
           submitLabel={editing ? 'Save Changes' : 'Add Employee'}
           onSubmit={submit}
+          onSectionsChange={() => setSectionsVersion(v => v + 1)}
         />
       </Modal>
 

@@ -12,20 +12,24 @@ export default function Attendance() {
 
   useEffect(() => {
     attendanceApi.list().then(r => {
-      const all = r.data;
+      const all = Array.isArray(r.data) ? r.data : [];
       setRows(all);
       setDates([...new Set(all.map(a => a.date ? new Date(a.date).toISOString().slice(0, 10) : ''))].filter(Boolean).sort());
     }).catch(() => toast('Failed to load attendance', 'error'));
+    // NOTE: date-filtered refetch is handled by the effect below, so this
+    // initial load must not fire twice on mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
-    attendanceApi.list(date || undefined).then(r => setRows(r.data)).catch(() => toast('Failed to load attendance', 'error'));
+    if (!date) return;
+    attendanceApi.list(date).then(r => setRows(Array.isArray(r.data) ? r.data : [])).catch(() => toast('Failed to load attendance', 'error'));
   }, [date]);
 
   const summary = useMemo(() => {
     const onTime = rows.filter(r => r.remark === 'On time').length;
     const late = rows.filter(r => r.remark === 'Tardiness').length;
-    const ot = rows.filter(r => r.remark === 'Overtime').reduce((s, r) => s + (r.hours ?? 0) - 8, 0);
+    const ot = rows.filter(r => r.remark === 'Overtime').reduce((s, r) => s + Math.max(0, (r.hours ?? 0) - 8), 0);
     const onLeave = rows.filter(r => r.remark === 'On leave').length;
     return { onTime, late, ot: Math.round(ot * 10) / 10, onLeave };
   }, [rows]);

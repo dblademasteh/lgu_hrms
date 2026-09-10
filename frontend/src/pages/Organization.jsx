@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Plus, ChevronDown, Pencil, Trash2 } from 'lucide-react';
 import Layout from '../components/Layout.jsx';
 import Modal from '../components/Modal.jsx';
 import ConfirmDialog from '../components/ConfirmDialog.jsx';
@@ -7,26 +8,63 @@ import { useToast } from '../components/Toast.jsx';
 
 const childrenOf = (list, parentId) => list.filter(d => d.parentId === parentId);
 
-function Node({ list, dept, depth, onRename, onRemove }) {
-  const children = childrenOf(list, dept.id);
+function Node({ list, dept, onRename, onRemove, expanded, onToggle }) {
+  const hasChildren = childrenOf(list, dept.id).length > 0;
+  const isExpanded = expanded || !hasChildren;
+  
   return (
-    <li>
-      <div
-        className="card p-4 flex items-center gap-3 flex-wrap"
-        style={depth ? { marginLeft: `${depth * 1.5}rem` } : undefined}
-      >
-        <span className="mono-label">{dept.code}</span>
-        <span className="font-display font-semibold text-ink text-sm">{dept.name}</span>
-        <span className="ml-auto mono-label">Level {dept.level}</span>
-        <span className="inline-flex gap-1">
-          <button type="button" className="btn btn-ghost px-2 text-xs" onClick={() => onRename(dept)}>Rename</button>
-          <button type="button" className="btn btn-ghost px-2 text-xs" onClick={() => onRemove(dept)}>Remove</button>
+    <li className="mb-2">
+      <div className="card p-4 flex items-center gap-3 flex-wrap">
+        <button
+          type="button"
+          className="btn btn-ghost p-1 rounded-full hover:bg-bg/50"
+          onClick={() => hasChildren && onToggle(dept.id)}
+          aria-label={hasChildren ? (isExpanded ? 'Collapse' : 'Expand') : ''}
+        >
+          {hasChildren && (
+            isExpanded ? (
+              <ChevronDown size={16} className="text-muted" />
+            ) : (
+              <ChevronDown size={16} className="text-muted rotate-180" />
+            )
+          )}
+        </button>
+        <span className="mono-label bg-accent/10 text-accent px-2 py-1 rounded text-xs font-medium">
+          {dept.code}
         </span>
+        <span className="font-display font-semibold text-ink text-sm">{dept.name}</span>
+        <span className="ml-auto text-xs text-muted mono-label">Level {dept.level}</span>
+        <div className="flex items-center gap-1">
+          <button 
+            type="button" 
+            className="btn btn-ghost px-2 text-xs flex items-center gap-1" 
+            onClick={() => onRename(dept)}
+          >
+            <Pencil size={14} />
+            Rename
+          </button>
+          <button 
+            type="button" 
+            className="btn btn-ghost px-2 text-xs text-error hover:text-error-ink" 
+            onClick={() => onRemove(dept)}
+          >
+            <Trash2 size={14} />
+            Remove
+          </button>
+        </div>
       </div>
-      {children.length > 0 && (
-        <ul className="mt-2 space-y-2">
-          {children.map(c => (
-            <Node key={c.id} list={list} dept={c} depth={depth + 1} onRename={onRename} onRemove={onRemove} />
+      {hasChildren && isExpanded && (
+        <ul className="ml-4 mt-2 space-y-2 border-l border-line pl-4">
+          {childrenOf(list, dept.id).map(c => (
+            <Node
+              key={c.id}
+              list={list}
+              dept={c}
+              onRename={onRename}
+              onRemove={onRemove}
+              expanded={!!expanded[c.id]}
+              onToggle={onToggle}
+            />
           ))}
         </ul>
       )}
@@ -85,6 +123,11 @@ export default function Organization() {
   };
 
   const roots = list.filter(d => !d.parentId);
+  const [expanded, setExpanded] = useState({});
+
+  const toggleExpand = (id) => {
+    setExpanded(e => ({ ...e, [id]: !e[id] }));
+  };
 
   return (
     <Layout>
@@ -93,7 +136,10 @@ export default function Organization() {
           <h1 className="font-display text-xl font-bold text-ink">Organization</h1>
           <p className="text-sm text-muted mt-0.5">Multi-level department hierarchy</p>
         </div>
-        <button type="button" className="btn btn-primary" onClick={() => setAddOpen(true)}>Add Department</button>
+        <button type="button" className="btn btn-primary gap-2" onClick={() => setAddOpen(true)}>
+          <Plus size={18} />
+          Add Department
+        </button>
       </div>
 
       <ul className="space-y-2">
@@ -102,9 +148,10 @@ export default function Organization() {
             key={r.id}
             list={list}
             dept={r}
-            depth={0}
             onRename={d => { setRename(d); setRenameName(d.name); }}
             onRemove={setConfirmDel}
+            expanded={!!expanded[r.id]}
+            onToggle={toggleExpand}
           />
         ))}
       </ul>

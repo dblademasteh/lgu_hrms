@@ -27,13 +27,19 @@ import { ToastProvider } from './components/Toast.jsx';
 
 import { useAuthStore } from './stores/authStore.js';
 
-function Protected({ children }) {
-  const { user, hydrate } = useAuthStore();
-  if (typeof window !== 'undefined' && !user) {
-    hydrate();
-  }
-  const auth = useAuthStore((s) => s.user);
-  return auth ? children : <Navigate to="/" replace />;
+function Protected({ children, roles }) {
+  const user = useAuthStore(s => s.user);
+  const hydrate = useAuthStore(s => s.hydrate);
+  const [ready, setReady] = React.useState(!!user);
+  React.useEffect(() => {
+    if (!user) hydrate();
+    setReady(true);
+  }, [user, hydrate]);
+  if (!ready) return null;
+  if (!useAuthStore.getState().user) return <Navigate to="/" replace />;
+  const current = useAuthStore.getState().user;
+  if (roles && !roles.includes(current.role)) return <Navigate to="/dashboard" replace />;
+  return children;
 }
 
 export default function App() {
@@ -44,23 +50,23 @@ export default function App() {
           <Routes>
             <Route path="/" element={<Login />} />
             <Route path="/dashboard" element={<Protected><UserDashboard /></Protected>} />
-            <Route path="/employees" element={<Protected><Employees /></Protected>} />
+            <Route path="/employees" element={<Protected roles={['ADMIN', 'HR_MANAGER', 'DEPARTMENT_HEAD']}><Employees /></Protected>} />
             <Route path="/organization" element={<Protected><Organization /></Protected>} />
-            <Route path="/payroll" element={<Protected><Payroll /></Protected>} />
-            <Route path="/leave" element={<Protected><Leave /></Protected>} />
-            <Route path="/audit" element={<Protected><Audit /></Protected>} />
-            <Route path="/reports" element={<Protected><Reports /></Protected>} />
-            <Route path="/users" element={<Protected><Users /></Protected>} />
-            <Route path="/attendance" element={<Protected><Attendance /></Protected>} />
-            <Route path="/appointments" element={<Protected><Appointments /></Protected>} />
-            <Route path="/performance" element={<Protected><Performance /></Protected>} />
-            <Route path="/plantilla" element={<Protected><Plantilla /></Protected>} />
-            <Route path="/vacancy" element={<Protected><Vacancy /></Protected>} />
-            <Route path="/designation" element={<Protected><Designation /></Protected>} />
+            <Route path="/payroll" element={<Protected roles={['ADMIN', 'HR_MANAGER', 'PAYROLL_OFFICER']}><Payroll /></Protected>} />
+            <Route path="/leave" element={<Protected roles={['ADMIN', 'HR_MANAGER', 'DEPARTMENT_HEAD']}><Leave /></Protected>} />
+            <Route path="/audit" element={<Protected roles={['ADMIN', 'AUDITOR']}><Audit /></Protected>} />
+            <Route path="/reports" element={<Protected roles={['ADMIN', 'HR_MANAGER', 'PAYROLL_OFFICER', 'AUDITOR']}><Reports /></Protected>} />
+            <Route path="/users" element={<Protected roles={['ADMIN']}><Users /></Protected>} />
+            <Route path="/attendance" element={<Protected roles={['ADMIN', 'HR_MANAGER', 'DEPARTMENT_HEAD']}><Attendance /></Protected>} />
+            <Route path="/appointments" element={<Protected roles={['ADMIN', 'HR_MANAGER']}><Appointments /></Protected>} />
+            <Route path="/performance" element={<Protected roles={['ADMIN', 'HR_MANAGER', 'DEPARTMENT_HEAD']}><Performance /></Protected>} />
+            <Route path="/plantilla" element={<Protected roles={['ADMIN', 'HR_MANAGER']}><Plantilla /></Protected>} />
+            <Route path="/vacancy" element={<Protected roles={['ADMIN', 'HR_MANAGER']}><Vacancy /></Protected>} />
+            <Route path="/designation" element={<Protected roles={['ADMIN', 'HR_MANAGER']}><Designation /></Protected>} />
             <Route path="/learning" element={<Protected><Learning /></Protected>} />
-            <Route path="/recruitment" element={<Protected><Recruitment /></Protected>} />
+            <Route path="/recruitment" element={<Protected roles={['ADMIN', 'HR_MANAGER']}><Recruitment /></Protected>} />
             <Route path="/ess" element={<Protected><ESS /></Protected>} />
-            <Route path="/ipcr" element={<Protected><IPCR /></Protected>} />
+            <Route path="/ipcr" element={<Protected roles={['ADMIN', 'HR_MANAGER', 'DEPARTMENT_HEAD']}><IPCR /></Protected>} />
             <Route path="/settings" element={<Protected><Settings /></Protected>} />
             <Route path="*" element={<NotFound />} />
           </Routes>

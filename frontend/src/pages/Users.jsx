@@ -54,10 +54,20 @@ export default function Users() {
     }
   };
 
-  const toggleStatus = u => {
-    const next = u.status === 'Active' ? 'Inactive' : 'Active';
-    setList(l => l.map(x => (x.id === u.id ? { ...x, status: next } : x)));
-    toast(`User ${u.username} set to ${next}.`, next === 'Active' ? 'success' : 'info');
+  // DB stores status as 'ACTIVE'/'INACTIVE' (uppercase); the API contract
+  // enforces the same. Normalize here so seeded rows and toggles agree.
+  const isActive = u => String(u.status ?? '').toUpperCase() === 'ACTIVE';
+
+  const toggleStatus = async u => {
+    const next = isActive(u) ? 'INACTIVE' : 'ACTIVE';
+    try {
+      const r = await usersApi.update(u.id, { status: next });
+      setList(l => l.map(x => (x.id === u.id ? r.data : x)));
+      toast(`User ${u.username} set to ${next === 'ACTIVE' ? 'Active' : 'Inactive'}.`, next === 'ACTIVE' ? 'success' : 'info');
+    } catch (e) {
+      const msg = e?.response?.data?.error?.message;
+      toast(msg || 'Status change failed', 'error');
+    }
   };
 
   return (
@@ -73,7 +83,7 @@ export default function Users() {
       <div className="card p-5 mb-4">
         <div className="flex items-center justify-between mb-3">
           <h3 className="font-display font-semibold text-ink">User Accounts</h3>
-          <span className="mono-label">{list.filter(u => u.status === 'Active').length} active</span>
+          <span className="mono-label">{list.filter(isActive).length} active</span>
         </div>
         <div className="overflow-auto">
           <table className="data-table">
@@ -96,7 +106,7 @@ export default function Users() {
                     <span className="inline-flex gap-2">
                       <button type="button" className="btn btn-ghost px-3 text-xs" onClick={() => openEdit(u)}>Edit</button>
                       <button type="button" className="btn btn-ghost px-3 text-xs" onClick={() => setConfirm(u)}>
-                        {u.status === 'Active' ? 'Deactivate' : 'Activate'}
+                        {isActive(u) ? 'Deactivate' : 'Activate'}
                       </button>
                     </span>
                   </td>
@@ -180,10 +190,10 @@ export default function Users() {
         open={!!confirm}
         onClose={() => setConfirm(null)}
         onConfirm={() => toggleStatus(confirm)}
-        title={`${confirm?.status === 'Active' ? 'Deactivate' : 'Activate'} user?`}
-        message={`User account "${confirm?.username}" will be set to ${confirm?.status === 'Active' ? 'Inactive — they will lose access.' : 'Active — they will regain access.'}`}
-        confirmLabel={confirm?.status === 'Active' ? 'Deactivate' : 'Activate'}
-        danger={confirm?.status === 'Active'}
+        title={`${confirm && isActive(confirm) ? 'Deactivate' : 'Activate'} user?`}
+        message={`User account "${confirm?.username}" will be set to ${confirm && isActive(confirm) ? 'Inactive — they will lose access.' : 'Active — they will regain access.'}`}
+        confirmLabel={confirm && isActive(confirm) ? 'Deactivate' : 'Activate'}
+        danger={!!confirm && isActive(confirm)}
       />
     </Layout>
   );

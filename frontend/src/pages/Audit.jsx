@@ -22,6 +22,33 @@ export default function Audit() {
 
   const detailInfo = detail ? { before: detail.before, after: detail.after } : null;
 
+  const exportCsv = () => {
+    if (!logs.length) {
+      toast('Nothing to export.', 'info');
+      return;
+    }
+    const cell = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
+    const rows = [
+      ['timestamp', 'user', 'action', 'entity', 'entityId', 'ip'],
+      ...logs.map(l => [
+        l.timestamp ? new Date(l.timestamp).toISOString() : '',
+        l.user?.username ?? l.user ?? '',
+        l.action ?? '',
+        l.entity ?? '',
+        l.entityId ?? '',
+        l.ip ?? '',
+      ]),
+    ];
+    const blob = new Blob([rows.map(r => r.map(cell).join(',')).join('\n')], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `audit-log-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast(`Exported ${logs.length} audit entr${logs.length === 1 ? 'y' : 'ies'}.`, 'success');
+  };
+
   return (
     <Layout>
       <div className="flex items-end justify-between gap-4 mb-6">
@@ -29,7 +56,7 @@ export default function Audit() {
           <h1 className="font-display text-xl font-bold text-ink">Audit Trail</h1>
           <p className="text-sm text-muted mt-0.5">Immutable, append-only record of every action</p>
         </div>
-        <button type="button" className="btn btn-ghost">Export CSV</button>
+        <button type="button" className="btn btn-ghost" onClick={exportCsv}>Export CSV</button>
       </div>
 
       <div className="card p-5">
@@ -75,7 +102,7 @@ export default function Audit() {
           <div>
             <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm mb-4">
               <div><dt className="mono-label">Timestamp</dt><dd className="font-mono mt-0.5">{new Date(detail.timestamp).toLocaleString()}</dd></div>
-              <div><dt className="mono-label">User</dt><dd className="font-mono mt-0.5">{detail.user}</dd></div>
+              <div><dt className="mono-label">User</dt><dd className="font-mono mt-0.5">{detail.user?.username ?? detail.user ?? '—'}</dd></div>
               <div><dt className="mono-label">Action</dt><dd className="mt-0.5"><span className={`badge ${badgeTone(detail.action)}`}>{detail.action}</span></dd></div>
               <div><dt className="mono-label">IP Address</dt><dd className="font-mono mt-0.5">{detail.ip}</dd></div>
             </dl>

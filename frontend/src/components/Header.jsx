@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { toggleTheme, useTheme } from '../theme.js';
-import { notifications } from '../data/mock.js';
-import { Search, Bell, Sun, Moon, LogOut, User, Menu, ChevronDown, Home, CheckCheck, Trash2, Inbox } from 'lucide-react';
+import { useAuthStore } from '../stores/authStore.js';
+import { useNotifications, useInAppEnabled } from '../hooks/useNotifications.js';
+import { Search, Bell, Sun, Moon, LogOut, User, Menu, ChevronDown, Home, CheckCheck, Trash2, Inbox, HelpCircle } from 'lucide-react';
 
 const titles = {
   '/dashboard': 'Dashboard',
@@ -21,12 +22,15 @@ export default function Header({ onToggleSidebar }) {
   const navigate = useNavigate();
   const location = useLocation();
   const theme = useTheme();
-  const [items, setItems] = useState(notifications);
+  const user = useAuthStore(s => s.user);
+  const logout = useAuthStore(s => s.logout);
+  const { items, loading, live, markRead, markAllRead, dismissAll } = useNotifications();
+  const inAppEnabled = useInAppEnabled();
   const [bellOpen, setBellOpen] = useState(false);
   const [userOpen, setUserOpen] = useState(false);
   const bellRef = useRef(null);
   const userRef = useRef(null);
-  const unread = items.filter(n => n.unread).length;
+  const unread = inAppEnabled ? items.filter(n => n.unread).length : 0;
 
   useEffect(() => {
     if (!bellOpen) return undefined;
@@ -46,8 +50,11 @@ export default function Header({ onToggleSidebar }) {
     return () => document.removeEventListener('mousedown', onDown);
   }, [userOpen]);
 
-  const markAllRead = () => setItems(ns => ns.map(n => ({ ...n, unread: false })));
-  const dismissAll = () => setItems([]);
+  const openItem = (n) => {
+    markRead(n.id);
+    setBellOpen(false);
+    if (n.path) navigate(n.path);
+  };
 
   return (
     <header className="h-16 shrink-0 bg-surface/90 backdrop-blur-md border-b border-line" style={{ zIndex: 50 }}>
@@ -77,12 +84,22 @@ export default function Header({ onToggleSidebar }) {
             type="button"
             className="btn btn-ghost px-2 md:px-3"
             onClick={() => window.dispatchEvent(new CustomEvent('lgu:open-palette'))}
-            aria-label="Quick search (Ctrl+K)"
+            aria-label="Quick search (Ctrl+K) - press to open"
             title="Quick search (Ctrl+K)"
           >
             <Search size={18} />
             <span className="hidden md:inline ml-1 text-sm">Search</span>
             <span className="hidden lg:inline mono-label ml-2">⌘K</span>
+          </button>
+
+          <button
+            type="button"
+            className="btn btn-ghost px-2 md:px-3"
+            onClick={() => {}}
+            aria-label="Help"
+            title="Help"
+          >
+            <HelpCircle size={18} />
           </button>
 
           <div className="dropdown" ref={bellRef}>
@@ -101,7 +118,7 @@ export default function Header({ onToggleSidebar }) {
               )}
             </button>
             {bellOpen && (
-              <div className="dropdown-panel w-[360px] p-0" role="menu" aria-label="Notifications">
+              <div className="dropdown-panel w-90 p-0" role="menu" aria-label="Notifications">
                 <div className="flex items-center justify-between px-4 py-3 border-b border-line">
                   <div className="flex items-center gap-2">
                     <Inbox size={16} className="text-muted" />
@@ -112,13 +129,23 @@ export default function Header({ onToggleSidebar }) {
                     <button type="button" className="btn btn-ghost px-2 py-1 text-xs flex items-center gap-1" onClick={markAllRead} title="Mark all read">
                       <CheckCheck size={14} /> Mark all
                     </button>
-                    <button type="button" className="btn btn-ghost px-2 py-1 text-xs" onClick={dismissAll} title="Clear all">
+                    <button type="button" className="btn btn-ghost px-2 py-1 text-xs" onClick={dismissAll} title="Clear all" aria-label="Clear all notifications">
                       <Trash2 size={14} />
                     </button>
                   </div>
                 </div>
 
-                {items.length === 0 ? (
+                {!inAppEnabled ? (
+                  <div className="py-12 px-6 text-center">
+                    <div className="mx-auto w-12 h-12 rounded-full bg-bg grid place-items-center mb-3">
+                      <Bell size={20} className="text-muted" />
+                    </div>
+                    <p className="text-sm font-medium text-ink">Notifications muted</p>
+                    <p className="text-xs text-muted mt-1">Turn on In-app notifications under Settings → Notifications.</p>
+                  </div>
+                ) : loading ? (
+                  <p className="text-sm text-muted px-4 py-8 text-center">Loading notifications…</p>
+                ) : items.length === 0 ? (
                   <div className="py-12 text-center">
                     <div className="mx-auto w-12 h-12 rounded-full bg-bg grid place-items-center mb-3">
                       <Bell size={20} className="text-muted" />
@@ -127,26 +154,33 @@ export default function Header({ onToggleSidebar }) {
                     <p className="text-xs text-muted mt-1">You’re all caught up</p>
                   </div>
                 ) : (
-                  <ul className="max-h-[380px] overflow-auto divide-y divide-line">
+                  <ul className="max-h-95 overflow-auto divide-y divide-line">
                     {items.map(n => (
-                      <li key={n.id} className={`px-4 py-3 hover:bg-bg/50 transition-colors cursor-pointer ${n.unread ? 'bg-accent/[0.03]' : ''}`} onClick={() => { setBellOpen(false); navigate('/audit'); }}>
-                        <div className="flex gap-3">
-                          <div className={`mt-0.5 w-2 h-2 rounded-full shrink-0 ${n.unread ? 'bg-accent' : 'bg-transparent'}`} />
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-start justify-between gap-2">
-                              <p className={`text-sm font-medium text-ink truncate ${n.unread ? '' : 'opacity-90'}`}>{n.title}</p>
-                              <span className="mono-label text-[10px] text-muted shrink-0">{n.time}</span>
+                      <li key={n.id}>
+                        <button
+                          type="button"
+                          className={`w-full text-left px-4 py-3 hover:bg-bg/50 transition-colors ${n.unread ? 'bg-accent/3' : ''}`}
+                          onClick={() => openItem(n)}
+                        >
+                          <div className="flex gap-3">
+                            <div className={`mt-1.5 w-2 h-2 rounded-full shrink-0 ${n.unread ? 'bg-accent' : 'bg-line'}`} aria-hidden="true" />
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-start justify-between gap-2">
+                                <p className={`text-sm font-medium text-ink ${n.unread ? '' : 'opacity-90'}`}>{n.title}</p>
+                                <span className="mono-label text-[10px] text-muted shrink-0">{n.time}</span>
+                              </div>
+                              <p className="text-xs text-muted mt-0.5 line-clamp-2">{n.body}</p>
                             </div>
-                            <p className="text-xs text-muted mt-0.5 line-clamp-2">{n.body}</p>
                           </div>
-                        </div>
+                        </button>
                       </li>
                     ))}
                   </ul>
                 )}
 
-                <div className="px-4 py-2 border-t border-line">
-                  <button className="w-full text-center text-xs mono-label hover:text-accent" onClick={() => navigate('/audit')}>
+                <div className="px-4 py-2 border-t border-line flex items-center justify-between">
+                  <span className="mono-label text-[10px]">{live ? 'Live' : 'Offline sample'}</span>
+                  <button type="button" className="text-xs mono-label hover:text-accent" onClick={() => { setBellOpen(false); navigate('/audit'); }}>
                     View audit log
                   </button>
                 </div>
@@ -172,12 +206,12 @@ export default function Header({ onToggleSidebar }) {
               aria-expanded={userOpen}
               aria-label="User menu"
             >
-              <div className="w-8 h-8 rounded-full bg-accent/10 text-accent flex items-center justify-center">
-                <User size={16} />
+              <div className="w-10 h-10 rounded-[12px] bg-accent/10 text-accent flex items-center justify-center" aria-hidden="true">
+                <User size={18} />
               </div>
               <div className="hidden md:block text-left leading-tight">
-                <p className="text-sm font-semibold text-ink">Admin</p>
-                <p className="text-[10px] mono-label text-muted">HRMO</p>
+                <p className="text-sm font-semibold text-ink truncate max-w-28">{user?.username ?? 'Account'}</p>
+                <p className="text-[10px] mono-label text-muted">{user?.role?.replaceAll('_', ' ') ?? '—'}</p>
               </div>
               <ChevronDown size={14} className="text-muted" />
             </button>
@@ -185,11 +219,11 @@ export default function Header({ onToggleSidebar }) {
               <div className="dropdown-panel w-56" role="menu" aria-label="User menu">
                 <div className="px-4 py-3 border-b border-line">
                   <p className="font-semibold text-ink text-sm">Signed in as</p>
-                  <p className="mono-label text-xs text-muted">admin@lgu.gov.ph</p>
+                  <p className="mono-label text-xs text-muted truncate">{user?.username ?? '—'}{user?.role ? ` · ${user.role.replaceAll('_', ' ')}` : ''}</p>
                 </div>
                 <button
                   className="w-full text-left px-4 py-2.5 text-sm hover:bg-bg/60 flex items-center gap-2"
-                  onClick={() => { localStorage.removeItem('auth'); navigate('/'); }}
+                  onClick={() => { logout(); setUserOpen(false); navigate('/'); }}
                 >
                   <LogOut size={16} /> Sign out
                 </button>

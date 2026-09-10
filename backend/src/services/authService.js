@@ -29,7 +29,11 @@ export const authService = {
   },
   async refresh(refreshToken) {
     const payload = jwt.verify(refreshToken, REFRESH_SECRET);
-    const accessToken = jwt.sign({ id: payload.id, role: payload.role }, ACCESS_SECRET, { expiresIn: '15m' });
+    // Re-read the user so the new access token carries the live role
+    // (refresh tokens only carry the id). Revoked/missing users fail closed.
+    const user = await prisma.user.findUnique({ where: { id: payload.id } });
+    if (!user || user.status === 'INACTIVE') throw new Error('Invalid refresh token');
+    const accessToken = jwt.sign({ id: user.id, role: user.role }, ACCESS_SECRET, { expiresIn: '15m' });
     return { accessToken };
   }
 };

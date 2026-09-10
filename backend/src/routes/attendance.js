@@ -1,12 +1,12 @@
 import { Router } from 'express';
 import { attendanceController } from '../controllers/attendanceController.js';
-import { requireAuth } from '../middleware/auth.js';
-import { auditLog } from '../middleware/audit.js';
+import { validate } from '../middleware/validate.js';
+import { createAttendanceSchema } from '../shared/contracts/attendance.js';
 
+// NOTE: requireAuth + auditLog are mounted globally in routes/index.js.
 const router = Router();
-router.use(requireAuth);
 
 router.get('/', attendanceController.list);
-router.post('/', auditLog, attendanceController.create);
+router.post('/', validate(createAttendanceSchema), attendanceController.create);
 
 export default router;

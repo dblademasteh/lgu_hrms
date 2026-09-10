@@ -1,17 +1,18 @@
 import { Router } from 'express';
 import { usersController } from '../controllers/usersController.js';
-import { requireAuth } from '../middleware/auth.js';
-import { auditLog } from '../middleware/audit.js';
 import { validate } from '../middleware/validate.js';
+import { requireRole } from '../middleware/rbac.js';
 import { createUserSchema, updateUserSchema, userIdSchema } from '../shared/contracts/users.js';
 
 const router = Router();
 
-router.use(requireAuth);
+// NOTE: requireAuth + auditLog are mounted globally in routes/index.js.
+// User admin is ADMIN-only; validate before audit so 400s aren't logged as mutations.
+router.use(requireRole('ADMIN'));
 
 router.get('/', usersController.list);
-router.post('/', auditLog, validate(createUserSchema), usersController.create);
-router.patch('/:id', auditLog, validate(updateUserSchema), usersController.update);
-router.delete('/:id', auditLog, validate(userIdSchema), usersController.remove);
+router.post('/', validate(createUserSchema), usersController.create);
+router.patch('/:id', validate(updateUserSchema), usersController.update);
+router.delete('/:id', validate(userIdSchema), usersController.remove);
 
 export default router;

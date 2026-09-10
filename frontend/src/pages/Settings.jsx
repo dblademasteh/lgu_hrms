@@ -49,7 +49,7 @@ export default function Settings() {
   const [pwdCurrent, setPwdCurrent] = useState('');
   const [pwdNew, setPwdNew] = useState('');
   const [pwdConfirm, setPwdConfirm] = useState('');
-  const { push } = useToast();
+  const toast = useToast();
 
   useEffect(() => {
     if (active === 'account') {
@@ -70,7 +70,7 @@ export default function Settings() {
   useEffect(() => { localStorage.setItem('lgu-font-family', fontFamily); document.documentElement.style.setProperty('--font-sans', `"${fontFamily}", var(--font-sans-fallback)`); document.body.style.fontFamily = `"${fontFamily}", var(--font-sans-fallback)`; }, [fontFamily]);
   useEffect(() => { localStorage.setItem('lgu-ui-scale', String(uiScale)); document.documentElement.style.setProperty('--ui-scale', `${uiScale}%`); }, [uiScale]);
 
-  const save = (msg) => push({ title: 'Saved', body: msg, variant: 'success' });
+  const save = (msg) => toast(msg, 'success');
 
   const passwordStrength = (pwd) => {
     let score = 0;
@@ -82,45 +82,45 @@ export default function Settings() {
   };
 
   const handlePasswordChange = async () => {
-    if (!pwdCurrent || !pwdNew || !pwdConfirm) { push({title:'Missing fields', body:'Fill all fields', variant:'error'}); return; }
-    if (pwdNew !== pwdConfirm) { push({title:'Mismatch', body:'New passwords do not match', variant:'error'}); return; }
-    if (passwordStrength(pwdNew) < 3) { push({title:'Weak password', body:'Use 8+ chars with upper, number, symbol', variant:'error'}); return; }
+    if (!pwdCurrent || !pwdNew || !pwdConfirm) { toast('Fill all fields', 'error'); return; }
+    if (pwdNew !== pwdConfirm) { toast('New passwords do not match', 'error'); return; }
+    if (passwordStrength(pwdNew) < 3) { toast('Use 8+ chars with upper, number, symbol', 'error'); return; }
     try {
       await accountApi.changePassword({ currentPassword: pwdCurrent, newPassword: pwdNew });
-      push({title:'Success', body:'Password changed', variant:'success'});
+      toast('Password changed', 'success');
       setShowPasswordModal(false);
       setPwdCurrent(''); setPwdNew(''); setPwdConfirm('');
       accountApi.getProfile().then(res => setProfile(res.data)).catch(()=>{});
     } catch (e) {
-      push({title:'Error', body:'Current password incorrect', variant:'error'});
+      toast('Current password is incorrect', 'error');
     }
   };
 
   const handleProfileUpdate = async () => {
     try {
       await accountApi.updateProfile({ displayName: editDisplayName, email: editEmail, contactNumber: editContact, emergencyContact: editEmergency });
-      push({title:'Saved', body:'Profile updated', variant:'success'});
+      toast('Profile updated', 'success');
       setShowProfileEdit(false);
       accountApi.getProfile().then(res => setProfile(res.data)).catch(()=>{});
     } catch {
-      push({title:'Error', body:'Could not update profile', variant:'error'});
+      toast('Could not update profile', 'error');
     }
   };
 
   const handlePrefsSave = async () => {
     try {
       await accountApi.updateProfile({ displayPrefs: profile?.user?.displayPrefs || {} });
-      push({title:'Saved', body:'Preferences saved', variant:'success'});
+      toast('Preferences saved', 'success');
       accountApi.getProfile().then(res => setProfile(res.data)).catch(()=>{});
     } catch {
-      push({title:'Error', body:'Could not save preferences', variant:'error'});
+      toast('Could not save preferences', 'error');
     }
   };
 
   const handleCodeAssist = () => {
-    if (!codePrompt.trim()) { push({ title: 'Empty prompt', body: 'Enter a description', variant: 'error' }); return; }
+    if (!codePrompt.trim()) { toast('Enter a description', 'error'); return; }
     setCodeOutput(`// Generated from: ${codePrompt}\n\nfunction example() {\n  // TODO: implement logic\n  return 'Hello LGU HRMS';\n}\n`);
-    push({ title: 'Code generated', body: 'Mock output shown', variant: 'success' });
+    toast('Mock output shown', 'success');
   };
 
   return (
@@ -346,9 +346,9 @@ export default function Settings() {
                           <button className="btn btn-ghost text-xs" onClick={async ()=>{
                             try {
                               await accountApi.revokeSession(s.id);
-                              push({title:'Revoked', body:'Session revoked', variant:'success'});
+                              toast('Session revoked', 'success');
                               setSessions(prev => prev.filter(x => x.id !== s.id));
-                            } catch { push({title:'Error', body:'Could not revoke', variant:'error'}); }
+                            } catch { toast('Could not revoke session', 'error'); }
                           }}>Revoke</button>
                         </div>
                       ))}
@@ -413,7 +413,7 @@ export default function Settings() {
                     <p className="text-sm font-medium text-ink">Privacy & Data</p>
                     <div className="flex items-center justify-between text-sm">
                       <div><p className="text-ink">Data export</p><p className="text-xs text-muted">RA 10173 portability</p></div>
-                      <button className="btn btn-ghost text-sm" onClick={async()=>{ const r = await accountApi.exportData(); push({title:'Export', body:r.data.message, variant:'info'}); }}>Download</button>
+                      <button className="btn btn-ghost text-sm" onClick={async()=>{ const r = await accountApi.exportData(); toast(r.data.message, 'info'); }}>Download</button>
                     </div>
                     <div className="flex items-center justify-between text-sm">
                       <div><p className="text-ink">Deactivation</p><p className="text-xs text-muted">Soft delete account</p></div>
@@ -501,7 +501,7 @@ export default function Settings() {
         <Modal open={show2FAModal} onClose={()=>{setShow2FAModal(false); setTwoFASecret(null);}} title="Two-factor authentication" size="sm" footer={
           <div className="flex justify-end gap-2">
             <button className="btn btn-ghost" onClick={()=>{setShow2FAModal(false); setTwoFASecret(null);}}>Close</button>
-            <button className="btn btn-primary" onClick={async()=>{ await accountApi.verify2FA(twoFACode); push({title:'2FA', body:'2FA enabled', variant:'success'}); setShow2FAModal(false); accountApi.getProfile().then(r=>setProfile(r.data)); }}>Verify</button>
+            <button className="btn btn-primary" onClick={async()=>{ await accountApi.verify2FA(twoFACode); toast('2FA enabled', 'success'); setShow2FAModal(false); accountApi.getProfile().then(r=>setProfile(r.data)); }}>Verify</button>
           </div>
         }>
           <div className="space-y-3 text-sm">
@@ -516,7 +516,7 @@ export default function Settings() {
         <Modal open={showDelegationModal} onClose={()=>setShowDelegationModal(false)} title="Create delegation" size="sm" footer={
           <div className="flex justify-end gap-2">
             <button className="btn btn-ghost" onClick={()=>setShowDelegationModal(false)}>Cancel</button>
-            <button className="btn btn-primary" onClick={async()=>{ await accountApi.createDelegation(delegationForm); setShowDelegationModal(false); const r = await accountApi.getDelegations(); setDelegations(r.data||[]); push({title:'Created', body:'Delegation created', variant:'success'}); }}>Create</button>
+            <button className="btn btn-primary" onClick={async()=>{ await accountApi.createDelegation(delegationForm); setShowDelegationModal(false); const r = await accountApi.getDelegations(); setDelegations(r.data||[]); toast('Delegation created', 'success'); }}>Create</button>
           </div>
         }>
           <div className="space-y-3 text-sm">
@@ -529,7 +529,7 @@ export default function Settings() {
             </div>
           </div>
         </Modal>
-        <ConfirmDialog open={showDeactivateConfirm} onClose={()=>setShowDeactivateConfirm(false)} title="Deactivate account" description="This will soft-delete your account. Continue?" confirmText="Deactivate" variant="danger" onConfirm={async()=>{ await accountApi.deactivateAccount(); push({title:'Deactivated', body:'Account deactivated', variant:'success'}); setShowDeactivateConfirm(false); }} />
+        <ConfirmDialog open={showDeactivateConfirm} onClose={()=>setShowDeactivateConfirm(false)} title="Deactivate account" message="This will soft-delete your account. Continue?" confirmLabel="Deactivate" danger onConfirm={async()=>{ await accountApi.deactivateAccount(); toast('Account deactivated', 'success'); setShowDeactivateConfirm(false); }} />
     </Layout>
   );
 }

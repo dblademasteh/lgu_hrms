@@ -16,6 +16,7 @@ export const SECTIONS = {
     model: 'familyMember',
     required: ['relationship', 'firstName', 'lastName'],
     dates: ['birthDate'],
+    defaults: ['isDependent'],
     orderBy: { createdAt: 'asc' },
   },
   education: {
@@ -87,6 +88,18 @@ function sectionOrThrow(name) {
   return cfg;
 }
 
+/**
+ * Translate Prisma request errors into client-facing 400s (bad FK, null
+ * violation, unknown field) instead of leaking a 500 + raw query dump.
+ */
+function prismaError(e, section) {
+  if (e?.code && String(e.code).startsWith('P2')) {
+    const lastLine = String(e.message || '').split('\n').filter(Boolean).pop() || 'Invalid data';
+    throw new AppError(`Section "${section}": ${lastLine}`, 400, 'VALIDATION_ERROR');
+  }
+  throw e;
+}
+
 function assertWritable(cfg, name) {
   if (cfg.readOnly) throw new AppError(`Section "${name}" is read-only`, 405, 'READ_ONLY');
 }
@@ -130,9 +143,19 @@ export const employeeSectionService = {
         throw new AppError(`${f} is required`, 400, 'VALIDATION_ERROR');
       }
     }
-    return prisma[cfg.model].create({
-      data: { ...coerceDates(cfg, data), employeeId },
-    });
+    // Omit explicit nulls for fields with DB defaults (e.g. isDependent):
+    // a non-nullable Boolean with @default(false) rejects `null`.
+    const payload = { ...coerceDates(cfg, data) };
+    for (const [k, v] of Object.entries(payload)) {
+      if (v === null && cfg.defaults?.includes(k)) delete payload[k];
+    }
+    try {
+      return await prisma[cfg.model].create({
+        data: { ...payload, employeeId },
+      });
+    } catch (e) {
+      prismaError(e, section);
+    }
   },
 
   async update(section, employeeId, recordId, data) {
@@ -141,10 +164,14 @@ export const employeeSectionService = {
     await assertEmployee(employeeId);
     const existing = await prisma[cfg.model].findFirst({ where: { id: recordId, employeeId } });
     if (!existing) throw new AppError('Record not found', 404, 'NOT_FOUND');
-    return prisma[cfg.model].update({
-      where: { id: recordId },
-      data: coerceDates(cfg, data),
-    });
+    try {
+      return await prisma[cfg.model].update({
+        where: { id: recordId },
+        data: coerceDates(cfg, data),
+      });
+    } catch (e) {
+      prismaError(e, section);
+    }
   },
 
   async remove(section, employeeId, recordId) {
@@ -153,6 +180,10 @@ export const employeeSectionService = {
     await assertEmployee(employeeId);
     const existing = await prisma[cfg.model].findFirst({ where: { id: recordId, employeeId } });
     if (!existing) throw new AppError('Record not found', 404, 'NOT_FOUND');
-    await prisma[cfg.model].delete({ where: { id: recordId } });
+    try {
+      await prisma[cfg.model].delete({ where: { id: recordId } });
+    } catch (e) {
+      prismaError(e, section);
+    }
   },
 };

@@ -1,25 +1,28 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Tabs from './Tabs.jsx';
-import Modal from './Modal.jsx';
 import { badgeTone } from '../data/mock.js';
+import { api } from '../api/client.js';
+import { departmentsApi } from '../api/departments.js';
 import { employeeSectionsApi } from '../api/employeeSections.js';
 
-const initialsOf = name => name.split(' ').map(p => p[0]).slice(0, 2).join('');
+const initialsOf = name => (name ?? '').split(' ').filter(Boolean).map(p => p[0]).slice(0, 2).join('') || '—';
 const peso = n => `\u20B1 ${Number(n ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const d10 = v => (v ? String(v).slice(0, 10) : '\u2014');
-const dash = v => (v ?? v === 0 ? String(v) : '\u2014');
+const dash = v => (v === 0 || v ? String(v) : '\u2014');
 
 /** Generic table renderer per relation section. */
 const RELATION_COLUMNS = {
   history: [
-    { key: 'position', label: 'Position', get: r => dash(r.position?.title ?? r.positionId) },
-    { key: 'dept', label: 'Dept', get: r => dash(r.department?.name ?? r.departmentId) },
+    { key: 'position', label: 'Position', get: r => dash(r._positionName ?? r.position?.title ?? r.positionId) },
+    { key: 'dept', label: 'Dept', get: r => dash(r._deptName ?? r.department?.name ?? r.departmentId) },
     { key: 'startDate', label: 'From', get: r => d10(r.startDate) },
     { key: 'endDate', label: 'To', get: r => (r.endDate ? d10(r.endDate) : 'Present') },
   ],
   appointments: [
     { key: 'type', label: 'Type', get: r => dash(r.type) },
     { key: 'itemNumber', label: 'Item No', get: r => dash(r.itemNumber) },
+    { key: 'position', label: 'Position', get: r => dash(r._positionString ?? r.position) },
+    { key: 'dept', label: 'Dept', get: r => dash(r._deptString ?? r.dept) },
     { key: 'startDate', label: 'From', get: r => d10(r.startDate) },
     { key: 'endDate', label: 'To', get: r => (r.endDate ? d10(r.endDate) : 'Present') },
     { key: 'status', label: 'Status', get: r => dash(r.status) },
@@ -71,28 +74,77 @@ const RELATION_COLUMNS = {
   ],
 };
 
-const READONLY_TABS = ['appointments', 'leave', 'leaveCredits', 'attendance', 'payroll', 'performance', 'training', 'loans'];
+const READONLY_TABS = ['history', 'appointments', 'leave', 'leaveCredits', 'attendance', 'payroll', 'performance', 'training', 'loans'];
+
+/** Cached id -> label maps so history/appointment rows show names, not raw UUIDs. */
+let refCache = null;
+async function getRefMaps() {
+  if (refCache) return refCache;
+  try {
+    const [deps, poss] = await Promise.all([
+      departmentsApi.list().then(r => r?.data ?? r).catch(() => []),
+      api.get('/positions').then(r => r?.data ?? []).catch(() => []),
+    ]);
+    const depMap = Object.fromEntries(
+      (Array.isArray(deps) ? deps : []).map(d => [d.id, d.code ? `${d.code} · ${d.name}` : d.name])
+    );
+    const posMap = Object.fromEntries(
+      (Array.isArray(poss) ? poss : []).map(p => [p.id, p.salaryGrade ? `${p.title} (SG ${p.salaryGrade})` : p.title])
+    );
+    refCache = { depMap, posMap };
+  } catch {
+    refCache = { depMap: {}, posMap: {} };
+  }
+  return refCache;
+}
 
 function RelationTable({ employeeId, section, refreshKey }) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
-  React.useEffect(() => {
-    if (!employeeId) return;
+  useEffect(() => {
+    if (!employeeId) {
+      setLoading(false);
+      setRows([]);
+      return undefined;
+    }
+    let cancelled = false;
     setLoading(true);
     setError(false);
-    employeeSectionsApi.list(employeeId, section)
-      .then(r => setRows(r.data ?? r))
-      .catch(() => setError(true))
-      .finally(() => setLoading(false));
+    (async () => {
+      try {
+        const [res, { depMap, posMap }] = await Promise.all([
+          employeeSectionsApi.list(employeeId, section),
+          getRefMaps(),
+        ]);
+        if (cancelled) return;
+        const data = res?.data ?? res;
+        const list = Array.isArray(data) ? data : [];
+        // Resolve raw id strings (history has no Prisma includes; the seed
+        // stores appointment position/dept as id strings too).
+        for (const row of list) {
+          if (row.departmentId && depMap[row.departmentId] !== undefined) row._deptName = depMap[row.departmentId];
+          if (row.positionId && posMap[row.positionId] !== undefined) row._positionName = posMap[row.positionId];
+          if (row.position && posMap[row.position] !== undefined) row._positionString = posMap[row.position];
+          if (row.dept && depMap[row.dept] !== undefined) row._deptString = depMap[row.dept];
+        }
+        setRows(list);
+      } catch {
+        if (!cancelled) setError(true);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
   }, [employeeId, section, refreshKey]);
 
-  if (loading) return <p className="text-sm text-muted py-4">Loading...</p>;
+  if (loading) return <p className="text-sm text-muted py-4">Loading…</p>;
   if (error) return <p className="text-sm text-error py-4">Failed to load records.</p>;
   if (!rows.length) return <p className="text-sm text-muted py-2">No records on file.</p>;
 
   const cols = RELATION_COLUMNS[section];
+  if (!cols) return <p className="text-sm text-muted py-2">{rows.length} record(s) on file.</p>;
   return (
     <div className="overflow-auto">
       <table className="data-table">
@@ -109,15 +161,60 @@ function RelationTable({ employeeId, section, refreshKey }) {
   );
 }
 
-export default function DetailPane({ employee }) {
-  const [payslipOpen, setPayslipOpen] = useState(false);
-  const [refreshKey, setRefreshKey] = useState(0);
-  const history = employee ? employmentHistory.filter(h => h.no === employee.employeeNumber) : [];
-  const entry = employee ? ledgerEntries.find(l => l.employee.startsWith(employee.no)) : null;
+function PayslipPanel({ employeeId, refreshKey }) {
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    if (!employeeId) {
+      setLoading(false);
+      return undefined;
+    }
+    let cancelled = false;
+    setLoading(true);
+    setError(false);
+    employeeSectionsApi.list(employeeId, 'payroll')
+      .then(r => {
+        if (cancelled) return;
+        const data = r?.data ?? r;
+        setItems(Array.isArray(data) ? data : []);
+      })
+      .catch(() => { if (!cancelled) setError(true); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [employeeId, refreshKey]);
+
+  if (loading) return <p className="text-sm text-muted py-4">Loading…</p>;
+  if (error) return <p className="text-sm text-error py-4">Failed to load payslip.</p>;
+  if (!items.length) return <p className="text-sm text-muted py-2">No payroll records on file.</p>;
+
+  const latest = items[0];
+  const period = latest.run?.period?.name ?? latest.run?.runDate?.slice(0, 10) ?? 'Latest run';
+  return (
+    <div>
+      <p className="mono-label mb-3">{period}</p>
+      <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+        <div><dt className="mono-label">Basic Pay</dt><dd className="font-mono mt-0.5">{peso(latest.basicPay)}</dd></div>
+        <div><dt className="mono-label">Allowances</dt><dd className="font-mono mt-0.5">{peso(latest.allowances)}</dd></div>
+        <div><dt className="mono-label">Deductions</dt><dd className="font-mono mt-0.5">{peso(latest.deductions)}</dd></div>
+        <div><dt className="mono-label">Net Pay</dt><dd className="font-mono mt-0.5 font-semibold">{peso(latest.netPay)}</dd></div>
+      </dl>
+    </div>
+  );
+}
+
+export default function DetailPane({ employee, onEdit, refreshKey = 0 }) {
+  const [activeTab, setActiveTab] = useState('profile');
+
+  useEffect(() => {
+    setActiveTab('profile');
+  }, [employee?.id]);
 
   const relationTabs = READONLY_TABS.map(id => ({
     id,
     label: {
+      history: 'Employment History',
       appointments: 'Appointments', leave: 'Leave', leaveCredits: 'Leave Credits',
       attendance: 'Attendance', payroll: 'Payroll', performance: 'Performance',
       training: 'Training', loans: 'Loans',
@@ -143,28 +240,9 @@ export default function DetailPane({ employee }) {
       ),
     },
     {
-      id: 'history',
-      label: 'Employment History',
-      content: history.length ? (
-        <table className="data-table">
-          <thead><tr><th>Position</th><th>Dept</th><th>From</th><th>To</th></tr></thead>
-          <tbody>
-            {history.map(h => (
-              <tr key={`${h.from}-${h.position}`}>
-                <td className="font-medium">{h.position}</td>
-                <td className="font-mono">{h.dept}</td>
-                <td className="font-mono">{h.from}</td>
-                <td className="font-mono">{h.to ?? 'Present'}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      ) : <p className="text-sm text-muted">No history records on file.</p>,
-    },
-    {
-      id: 'payroll',
-      label: 'Payroll Breakdown',
-      content: <PayrollBreakdown onViewPayslip={() => setPayslipOpen(true)} />,
+      id: 'payslip',
+      label: 'Payslip',
+      content: <PayslipPanel employeeId={employee.id} refreshKey={refreshKey} />,
     },
     ...relationTabs,
   ] : [];
@@ -185,11 +263,11 @@ export default function DetailPane({ employee }) {
              </div>
           </div>
 
-          <Tabs tabs={tabs} label="Employee detail sections" />
+          <Tabs tabs={tabs} label="Employee detail sections" active={activeTab} onChange={setActiveTab} />
 
           <div className="flex gap-2 mt-auto pt-5">
-            <button type="button" className="btn btn-primary flex-1">Edit Profile</button>
-            <button type="button" className="btn btn-ghost">History</button>
+            <button type="button" className="btn btn-primary flex-1" onClick={() => onEdit?.(employee)}>Edit Profile</button>
+            <button type="button" className="btn btn-ghost" onClick={() => setActiveTab('history')}>History</button>
           </div>
         </>
       ) : (
@@ -197,42 +275,6 @@ export default function DetailPane({ employee }) {
           <p className="text-sm text-muted max-w-48">Select an employee from the master list to view their profile.</p>
         </div>
       )}
-
-      <Modal
-        open={payslipOpen}
-        onClose={() => setPayslipOpen(false)}
-        title={`Payslip · ${employee?.fullName ?? ''}`}
-        size="sm"
-        footer={<button type="button" className="btn btn-primary" onClick={() => setPayslipOpen(false)}>Close</button>}
-      >
-        {employee && (
-          <div>
-            <p className="mono-label">{employee.employeeNumber} · {employee.position} · {employee.sg}</p>
-            <table className="data-table mt-3">
-              <thead><tr><th>Earnings</th><th className="text-right">Amount</th></tr></thead>
-              <tbody>
-                <tr><td>Gross Pay (latest run)</td><td className="font-mono text-right">{entry ? entry.gross : '—'}</td></tr>
-              </tbody>
-            </table>
-            <table className="data-table mt-3">
-              <thead><tr><th>Deductions</th><th className="text-right">Amount</th></tr></thead>
-              <tbody>
-                {deductionLines.map(d => (
-                  <tr key={d.label}><td>{d.label}</td><td className="font-mono text-right">{peso(d.amount)}</td></tr>
-                ))}
-                <tr><td className="font-semibold">Total</td><td className="font-mono text-right font-semibold">{peso(totalDeductions)}</td></tr>
-              </tbody>
-            </table>
-            {entry && (
-              <p className="text-sm mt-3 text-right">
-                <span className="text-muted">Net Pay · </span>
-                <span className="font-mono font-semibold">{entry.net}</span>
-              </p>
-            )}
-            <p className="mono-label mt-3">Sample figures — payslip wires to the payroll API.</p>
-          </div>
-        )}
-      </Modal>
     </div>
   );
 }

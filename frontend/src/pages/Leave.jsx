@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import Layout from '../components/Layout.jsx';
-import Modal from '../components/Modal.jsx';
 import ConfirmDialog from '../components/ConfirmDialog.jsx';
 import { useToast } from '../components/Toast.jsx';
 import { leaveApi } from '../api/leave.js';
@@ -33,6 +32,10 @@ export default function Leave() {
   const selected = requests.find(r => r.id === selectedId) ?? null;
 
   const decide = async (request, status) => {
+    if (!request) {
+      toast('Select a leave application first.', 'error');
+      return;
+    }
     try {
       const mapStatus = status === 'Approved' ? 'APPROVED' : 'DENIED';
       const r = await leaveApi.updateRequest(request.id, { status: mapStatus });
@@ -50,7 +53,7 @@ export default function Leave() {
           <h1 className="font-display text-xl font-bold text-ink">Leave &amp; Appointments</h1>
           <p className="text-sm text-muted mt-0.5">Leave applications with approval pane</p>
         </div>
-        <button type="button" className="btn btn-primary">File Leave</button>
+        <span className="mono-label">{pendingCount} pending</span>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
