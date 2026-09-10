@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, ChevronDown, Pencil, Trash2 } from 'lucide-react';
+import { Plus, ChevronDown, Pencil, Trash2, X, Save } from 'lucide-react';
 import Layout from '../components/Layout.jsx';
 import Modal from '../components/Modal.jsx';
 import ConfirmDialog from '../components/ConfirmDialog.jsx';
@@ -163,8 +163,14 @@ export default function Organization() {
         size="sm"
         footer={
           <>
-            <button type="button" className="btn btn-ghost" onClick={() => setAddOpen(false)}>Cancel</button>
-            <button type="submit" form="dept-form" className="btn btn-primary">Add Department</button>
+            <button type="button" className="btn btn-ghost gap-2" onClick={() => setAddOpen(false)}>
+              <X size={16} />
+              Cancel
+            </button>
+            <button type="submit" form="dept-form" className="btn btn-primary gap-2">
+              <Plus size={16} />
+              Add Department
+            </button>
           </>
         }
       >
@@ -194,8 +200,14 @@ export default function Organization() {
         size="sm"
         footer={
           <>
-            <button type="button" className="btn btn-ghost" onClick={() => setRename(null)}>Cancel</button>
-            <button type="submit" form="rename-form" className="btn btn-primary">Save</button>
+            <button type="button" className="btn btn-ghost gap-2" onClick={() => setRename(null)}>
+              <X size={16} />
+              Cancel
+            </button>
+            <button type="submit" form="rename-form" className="btn btn-primary gap-2">
+              <Save size={16} />
+              Save
+            </button>
           </>
         }
       >
