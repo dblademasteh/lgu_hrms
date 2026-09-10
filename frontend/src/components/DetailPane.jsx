@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Edit, History as HistoryIcon } from 'lucide-react';
 import Tabs from './Tabs.jsx';
 import { badgeTone } from '../data/mock.js';
 import { api } from '../api/client.js';
@@ -266,8 +267,14 @@ export default function DetailPane({ employee, onEdit, refreshKey = 0 }) {
           <Tabs tabs={tabs} label="Employee detail sections" active={activeTab} onChange={setActiveTab} />
 
           <div className="flex gap-2 mt-auto pt-5">
-            <button type="button" className="btn btn-primary flex-1" onClick={() => onEdit?.(employee)}>Edit Profile</button>
-            <button type="button" className="btn btn-ghost" onClick={() => setActiveTab('history')}>History</button>
+            <button type="button" className="btn btn-primary gap-2 flex-1" onClick={() => onEdit?.(employee)}>
+              <Edit size={16} />
+              Edit Profile
+            </button>
+            <button type="button" className="btn btn-ghost gap-2" onClick={() => setActiveTab('history')}>
+              <HistoryIcon size={16} />
+              History
+            </button>
           </div>
         </>
       ) : (

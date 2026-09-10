@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Moon, Sun, LayoutGrid, Bell, User, ShieldCheck, Info, Settings as SettingsIcon, Code2, Sparkles, Type, Palette, X, Save, Check } from 'lucide-react';
+import { Moon, Sun, LayoutGrid, Bell, User, ShieldCheck, Info, Settings as SettingsIcon, Code2, Sparkles, Type, Palette, X, Save, Check, Plus } from 'lucide-react';
 import { useTheme, toggleTheme } from '../theme.js';
 import { useToast } from '../components/Toast.jsx';
 import { accountApi } from '../api/account.js';
@@ -474,8 +474,14 @@ export default function Settings() {
         </Modal>
         <Modal open={showProfileEdit} onClose={() => setShowProfileEdit(false)} title="Edit profile" size="sm" footer={
           <div className="flex justify-end gap-2">
-            <button className="btn btn-ghost" onClick={() => setShowProfileEdit(false)}>Cancel</button>
-            <button className="btn btn-primary" onClick={handleProfileUpdate}>Save</button>
+            <button className="btn btn-ghost gap-2" onClick={() => setShowProfileEdit(false)}>
+              <X size={16} />
+              Cancel
+            </button>
+            <button className="btn btn-primary gap-2" onClick={handleProfileUpdate}>
+              <Save size={16} />
+              Save
+            </button>
           </div>
         }>
           <div className="space-y-4 text-sm">
@@ -499,8 +505,14 @@ export default function Settings() {
         </Modal>
         <Modal open={show2FAModal} onClose={()=>{setShow2FAModal(false); setTwoFASecret(null);}} title="Two-factor authentication" size="sm" footer={
           <div className="flex justify-end gap-2">
-            <button className="btn btn-ghost" onClick={()=>{setShow2FAModal(false); setTwoFASecret(null);}}>Close</button>
-            <button className="btn btn-primary" onClick={async()=>{ await accountApi.verify2FA(twoFACode); toast('2FA enabled', 'success'); setShow2FAModal(false); accountApi.getProfile().then(r=>setProfile(r.data)); }}>Verify</button>
+            <button className="btn btn-ghost gap-2" onClick={()=>{setShow2FAModal(false); setTwoFASecret(null);}}>
+              <X size={16} />
+              Close
+            </button>
+            <button className="btn btn-primary gap-2" onClick={async()=>{ await accountApi.verify2FA(twoFACode); toast('2FA enabled', 'success'); setShow2FAModal(false); accountApi.getProfile().then(r=>setProfile(r.data)); }}>
+              <Check size={16} />
+              Verify
+            </button>
           </div>
         }>
           <div className="space-y-3 text-sm">
@@ -514,8 +526,14 @@ export default function Settings() {
         </Modal>
         <Modal open={showDelegationModal} onClose={()=>setShowDelegationModal(false)} title="Create delegation" size="sm" footer={
           <div className="flex justify-end gap-2">
-            <button className="btn btn-ghost" onClick={()=>setShowDelegationModal(false)}>Cancel</button>
-            <button className="btn btn-primary" onClick={async()=>{ await accountApi.createDelegation(delegationForm); setShowDelegationModal(false); const r = await accountApi.getDelegations(); setDelegations(r.data||[]); toast('Delegation created', 'success'); }}>Create</button>
+            <button className="btn btn-ghost gap-2" onClick={()=>setShowDelegationModal(false)}>
+              <X size={16} />
+              Cancel
+            </button>
+            <button className="btn btn-primary gap-2" onClick={async()=>{ await accountApi.createDelegation(delegationForm); setShowDelegationModal(false); const r = await accountApi.getDelegations(); setDelegations(r.data||[]); toast('Delegation created', 'success'); }}>
+              <Plus size={16} />
+              Create
+            </button>
           </div>
         }>
           <div className="space-y-3 text-sm">

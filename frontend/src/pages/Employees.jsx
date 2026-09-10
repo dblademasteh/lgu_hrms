@@ -142,9 +142,9 @@ export default function Employees() {
           <p className="text-sm text-muted mt-0.5">CSC-compliant personnel master with Personal, Service, Appointment & Payroll history</p>
         </div>
         <button type="button" className="btn btn-primary gap-2" onClick={openAdd}>
-            <Plus size={16} />
-            Add Employee
-          </button>
+          <Plus size={16} />
+          Add Employee
+        </button>
       </div>
 
       <div className="mb-4 flex gap-2">
