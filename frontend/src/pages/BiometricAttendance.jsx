@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Layout from '../components/Layout.jsx';
 import { biometricApi } from '../api/biometric.js';
 import { useAuthStore } from '../stores/authStore.js';
-import { Calendar, Clock, RefreshCw, CheckCircle, XCircle } from 'lucide-react';
+import { Calendar, Clock, RefreshCw, CheckCircle, XCircle, LogIn, LogOut } from 'lucide-react';
 import { badgeTone } from '../data/mock.js';
 import { useToast } from '../components/Toast.jsx';
 
@@ -142,25 +142,36 @@ export default function BiometricAttendance() {
               disabled={punchLoading}
               className="btn btn-primary gap-2"
             >
-              {punchLoading ? <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" /> : 'Punch In'}
+              {punchLoading ? (
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
+              ) : (
+                <LogIn size={16} />
+              )}
+              Punch In
             </button>
           )}
           {isPunchedIn && !isPunchedOut && (
             <button
               onClick={() => handlePunch('OUT')}
               disabled={punchLoading}
-              className="btn btn-secondary gap-2"
+              className="btn btn-outline gap-2"
             >
-              {punchLoading ? <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" /> : 'Punch Out'}
+              {punchLoading ? (
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-accent" />
+              ) : (
+                <LogOut size={16} />
+              )}
+              Punch Out
             </button>
           )}
           {isPunchedOut && (
             <button
               onClick={loadStatus}
               disabled={punchLoading}
-              className="btn btn-outline gap-2"
+              className="btn btn-ghost gap-2"
             >
-              <RefreshCw size={16} /> Refresh
+              <RefreshCw size={16} />
+              Refresh
             </button>
           )}
         </div>
@@ -184,7 +195,10 @@ export default function BiometricAttendance() {
       {/* Attendance History Table */}
       <div className="card p-5">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="font-display font-semibold text-ink">Attendance History</h3>
+          <h3 className="font-display font-semibold text-ink flex items-center gap-2">
+            <Calendar size={16} />
+            Attendance History
+          </h3>
           <label className="flex items-center gap-2">
             <span className="mono-label">Month</span>
             <input
