@@ -94,7 +94,7 @@ export default function Sidebar({ collapsed }) {
         )}
       </div>
 
-      <nav className="flex-1 overflow-y-auto py-4">
+      <nav className="flex-1 overflow-y-auto hide-scrollbar py-4">
         {expanded && <div className="px-4 pb-2 pt-1 mono-label text-[10px] uppercase tracking-wider text-muted">Navigation</div>}
         {visibleGroups.map(g => (
           <div key={g.label} className="mb-4">

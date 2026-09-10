@@ -516,3 +516,15 @@
 }
 *::-webkit-scrollbar-corner { background: transparent; }
 
+/* hide-scrollbar utility — visually hide scrollbar but keep it functional */
+.hide-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.hide-scrollbar::-webkit-scrollbar-thumb {
+  display: none;
+}
+

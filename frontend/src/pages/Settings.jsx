@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import Layout from '../components/Layout.jsx';
+import { Moon, Sun, LayoutGrid, Bell, User, ShieldCheck, Info, Settings as SettingsIcon, Code2, Sparkles, Type, Palette, X, Save, Check } from 'lucide-react';
 import { useTheme, toggleTheme } from '../theme.js';
-import { Moon, Sun, LayoutGrid, Bell, User, ShieldCheck, Info, Settings as SettingsIcon, Code2, Sparkles, Type, Palette } from 'lucide-react';
 import { useToast } from '../components/Toast.jsx';
 import { accountApi } from '../api/account.js';
 import Modal from '../components/Modal.jsx';
