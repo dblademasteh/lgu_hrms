@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Plus, X } from 'lucide-react';
+import { Plus, X, Trash2 } from 'lucide-react';
 import { api } from '../api/client.js';
 import { departmentsApi } from '../api/departments.js';
 import { employeeSectionsApi } from '../api/employeeSections.js';
@@ -243,8 +243,8 @@ export default function EmployeeForm({ formId, initial, submitLabel = 'Save', on
       // Clear the inline error as soon as the user fixes the field.
       if (errors.includes(key)) setFieldErrors(e => ({ ...e, [section]: errors.filter(k => k !== key) }));
     };
-    const inputClass = key => `input${errors.includes(key) ? ' border-error' : ''}`;
-    const selectClass = key => `select${errors.includes(key) ? ' border-error' : ''}`;
+    const inputClass = key => `input`;
+    const selectClass = key => `select`;
     return (
       <div className="space-y-3">
         {!employeeId && (
@@ -314,7 +314,7 @@ export default function EmployeeForm({ formId, initial, submitLabel = 'Save', on
                         {fields.map(f => <td key={f.key}>{displayValue(section, f, row)}</td>)}
                         <td className="text-right">
                           <button type="button" className="btn btn-ghost gap-1 text-xs" disabled={sectionBusy} onClick={() => setConfirmRemove({ section, id: row.id, label: describeRow(section, row) })}>
-                            <X size={14} />
+                            <Trash2 size={14} />
                             Remove
                           </button>
                         </td>
@@ -356,7 +356,7 @@ export default function EmployeeForm({ formId, initial, submitLabel = 'Save', on
             </div>
             <div>
               <label htmlFor="e-status" className="block text-sm font-medium text-ink mb-1">Employment Status</label>
-              <select id="e-status" className="input" value={form.status ?? 'ACTIVE'} onChange={e => set('status', e.target.value)}>
+              <select id="e-status" className="select" value={form.status ?? 'ACTIVE'} onChange={e => set('status', e.target.value)}>
                 {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
@@ -382,14 +382,14 @@ export default function EmployeeForm({ formId, initial, submitLabel = 'Save', on
             </div>
             <div>
               <label htmlFor="e-gender" className="block text-sm font-medium text-ink mb-1">Gender *</label>
-              <select id="e-gender" required className="input" value={form.gender ?? ''} onChange={e => set('gender', e.target.value)}>
+              <select id="e-gender" required className="select" value={form.gender ?? ''} onChange={e => set('gender', e.target.value)}>
                 <option value="" disabled>Select...</option>
                 {GENDERS.map(g => <option key={g} value={g}>{g}</option>)}
               </select>
             </div>
             <div>
               <label htmlFor="e-civil" className="block text-sm font-medium text-ink mb-1">Civil Status *</label>
-              <select id="e-civil" required className="input" value={form.civilStatus ?? ''} onChange={e => set('civilStatus', e.target.value)}>
+              <select id="e-civil" required className="select" value={form.civilStatus ?? ''} onChange={e => set('civilStatus', e.target.value)}>
                 <option value="" disabled>Select...</option>
                 {CIVIL_STATUSES.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
@@ -402,14 +402,14 @@ export default function EmployeeForm({ formId, initial, submitLabel = 'Save', on
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label htmlFor="e-dept" className="block text-sm font-medium text-ink mb-1">Department *</label>
-              <select id="e-dept" required className="input" value={form.departmentId ?? ''} onChange={e => set('departmentId', e.target.value)}>
+              <select id="e-dept" required className="select" value={form.departmentId ?? ''} onChange={e => set('departmentId', e.target.value)}>
                 <option value="" disabled>Select...</option>
                 {departments.map(d => <option key={d.id} value={d.id}>{d.code} - {d.name}</option>)}
               </select>
             </div>
             <div>
               <label htmlFor="e-position" className="block text-sm font-medium text-ink mb-1">Position *</label>
-              <select id="e-position" required className="input" value={form.positionId ?? ''} onChange={e => set('positionId', e.target.value)}>
+              <select id="e-position" required className="select" value={form.positionId ?? ''} onChange={e => set('positionId', e.target.value)}>
                 <option value="" disabled>Select...</option>
                 {positions.map(p => <option key={p.id} value={p.id}>{p.title} (SG {p.salaryGrade})</option>)}
               </select>
