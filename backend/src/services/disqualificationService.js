@@ -16,13 +16,18 @@ export const disqualificationService = {
       ];
     }
     
-    return prisma.disqualification.findMany({
-      where,
-      include: { employee: { select: { firstName: true, lastName: true, employeeNumber: true, status: true } } },
-      skip: (page - 1) * limit,
-      take: limit * 1,
-      orderBy: { date: 'desc' }
-    });
+    const [records, total] = await Promise.all([
+      prisma.disqualification.findMany({
+        where,
+        include: { employee: { select: { firstName: true, lastName: true, employeeNumber: true, status: true } } },
+        skip: (page - 1) * limit,
+        take: limit,
+        orderBy: { date: 'desc' }
+      }),
+      prisma.disqualification.count({ where })
+    ]);
+    
+    return { records, total, page, limit };
   },
 
   async getById(id) {

@@ -11,8 +11,8 @@ export const disqualificationController = {
         limit: parseInt(req.query.limit) || 50,
         search: req.query.search
       };
-      const records = await disqualificationService.getAll(options);
-      res.json({ records, page: options.page, limit: options.limit });
+      const result = await disqualificationService.getAll(options);
+      res.json(result);
     } catch (e) {
       next(e);
     }
