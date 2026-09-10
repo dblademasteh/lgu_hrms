@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { X } from 'lucide-react';
 import Layout from '../components/Layout.jsx';
 import Modal from '../components/Modal.jsx';
 import ConfirmDialog from '../components/ConfirmDialog.jsx';
@@ -242,7 +243,7 @@ export default function Payroll() {
             {detail?.status === 'DRAFT' && (
               <button type="button" className="btn btn-ghost" onClick={() => { setConfirmApprove(detail); }}>Approve Run</button>
             )}
-            <button type="button" className="btn btn-primary" onClick={() => setDetail(null)}>Close</button>
+            <button type="button" className="btn btn-primary gap-2" onClick={() => setDetail(null)}><X size={16} /> Close</button>
           </>
         }
       >

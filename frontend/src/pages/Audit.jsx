@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Check } from 'lucide-react';
 import Layout from '../components/Layout.jsx';
 import Modal from '../components/Modal.jsx';
 import { useToast } from '../components/Toast.jsx';
@@ -96,7 +97,7 @@ export default function Audit() {
         open={!!detail}
         onClose={() => setDetail(null)}
         title={`Audit Entry · ${detail?.entity ?? ''}`}
-        footer={<button type="button" className="btn btn-primary" onClick={() => setDetail(null)}>Close</button>}
+        footer={<button type="button" className="btn btn-primary gap-2" onClick={() => setDetail(null)}><Check size={16} /> Close</button>}
       >
         {detail && (
           <div>

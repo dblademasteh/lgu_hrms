@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { Plus, X } from 'lucide-react';
 import { api } from '../api/client.js';
 import { departmentsApi } from '../api/departments.js';
 import { employeeSectionsApi } from '../api/employeeSections.js';
@@ -296,7 +297,10 @@ export default function EmployeeForm({ formId, initial, submitLabel = 'Save', on
               ))}
             </div>
             <div>
-              <button type="button" className="btn btn-ghost text-sm" disabled={sectionBusy} onClick={() => addRecord(section)}>+ Add entry</button>
+              <button type="button" className="btn btn-ghost gap-2 text-sm" disabled={sectionBusy} onClick={() => addRecord(section)}>
+                <Plus size={16} />
+                Add entry
+              </button>
             </div>
             {rows.length > 0 && (
               <div className="overflow-auto border border-line rounded-[10px]">
@@ -309,7 +313,10 @@ export default function EmployeeForm({ formId, initial, submitLabel = 'Save', on
                       <tr key={row.id}>
                         {fields.map(f => <td key={f.key}>{displayValue(section, f, row)}</td>)}
                         <td className="text-right">
-                          <button type="button" className="btn btn-ghost text-xs" disabled={sectionBusy} onClick={() => setConfirmRemove({ section, id: row.id, label: describeRow(section, row) })}>Remove</button>
+                          <button type="button" className="btn btn-ghost gap-1 text-xs" disabled={sectionBusy} onClick={() => setConfirmRemove({ section, id: row.id, label: describeRow(section, row) })}>
+                            <X size={14} />
+                            Remove
+                          </button>
                         </td>
                       </tr>
                     ))}
