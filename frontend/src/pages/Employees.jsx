@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Plus, Save, X } from 'lucide-react';
 import Layout from '../components/Layout.jsx';
 import MasterTable from '../components/MasterTable.jsx';
 import DetailPane from '../components/DetailPane.jsx';
@@ -140,7 +141,10 @@ export default function Employees() {
           <h1 className="font-display text-xl font-bold text-ink">Employees 201 File</h1>
           <p className="text-sm text-muted mt-0.5">CSC-compliant personnel master with Personal, Service, Appointment & Payroll history</p>
         </div>
-        <button type="button" className="btn btn-primary" onClick={openAdd}>Add Employee</button>
+        <button type="button" className="btn btn-primary gap-2" onClick={openAdd}>
+            <Plus size={16} />
+            Add Employee
+          </button>
       </div>
 
       <div className="mb-4 flex gap-2">
@@ -168,8 +172,14 @@ export default function Employees() {
         size="lg"
         footer={
           <>
-            <button type="button" className="btn btn-ghost" onClick={() => { setFormOpen(false); setEditing(null); }}>Cancel</button>
-            <button type="submit" form="employee-form" className="btn btn-primary">{editing ? 'Save Changes' : 'Add Employee'}</button>
+            <button type="button" className="btn btn-ghost gap-2" onClick={() => { setFormOpen(false); setEditing(null); }}>
+              <X size={16} />
+              Cancel
+            </button>
+            <button type="submit" form="employee-form" className="btn btn-primary gap-2">
+              <Save size={16} />
+              {editing ? 'Save Changes' : 'Add Employee'}
+            </button>
           </>
         }
       >
