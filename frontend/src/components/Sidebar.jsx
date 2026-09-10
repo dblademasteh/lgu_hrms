@@ -2,7 +2,7 @@ import React from 'react';
 import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard, Users, Building2, FileBadge, Banknote, CalendarDays, Clock,
-  ShieldCheck, BarChart3, UserCog, Landmark, Settings as SettingsIcon, Fingerprint
+  ShieldCheck, BarChart3, UserCog, Landmark, Settings as SettingsIcon, Fingerprint, ShieldAlert
 } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore.js';
 
@@ -53,6 +53,7 @@ const groups = [
     label: 'Compliance & Audit',
     items: [
       { name: 'Audit Trail', path: '/audit', icon: ShieldCheck, roles: ['AUDITOR', 'ADMIN'] },
+      { name: 'DIBAR Records', path: '/disqualifications', icon: ShieldAlert, roles: ['HR_MANAGER', 'ADMIN'] },
       { name: 'Reports', path: '/reports', icon: BarChart3, roles: ['PAYROLL_OFFICER', 'HR_MANAGER', 'ADMIN', 'AUDITOR'] },
     ]
   },
