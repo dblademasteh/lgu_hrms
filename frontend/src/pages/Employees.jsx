@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Save, X } from 'lucide-react';
 import Layout from '../components/Layout.jsx';
-import MasterTable from '../components/MasterTable.jsx';
+import { badgeTone } from '../data/mock.js';
 import DetailPane from '../components/DetailPane.jsx';
 import EmployeeForm from '../components/EmployeeForm.jsx';
 import Modal from '../components/Modal.jsx';
 import ConfirmDialog from '../components/ConfirmDialog.jsx';
 import { listEmployees, createEmployee, updateEmployee, deleteEmployee } from '../api/employees.js';
+import { departmentsApi } from '../api/departments.js';
 import { useToast } from '../components/Toast.jsx';
 
 const blankEmployee = { employeeNumber: '', firstName: '', lastName: '', middleName: '', birthDate: '', gender: '', civilStatus: '', address: '', contactNumber: '', email: '', status: 'ACTIVE', departmentId: '', positionId: '', hiredDate: '' };
@@ -49,44 +50,83 @@ function mapEmployee(e) {
 export default function Employees() {
   const toast = useToast();
   const [rows, setRows] = useState([]);
-  const [filtered, setFiltered] = useState([]);
   const [selected, setSelected] = useState(null);
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [confirmDel, setConfirmDel] = useState(null);
   const [loading, setLoading] = useState(true);
+  
+  // Server-side filtering
   const [search, setSearch] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [filterDept, setFilterDept] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
+  const [departments, setDepartments] = useState([]);
+  
+  // Pagination state
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const pageSize = 50;
+  
   // Bumped whenever a CSC section entry is added/removed in the edit modal,
   // so the detail pane refetches its relation tabs.
   const [sectionsVersion, setSectionsVersion] = useState(0);
 
-  const load = async (q) => {
+  const load = async (params) => {
     setLoading(true);
     try {
-      const { items = [] } = await listEmployees({ page: 1, limit: 200, search: q || undefined });
+      const { data } = await listEmployees({ 
+        page: params.page || 1, 
+        limit: params.limit || pageSize, 
+        search: params.search,
+        departmentId: params.departmentId,
+        status: params.status
+      });
+      const items = data?.items || data || [];
+      const totalRecords = data?.total || items.length;
       const mapped = items.map(mapEmployee);
       setRows(mapped);
-      setFiltered(mapped);
+      setTotal(totalRecords);
+      
       // Keep the detail pane populated: select the first row when nothing is selected.
       setSelected(prev => {
         if (prev && mapped.some(m => m.id === prev.id)) return prev;
         return mapped[0] ?? null;
       });
-    } catch {
-      toast('Failed to load employees', 'error');
+    } catch (e) {
+      toast('Failed to load employees: ' + (e?.response?.data?.error?.message || e.message), 'error');
     } finally {
       setLoading(false);
     }
   };
 
-  // Debounced server-side search (backend filters by no/name).
-  // Single effect: initial '' query loads the full list on mount.
+  // Load departments for filter dropdown
+  useEffect(() => {
+    departmentsApi.list()
+      .then(r => setDepartments(r.data || r || []))
+      .catch(() => []);
+  }, []);
+
+  // Debounced search
   useEffect(() => {
     const t = setTimeout(() => setSearchQuery(search.trim()), 350);
     return () => clearTimeout(t);
   }, [search]);
-  useEffect(() => { if (searchQuery !== undefined) load(searchQuery); }, [searchQuery]);
+  
+  // Refetch when filters change
+  useEffect(() => {
+    load({
+      page,
+      search: searchQuery || undefined,
+      departmentId: filterDept || undefined,
+      status: filterStatus || undefined
+    });
+  }, [searchQuery, filterDept, filterStatus, page]);
+  
+  // Initial load
+  useEffect(() => {
+    load({ page: 1 });
+  }, []);
 
   const openAdd = () => { setEditing(null); setFormOpen(true); };
   const openEdit = e => { setEditing(e); setFormOpen(true); };
@@ -147,18 +187,84 @@ export default function Employees() {
         </button>
       </div>
 
-      <div className="mb-4 flex gap-2">
-        <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search employee no, name, position, dept" className="input flex-1" />
+      <div className="mb-4 flex flex-wrap gap-2">
+        <input
+          type="search"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Search employee no, name, position…"
+          className="input flex-1 min-w-40"
+          aria-label="Search employees"
+        />
+        <select
+          value={filterDept}
+          onChange={e => { setFilterDept(e.target.value); setPage(1); }}
+          className="input w-auto"
+          aria-label="Filter by department"
+        >
+          <option value="">All departments</option>
+          {departments.map(d => <option key={d.id} value={d.id}>{d.code} · {d.name}</option>)}\n        </select>
+        <select
+          value={filterStatus}
+          onChange={e => { setFilterStatus(e.target.value); setPage(1); }}
+          className="input w-auto"
+          aria-label="Filter by status"
+        >
+          <option value="">All statuses</option>
+          <option value="ACTIVE">Active</option>
+          <option value="INACTIVE">Inactive</option>
+        </select>
       </div>
+      
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="lg:col-span-2 min-w-0">
-          <MasterTable
-            rows={filtered}
-            selected={selected?.id ?? null}
-            onSelect={setSelected}
-            onEdit={openEdit}
-            onDelete={setConfirmDel}
-          />
+          <div className="card p-4 h-full flex flex-col min-h-0">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="font-display font-semibold text-ink">Employees</h2>
+              <span className="mono-label">Page {page} of {Math.ceil(total / pageSize)}</span>
+            </div>
+            
+            <div className="overflow-auto flex-1 min-h-0">
+              <table className="data-table">
+                <thead>
+                  <tr><th>No.</th><th>Name</th><th>Position</th><th>Dept</th><th>Status</th><th className="text-right">Actions</th></tr>
+                </thead>
+                <tbody>
+                  {rows.map(e => (
+                    <tr
+                      key={e.id}
+                      data-selectable="true"
+                      data-selected={selected?.id === e.id ? 'true' : undefined}
+                      onClick={() => setSelected(e)}
+                    >
+                      <td className="font-mono">{e.no}</td>
+                      <td className="font-medium">{e.fullName}</td>
+                      <td>{e.position}</td>
+                      <td className="font-mono">{e.dept}</td>
+                      <td><span className={`badge ${badgeTone(e.status)}`}>{e.status}</span></td>
+                      <td className="text-right">
+                        <span className="inline-flex gap-1">
+                          <button type="button" className="btn btn-ghost px-2 text-xs" onClick={e2 => { e2.stopPropagation(); openEdit(e); }}>Edit</button>
+                          <button type="button" className="btn btn-ghost px-2 text-xs text-error" onClick={e2 => { e2.stopPropagation(); setConfirmDel(e); }}>Delete</button>
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                  {rows.length === 0 && (
+                    <tr><td colSpan={6} className="text-muted text-sm py-8">No employees match your filters.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            
+            <div className="flex items-center justify-between pt-3">
+              <span className="mono-label">Showing {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, total)} of {total}</span>
+              <div className="flex gap-2">
+                <button type="button" className="btn btn-ghost px-3 text-xs" disabled={page <= 1 || loading} onClick={() => setPage(p => Math.max(1, p - 1))}>Prev</button>
+                <button type="button" className="btn btn-ghost px-3 text-xs" disabled={page >= Math.ceil(total / pageSize) || loading} onClick={() => setPage(p => Math.min(Math.ceil(total / pageSize), p + 1))}>Next</button>
+              </div>
+            </div>
+          </div>
         </div>
         <div className="min-w-0">
           <DetailPane employee={selected} onEdit={openEdit} refreshKey={sectionsVersion} />
