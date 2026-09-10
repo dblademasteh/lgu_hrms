@@ -4,7 +4,7 @@ import { listPrograms, createProgram, listEnrollments, createEnrollment } from '
 import { listEmployees } from '../api/employees.js';
 import { useToast } from '../components/Toast.jsx';
 import { badgeTone } from '../data/mock.js';
-import { BookOpen, User, FileText, Plus, Calendar, RefreshCw } from 'lucide-react';
+import { BookOpen, User, FileText, Plus, Calendar, RefreshCw, X, Save } from 'lucide-react';
 import Modal from '../components/Modal.jsx';
 
 export default function Learning(){
@@ -217,8 +217,14 @@ export default function Learning(){
         size="md"
         footer={
           <>
-            <button type="button" className="btn btn-ghost" onClick={() => setShowAdd(false)}>Cancel</button>
-            <button type="submit" form="prog-form" className="btn btn-primary">Create Program</button>
+            <button type="button" className="btn btn-ghost gap-2" onClick={() => setShowAdd(false)}>
+              <X size={16} />
+              Cancel
+            </button>
+            <button type="submit" form="prog-form" className="btn btn-primary gap-2">
+              <Save size={16} />
+              Create Program
+            </button>
           </>
         }
       >

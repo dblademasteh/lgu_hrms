@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Layout from '../components/Layout.jsx';
 import { disqualificationApi } from '../api/disqualifications.js';
 import { useToast } from '../components/Toast.jsx';
-import { ShieldAlert, Filter, Download, FileText } from 'lucide-react';
+import { ShieldAlert, Filter, Download, FileText, X, Save } from 'lucide-react';
 
 const DISQUALIFICATION_TYPES = [
   'VIOLATION_OF_CSC_RULES',
@@ -386,11 +386,11 @@ export default function Disqualifications() {
               </div>
 
               <div className="flex gap-2 justify-end">
-                <button type="button" className="btn btn-outline" onClick={() => setShowForm(false)}>
-                  Cancel
+                <button type="button" className="btn btn-outline gap-2" onClick={() => setShowForm(false)}>
+                  <X size={16} /> Cancel
                 </button>
-                <button type="submit" className="btn btn-primary">
-                  {editingRecord ? 'Update' : 'Create'}
+                <button type="submit" className="btn btn-primary gap-2">
+                  <Save size={16} /> {editingRecord ? 'Update' : 'Create'}
                 </button>
               </div>
             </form>

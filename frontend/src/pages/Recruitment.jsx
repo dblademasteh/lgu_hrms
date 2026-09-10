@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { User, Search, Plus, Mail, Phone, MapPin, Briefcase, RefreshCw } from 'lucide-react';
+import { User, Search, Plus, Mail, Phone, MapPin, Briefcase, RefreshCw, X, Save } from 'lucide-react';
 import Layout from '../components/Layout.jsx';
 import { listApplicants, createApplicant } from '../api/recruitment.js';
 import { departmentsApi } from '../api/departments.js';
@@ -199,12 +199,12 @@ export default function Recruitment(){
               </div>
             </div>
             <div className="flex gap-2 pt-2">
-              <button type="submit" className="btn btn-primary gap-1">
-                <Plus size={14} />
+              <button type="submit" className="btn btn-primary gap-2">
+                <Save size={16} />
                 Save Applicant
               </button>
-              <button type="button" className="btn btn-ghost" onClick={()=>setShowAdd(false)}>
-                Cancel
+              <button type="button" className="btn btn-ghost gap-2" onClick={()=>setShowAdd(false)}>
+                <X size={16} /> Cancel
               </button>
             </div>
           </form>

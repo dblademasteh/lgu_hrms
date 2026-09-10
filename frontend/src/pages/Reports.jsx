@@ -3,6 +3,7 @@ import Layout from '../components/Layout.jsx';
 import { reports } from '../data/reports.js';
 import { reportsApi } from '../api/reports.js';
 import { useToast } from '../components/Toast.jsx';
+import { FileText, ExternalLink, Download } from 'lucide-react';
 
 const peso = n => `₱ ${Number(n ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -92,17 +93,17 @@ export default function Reports() {
             <div className="flex gap-2 mt-4">
               <button
                 type="button"
-                className="btn btn-primary flex-1"
+                className="btn btn-primary flex-1 gap-2"
                 onClick={() => toast(`${r.title} generation queued — renders via pdfmake/ExcelJS once wired.`, 'info')}
               >
-                Generate
+                <FileText size={16} /> Generate
               </button>
               <button
                 type="button"
-                className="btn btn-ghost"
+                className="btn btn-ghost gap-2"
                 onClick={() => toast(`Preview for ${r.title} will open the report viewer once wired.`, 'info')}
               >
-                Preview
+                <ExternalLink size={16} /> Preview
               </button>
             </div>
           </div>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Check } from 'lucide-react';
+import { Check, Download } from 'lucide-react';
 import Layout from '../components/Layout.jsx';
 import Modal from '../components/Modal.jsx';
 import { useToast } from '../components/Toast.jsx';
@@ -57,7 +57,7 @@ export default function Audit() {
           <h1 className="font-display text-xl font-bold text-ink">Audit Trail</h1>
           <p className="text-sm text-muted mt-0.5">Immutable, append-only record of every action</p>
         </div>
-        <button type="button" className="btn btn-ghost" onClick={exportCsv}>Export CSV</button>
+        <button type="button" className="btn btn-ghost gap-2" onClick={exportCsv}><Download size={16} /> Export CSV</button>
       </div>
 
       <div className="card p-5">

@@ -5,7 +5,7 @@ import ConfirmDialog from '../components/ConfirmDialog.jsx';
 import { listPerformanceReviews, createPerformanceReview, updatePerformanceReview, deletePerformanceReview } from '../api/performance.js';
 import { useToast } from '../components/Toast.jsx';
 import { badgeTone } from '../data/mock.js';
-import { FileText, User, Calendar, Star, StarHalf, Star as StarOutline, Trash2 } from 'lucide-react';
+import { FileText, User, Calendar, Star, StarHalf, Star as StarOutline, Trash2, X, Save } from 'lucide-react';
 
 const TYPE_OPTIONS = [
   { value: 'IPCR', label: 'IPCR' },
@@ -245,10 +245,12 @@ export default function Performance() {
         size="md"
         footer={
           <>
-            <button type="button" className="btn btn-ghost gap-1" onClick={() => setModalOpen(false)}>
+            <button type="button" className="btn btn-ghost gap-2" onClick={() => setModalOpen(false)}>
+              <X size={16} />
               Cancel
             </button>
-            <button type="submit" form="perf-form" className="btn btn-primary gap-1">
+            <button type="submit" form="perf-form" className="btn btn-primary gap-2">
+              <Save size={16} />
               {editing ? 'Save Changes' : 'Create Review'}
             </button>
           </>

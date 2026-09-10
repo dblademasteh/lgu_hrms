@@ -26,6 +26,7 @@ import recruitmentRouter from './recruitment.js';
 import essRouter from './ess.js';
 import loansRouter from './loans.js';
 import reportsRouter from './reports.js';
+import databaseRouter from './database.js';
 
 const router = Router();
 
@@ -56,5 +57,6 @@ router.use('/recruitment', recruitmentRouter);
 router.use('/ess', essRouter);
 router.use('/loans', loansRouter);
 router.use('/reports', reportsRouter);
+router.use('/database', databaseRouter);
 
 export default router;

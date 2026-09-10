@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Calendar, FileText, Clock, User, Check, CalendarDays, FileDown, TrendingUp, CreditCard } from 'lucide-react';
+import { Calendar, FileText, Clock, User, Check, CalendarDays, FileDown, TrendingUp, CreditCard, X } from 'lucide-react';
 import Layout from '../components/Layout.jsx';
 import Modal from '../components/Modal.jsx';
 import { useToast } from '../components/Toast.jsx';
@@ -287,8 +287,14 @@ export default function ESS(){
         size="md"
         footer={
           <>
-            <button type="button" className="btn btn-ghost" onClick={() => setLeaveOpen(false)}>Cancel</button>
-            <button type="submit" form="ess-leave-form" className="btn btn-primary">File Request</button>
+            <button type="button" className="btn btn-ghost gap-2" onClick={() => setLeaveOpen(false)}>
+              <X size={16} />
+              Cancel
+            </button>
+            <button type="submit" form="ess-leave-form" className="btn btn-primary gap-2">
+              <Check size={16} />
+              File Request
+            </button>
           </>
         }
       >

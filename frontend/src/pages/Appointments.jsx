@@ -187,11 +187,11 @@ export default function Appointments() {
         size="md"
         footer={
           <>
-            <button type="button" className="btn btn-ghost gap-1" onClick={() => setOpen(false)}>
-              <X size={14} /> Cancel
+            <button type="button" className="btn btn-ghost gap-2" onClick={() => setOpen(false)}>
+              <X size={16} /> Cancel
             </button>
-            <button type="submit" form="appt-form" className="btn btn-primary gap-1">
-              <Plus size={14} /> Record Appointment
+            <button type="submit" form="appt-form" className="btn btn-primary gap-2">
+              <Plus size={16} /> Record Appointment
             </button>
           </>
         }
