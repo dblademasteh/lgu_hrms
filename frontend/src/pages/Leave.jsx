@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Check, X } from 'lucide-react';
 import Layout from '../components/Layout.jsx';
 import ConfirmDialog from '../components/ConfirmDialog.jsx';
 import { useToast } from '../components/Toast.jsx';
@@ -148,8 +149,14 @@ export default function Leave() {
 
                 {selected.status === 'PENDING' ? (
                   <div className="flex gap-2 mt-auto pt-4">
-                    <button type="button" className="btn btn-primary flex-1" onClick={() => setConfirm({ type: 'Approved' })}>Approve</button>
-                    <button type="button" className="btn btn-ghost" onClick={() => setConfirm({ type: 'Denied' })}>Deny</button>
+                    <button type="button" className="btn btn-primary flex-1 gap-2" onClick={() => setConfirm({ type: 'Approved' })}>
+                      <Check size={16} />
+                      Approve
+                    </button>
+                    <button type="button" className="btn btn-ghost gap-2" onClick={() => setConfirm({ type: 'Denied' })}>
+                      <X size={16} />
+                      Deny
+                    </button>
                   </div>
                 ) : (
                   <p className="mono-label mt-auto pt-4">Already {selected.status.toLowerCase()} — no further action.</p>
