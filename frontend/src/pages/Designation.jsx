@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { FileText, Plus, Calendar, User, MapPin, RefreshCw, Check } from 'lucide-react';
+import { FileText, Plus, Calendar, User, MapPin, RefreshCw, Check, X, Save, Search } from 'lucide-react';
 import Layout from '../components/Layout.jsx';
 import { designationApi } from '../api/designation.js';
 import { useToast } from '../components/Toast.jsx';
@@ -92,11 +92,30 @@ export default function Designation() {
         </div>
       </div>
 
+      {/* Search Bar */}
+      <div className="mb-4">
+        <div className="relative">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
+          <input
+            type="search"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search order number, employee name..."
+            className="input pl-10 w-full md:w-60"
+            aria-label="Search designation orders"
+          />
+        </div>
+      </div>
+
       {/* Orders Table */}
       <div className="card p-4">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="font-display font-semibold text-ink">Designation Orders</h3>
+          <span className="mono-label">{items.length} records</span>
+        </div>
         <div className="overflow-x-auto">
           <table className="data-table">
-            <thead><tr><th>Order No</th><th>Employee</th><th>Issued</th><th>Signed By</th><th>Status</th></tr></thead>
+            <thead><tr><th>Order No</th><th>Employee</th><th>Issued</th><th>Signed By</th><th>Status</th><th className="text-right">Actions</th></tr></thead>
             <tbody>
               {items.map(d=>(
                 <tr key={d.id}>
@@ -105,10 +124,16 @@ export default function Designation() {
                   <td>{d.issuedDate}</td>
                   <td className="font-mono">{d.signedBy || '—'}</td>
                   <td><span className={`badge ${badgeTone(d.status)}`}>{d.status}</span></td>
+                  <td className="text-right">
+                    <button type="button" className="btn btn-ghost px-2 text-xs" onClick={() => {}}>
+                      <X size={14} />
+                      Remove
+                    </button>
+                  </td>
                 </tr>
               ))}
               {items.length === 0 && (
-                <tr><td colSpan={5} className="text-muted text-sm py-8 text-center">No designation orders recorded.</td></tr>
+                <tr><td colSpan={6} className="text-muted text-sm py-8 text-center">No designation orders recorded.</td></tr>
               )}
             </tbody>
           </table>
@@ -116,8 +141,8 @@ export default function Designation() {
       </div>
 
       {/* New Order Modal */}
-      <Modal open={open} onClose={()=>setOpen(false)} title="New Designation Order">
-        <form onSubmit={submit} className="space-y-4">
+      <Modal open={open} onClose={()=>setOpen(false)} title="New Designation Order" size="sm">
+        <form onSubmit={submit} className="space-y-4" id="do-form">
           <div>
             <label htmlFor="do-emp" className="block text-sm font-medium text-ink mb-1">Employee ID *</label>
             <input 
@@ -162,6 +187,16 @@ export default function Designation() {
             />
           </div>
         </form>
+        <div className="modal-foot">
+          <button type="button" className="btn btn-ghost gap-2" onClick={() => { setOpen(false); setForm({ employeeId:'', orderNumber:'', issuedDate:'', signedBy:'' }); }}>
+            <X size={16} />
+            Cancel
+          </button>
+          <button type="submit" form="do-form" className="btn btn-primary gap-2">
+            <Save size={16} />
+            Create Order
+          </button>
+        </div>
       </Modal>
     </Layout>
   );
