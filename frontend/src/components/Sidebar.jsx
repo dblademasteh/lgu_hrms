@@ -2,7 +2,7 @@ import React from 'react';
 import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard, Users, Building2, FileBadge, Banknote, CalendarDays, Clock,
-  ShieldCheck, BarChart3, UserCog, Landmark, Settings as SettingsIcon
+  ShieldCheck, BarChart3, UserCog, Landmark, Settings as SettingsIcon, Fingerprint
 } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore.js';
 
@@ -39,6 +39,7 @@ const groups = [
       { name: 'Performance', path: '/performance', icon: BarChart3, roles: ['HR_MANAGER', 'ADMIN', 'DEPARTMENT_HEAD'] },
       { name: 'Learning', path: '/learning', icon: Landmark },
       { name: 'Attendance DTR', path: '/attendance', icon: Clock, roles: ['HR_MANAGER', 'ADMIN', 'DEPARTMENT_HEAD'] },
+      { name: 'Biometric Attendance', path: '/biometric', icon: Fingerprint, roles: ['HR_MANAGER', 'ADMIN', 'DEPARTMENT_HEAD', 'PAYROLL_OFFICER'] },
     ]
   },
   {

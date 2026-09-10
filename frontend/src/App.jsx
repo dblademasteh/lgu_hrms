@@ -10,6 +10,7 @@ import Audit from './pages/Audit.jsx';
 import Reports from './pages/Reports.jsx';
 import Users from './pages/Users.jsx';
 import Attendance from './pages/Attendance.jsx';
+import BiometricAttendance from './pages/BiometricAttendance.jsx';
 import Appointments from './pages/Appointments.jsx';
 import Settings from './pages/Settings.jsx';
 import Performance from './pages/Performance.jsx';
@@ -58,6 +59,7 @@ export default function App() {
             <Route path="/reports" element={<Protected roles={['ADMIN', 'HR_MANAGER', 'PAYROLL_OFFICER', 'AUDITOR']}><Reports /></Protected>} />
             <Route path="/users" element={<Protected roles={['ADMIN']}><Users /></Protected>} />
             <Route path="/attendance" element={<Protected roles={['ADMIN', 'HR_MANAGER', 'DEPARTMENT_HEAD']}><Attendance /></Protected>} />
+            <Route path="/biometric" element={<Protected roles={['ADMIN', 'HR_MANAGER', 'DEPARTMENT_HEAD', 'PAYROLL_OFFICER']}><BiometricAttendance /></Protected>} />
             <Route path="/appointments" element={<Protected roles={['ADMIN', 'HR_MANAGER']}><Appointments /></Protected>} />
             <Route path="/performance" element={<Protected roles={['ADMIN', 'HR_MANAGER', 'DEPARTMENT_HEAD']}><Performance /></Protected>} />
             <Route path="/plantilla" element={<Protected roles={['ADMIN', 'HR_MANAGER']}><Plantilla /></Protected>} />

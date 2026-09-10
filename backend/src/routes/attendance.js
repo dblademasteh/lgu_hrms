@@ -9,4 +9,8 @@ const router = Router();
 router.get('/', attendanceController.list);
 router.post('/', validate(createAttendanceSchema), attendanceController.create);
 
+// Self-service endpoints for employees
+router.get('/my', attendanceController.getMyAttendance);
+router.post('/punch', attendanceController.punchBiometric);
+
 export default router;
