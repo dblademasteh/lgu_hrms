@@ -11,6 +11,7 @@ router.post('/', validate(createAttendanceSchema), attendanceController.create);
 
 // Self-service endpoints for employees
 router.get('/my', attendanceController.getMyAttendance);
+router.get('/today', attendanceController.getTodayAttendance);
 router.post('/punch', attendanceController.punchBiometric);
 
 export default router;

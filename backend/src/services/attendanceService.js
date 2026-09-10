@@ -83,8 +83,10 @@ export const attendanceService = {
   async listForEmployee(employeeId, month) {
     const where = { employeeId };
     if (month) {
-      const start = new Date(`${month}-01T00:00:00.000Z`);
-      const end = new Date(`${month}-28T23:59:59.999Z`);
+      // Handle both YYYY-MM and YYYY-MM-DD formats
+      const monthStart = month.length > 7 ? month.slice(0, 7) : month;
+      const start = new Date(`${monthStart}-01T00:00:00.000Z`);
+      const end = new Date(start);
       end.setMonth(end.getMonth() + 1);
       where.date = { gte: start, lt: end };
     }

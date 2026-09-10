@@ -28,9 +28,8 @@ export default function BiometricAttendance() {
 
   const loadStatus = async () => {
     try {
-      const today = new Date().toISOString().slice(0, 10);
-      const response = await biometricApi.getMyAttendance(today);
-      const record = response.data?.records?.[0] || null;
+      const response = await biometricApi.getTodayAttendance();
+      const record = response.data?.record || null;
       setStatus(record);
     } catch (err) {
       if (err.response?.status === 404) {

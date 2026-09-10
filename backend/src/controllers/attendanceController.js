@@ -61,5 +61,34 @@ export const attendanceController = {
     } catch (e) {
       next(e);
     }
+  },
+  // Get today's attendance for quick status check
+  async getTodayAttendance(req, res, next) {
+    try {
+      const user = await prisma.user.findUnique({ where: { id: req.user.id } });
+      if (!user?.externalId) {
+        return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Employee linkage not found' }});
+      }
+      const employee = await prisma.employee.findUnique({ where: { employeeNumber: user.externalId }});
+      if (!employee) {
+        return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Employee not found' }});
+      }
+
+      const today = new Date();
+      const todayStr = today.toISOString().slice(0, 10);
+      const startOfDay = new Date(`${todayStr}T00:00:00.000Z`);
+      const endOfDay = new Date(`${todayStr}T23:59:59.999Z`);
+
+      const record = await prisma.attendance.findFirst({
+        where: {
+          employeeId: employee.id,
+          date: { gte: startOfDay, lte: endOfDay }
+        }
+      });
+
+      res.json({ record });
+    } catch (e) {
+      next(e);
+    }
   }
 };
