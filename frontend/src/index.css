@@ -135,6 +135,14 @@
   .btn-primary:hover { filter: brightness(1.08); }
   .btn-ghost { background: transparent; border-color: transparent; color: var(--muted); }
   .btn-ghost:hover { background: color-mix(in oklab, var(--ink) 6%, transparent); color: var(--ink); }
+  .btn-outline {
+    background: transparent;
+    border-color: var(--line);
+    color: var(--ink);
+  }
+  .btn-outline:hover {
+    background: color-mix(in oklab, var(--ink) 4%, transparent);
+  }
 
   /* input — surface fill, 8px radius, accent focus ring */
   .input {
