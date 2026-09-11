@@ -33,7 +33,7 @@ export default function CommandPalette() {
 
   useEffect(() => {
     const onKey = e => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
         e.preventDefault();
         setOpen(o => !o);
       }

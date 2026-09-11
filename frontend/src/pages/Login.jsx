@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Landmark, User, Lock, Eye, EyeOff, ArrowRight, ShieldCheck, Server, FileCheck, Sun, Moon, UserCheck, GraduationCap, Target, Award } from 'lucide-react';
+import { Landmark, User, Lock, Eye, EyeOff, ArrowRight, ShieldCheck, Server, FileCheck, Sun, Moon, UserCheck, GraduationCap, Target, Award, Hash, ChevronDown } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore.js';
 import { useToast } from '../components/Toast.jsx';
 import { useTheme, toggleTheme } from '../theme.js';
+import { api } from '../api/client.js';
 
 const PRIME_PILLARS = [
   { tag: 'RSP', title: 'Recruitment, Selection & Placement', desc: 'Plantilla, vacancy, eligibility & appointments', Icon: UserCheck },
@@ -15,14 +16,25 @@ const PRIME_PILLARS = [
 const MATURITY_LEVELS = ['Transactional', 'Process-Defined', 'Integrated', 'Strategic'];
 
 export default function Login() {
+  const [mode, setMode] = useState('password');
+  const [tenants, setTenants] = useState([]);
+  const [tenant, setTenant] = useState('');
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [pin, setPin] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [capsLock, setCapsLock] = useState(false);
   const [errors, setErrors] = useState({});
   const [authError, setAuthError] = useState('');
+
+  useEffect(() => {
+    api.get('/tenants').then(res => setTenants(res.data)).catch(() => {});
+  }, []);
   const navigate = useNavigate();
   const login = useAuthStore((s) => s.login);
+  const loginPin = useAuthStore((s) => s.loginPin);
+  const passwordExpired = useAuthStore((s) => s.passwordExpired);
   const loading = useAuthStore((s) => s.loading);
   const toast = useToast();
   const theme = useTheme();
@@ -30,8 +42,13 @@ export default function Login() {
   const validate = () => {
     const e = {};
     if (!username.trim()) e.username = 'Username is required';
-    if (!password) e.password = 'Password is required';
-    else if (password.length < 6) e.password = 'Password must be at least 6 characters';
+    if (mode === 'pin') {
+      if (!pin) e.pin = 'PIN is required';
+      else if (!/^\d{4,6}$/.test(pin)) e.pin = 'PIN must be 4–6 digits';
+    } else {
+      if (!password) e.password = 'Password is required';
+      else if (password.length < 6) e.password = 'Password must be at least 6 characters';
+    }
     return e;
   };
 
@@ -41,18 +58,25 @@ export default function Login() {
     const v = validate();
     setErrors(v);
     if (Object.keys(v).length > 0) return;
-    const ok = await login(username.trim(), password);
+    const tenantId = tenant ? tenant.toUpperCase() : undefined;
+    const ok = mode === 'pin'
+      ? await loginPin(username.trim(), pin, tenantId)
+      : await login(username.trim(), password, tenantId);
     if (ok) {
-      toast('Signed in successfully', 'success');
-      navigate('/dashboard');
+      const expired = useAuthStore.getState().passwordExpired;
+      toast(expired ? 'Password expired — please change it in Account → Security' : 'Signed in successfully', expired ? 'error' : 'success');
+      navigate(expired ? '/settings' : '/dashboard');
     } else {
-      setAuthError('Invalid credentials — check your username and password, or ask HR for access.');
+      const { error: msg, errorStatus } = useAuthStore.getState();
+      if (errorStatus === 429 || msg?.includes('Too many')) setAuthError(msg);
+      else setAuthError(mode === 'pin' ? 'Invalid username or PIN — PIN sign-in must be enabled in Account → Security.' : 'Invalid credentials — check your username and password, or ask HR for access.');
     }
   };
 
   const fillDemo = () => {
-    setUsername('admin');
-    setPassword('admin123');
+    setTenant('DEFAULT');
+    setUsername('admin-default');
+    if (mode === 'password') setPassword('admin123');
     setErrors({});
     setAuthError('');
   };
@@ -151,9 +175,46 @@ export default function Login() {
 
           <p className="mono-label mb-3">Secure sign-in</p>
           <h2 className="font-display text-3xl font-bold text-ink tracking-tight">Welcome back.</h2>
-          <p className="text-sm text-muted mt-2 mb-8">Sign the stub to enter the record room.</p>
+          <p className="text-sm text-muted mt-2 mb-5">Sign the stub to enter the record room.</p>
+
+          <div className="grid grid-cols-2 gap-2 mb-5" role="tablist" aria-label="Sign-in method">
+            {[
+              { id: 'password', label: 'Password', icon: Lock },
+              { id: 'pin', label: 'PIN', icon: Hash },
+            ].map(t => {
+              const Icon = t.icon;
+              const selected = mode === t.id;
+              return (
+                <button key={t.id} type="button" role="tab" aria-selected={selected}
+                  onClick={() => { setMode(t.id); setErrors({}); setAuthError(''); }}
+                  className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg border text-sm transition ${selected ? 'border-accent bg-accent/10 text-accent font-semibold' : 'border-line text-muted hover:text-ink'}`}>
+                  <Icon size={15} /> {t.label}
+                </button>
+              );
+            })}
+          </div>
 
           <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+            <button type="button" onClick={()=>setShowAdvanced(v=>!v)} className="text-xs mono-label text-muted hover:text-ink">Advanced options {showAdvanced ? '▲' : '▼'}</button>
+            {showAdvanced && (
+              <div>
+                <label htmlFor="tenant" className="block text-sm font-medium text-ink mb-1">Institution</label>
+                <div className="relative">
+                  <select
+                    id="tenant"
+                    value={tenant}
+                    onChange={(e) => setTenant(e.target.value)}
+                    className="input h-12 pr-10 appearance-none w-full"
+                  >
+                    <option value="">Auto-detect</option>
+                    {tenants.map(t => (
+                      <option key={t.id} value={t.code}>{t.name}</option>
+                    ))}
+                  </select>
+                  <ChevronDown size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted"/>
+                </div>
+              </div>
+            )}
             <div>
               <label htmlFor="username" className="block text-sm font-medium text-ink mb-1">Username</label>
               <div className="relative">
@@ -175,6 +236,32 @@ export default function Login() {
               {errors.username && <p id="username-error" role="alert" className="text-sm text-error mt-1">{errors.username}</p>}
             </div>
 
+            {mode === 'pin' ? (
+              <div>
+                <label htmlFor="pin" className="block text-sm font-medium text-ink mb-1">Sign-in PIN</label>
+                <div className="relative">
+                  <Hash size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" aria-hidden="true" />
+                  <input
+                    id="pin"
+                    type="password"
+                    inputMode="numeric"
+                    maxLength={6}
+                    value={pin}
+                    onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    aria-invalid={!!errors.pin}
+                    aria-describedby={errors.pin ? 'pin-error' : undefined}
+                    className="input pl-9! h-12 font-mono tracking-[0.4em]"
+                    placeholder="••••"
+                    autoComplete="one-time-code"
+                    autoFocus
+                  />
+                </div>
+                {errors.pin && <p id="pin-error" role="alert" className="text-sm text-error mt-1">{errors.pin}</p>}
+                {!errors.pin && (
+                  <p className="text-[11px] text-muted mt-1.5">4–6 digit PIN · enable it first in Account → Security. Locked after 8 failed attempts.</p>
+                )}
+              </div>
+            ) : (
             <div>
               <label htmlFor="password" className="block text-sm font-medium text-ink mb-1">Password</label>
               <div className="relative">
@@ -206,6 +293,7 @@ export default function Login() {
                 <p className="mono-label mt-1.5" role="status">Caps lock is on</p>
               )}
             </div>
+            )}
 
             {authError && (
               <p role="alert" className="text-sm text-error bg-error/10 border border-error/30 rounded-lg px-3 py-2.5">

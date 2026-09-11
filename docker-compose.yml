@@ -1,19 +1,55 @@
 version: '3.8'
+# ── Production-shaped compose ────────────────────────────────────────────
+# Secrets come from the environment (or a vault-injected .env file that is
+# NEVER committed). Dev ergonomics live in docker-compose.dev.yml:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
 services:
   db:
     image: postgres:16
     environment:
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: lgu_hrms
-    ports:
-      - "5432:5432"
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in the environment}
+      POSTGRES_DB: ${POSTGRES_DB:-lgu_hrms}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1G
   api:
     build: ./backend
-    ports:
-      - "4000:4000"
+    environment:
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-lgu_hrms}?schema=public
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in the environment}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?Set JWT_REFRESH_SECRET in the environment}
+      SEED_DEFAULT_PASSWORD: ${SEED_DEFAULT_PASSWORD:-}
+      PORT: 4000
+      NODE_ENV: production
+      WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost}
+      DB_CONTAINER: ${DB_CONTAINER:-lgu_hrms-db-1}
     depends_on:
-      - db
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
   web:
-    build: ./frontend
+    build:
+      context: ./frontend
+      args:
+        VITE_API_BASE: ${VITE_API_BASE:-/api/v1}
     ports:
-      - "5173:5173"
+      - "${WEB_PORT:-80}:80"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+volumes:
+  pgdata:

@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Save, X, Edit, UserCheck, Shield } from 'lucide-react';
+import { Plus, Save, X, Edit, UserCheck, Shield, Building2 } from 'lucide-react';
 import Layout from '../components/Layout.jsx';
 import Modal from '../components/Modal.jsx';
 import ConfirmDialog from '../components/ConfirmDialog.jsx';
 import { useToast } from '../components/Toast.jsx';
+import { useAuthStore } from '../stores/authStore.js';
 import { usersApi } from '../api/users.js';
 import { departmentsApi } from '../api/departments.js';
+import { databaseApi } from '../api/database.js';
 import { listEmployees } from '../api/employees.js';
 import { roleMatrix, badgeTone } from '../data/mock.js';
 
@@ -14,9 +16,13 @@ const emptyForm = { username: '', role: 'HR_MANAGER', departmentId: '', external
 
 export default function Users() {
   const toast = useToast();
+  const myRole = useAuthStore(s => s.user?.role);
   const [list, setList] = useState([]);
   const [deptList, setDeptList] = useState([]);
   const [employees, setEmployees] = useState([]);
+  const [tenants, setTenants] = useState(null);
+  const [tenantFilter, setTenantFilter] = useState(null);
+  const [tenantForm, setTenantForm] = useState({ code: '', name: '', domain: '' });
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(emptyForm);
@@ -26,7 +32,8 @@ export default function Users() {
     usersApi.list().then(r => setList(r.data)).catch(()=>toast('Failed to load users','error'));
     departmentsApi.list().then(r => setDeptList(r.data)).catch(()=>{});
     listEmployees({ page: 1, limit: 200 }).then(({ items = [] }) => setEmployees(items)).catch(()=>{});
-  }, []);
+    if (myRole === 'SUPER_ADMIN') databaseApi.tenants().then(setTenants).catch(()=>setTenants([]));
+  }, [myRole]);
 
   const openAdd = () => { setEditing(null); setForm(emptyForm); setFormOpen(true); };
   const openEdit = u => {
@@ -87,40 +94,70 @@ export default function Users() {
       <div className="card p-5 mb-4">
         <div className="flex items-center justify-between mb-3">
           <h3 className="font-display font-semibold text-ink">User Accounts</h3>
-          <span className="mono-label">{list.filter(isActive).length} active</span>
+          <span className="flex items-center gap-3 mono-label">
+            {list.filter(isActive).length} active
+            {myRole === 'SUPER_ADMIN' && tenants && (
+              <select
+                className="select select-sm mono-label"
+                value={tenantFilter ?? ''}
+                onChange={e => setTenantFilter(e.target.value || null)}
+                aria-label="Filter by tenant"
+              >
+                <option value="">All tenants</option>
+                {tenants.map(t => (
+                  <option key={t.id} value={t.id}>{t.code} · {t.name}</option>
+                ))}
+              </select>
+            )}
+          </span>
         </div>
         <div className="overflow-auto">
-          <table className="data-table">
-            <thead>
-              <tr><th>Username</th><th>Role</th><th>Department</th><th>Linked Employee (ESS)</th><th>Status</th><th className="text-right">Actions</th></tr>
-            </thead>
-            <tbody>
-              {list.map(u => (
-                <tr key={u.id}>
-                  <td className="font-mono">{u.username}</td>
-                  <td><span className="badge badge-accent">{u.role}</span></td>
-                  <td className="font-mono">{u.department?.name ?? u.department ?? '—'}</td>
-                  <td>
-                    {u.linkedEmployee
-                      ? <span className="font-mono text-xs">{u.linkedEmployee.employeeNumber} · {u.linkedEmployee.lastName}, {u.linkedEmployee.firstName}</span>
-                      : <span className="text-muted text-xs">—</span>}
-                  </td>
-                  <td><span className={`badge ${badgeTone(u.status)}`}>{u.status}</span></td>
-                  <td className="text-right">
-                    <span className="inline-flex gap-1">
-                      <button type="button" className="btn btn-ghost px-2 text-xs" onClick={() => openEdit(u)}>
-                        <Edit size={14} />
-                        Edit
-                      </button>
-                      <button type="button" className="btn btn-ghost px-2 text-xs" onClick={() => setConfirm(u)}>
-                        {isActive(u) ? <><UserCheck size={14} /> Deactivate</> : <><Shield size={14} /> Activate</>}
-                      </button>
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          {(() => {
+            const shown = tenantFilter
+              ? list.filter(u => u.tenantId === tenantFilter)
+              : list;
+            return (
+              <table className="data-table">
+                <thead>
+                  <tr><th>Username</th><th>Role</th><th>Tenant</th><th>Department</th><th>Linked Employee (ESS)</th><th>Status</th><th className="text-right">Actions</th></tr>
+                </thead>
+                <tbody>
+                  {shown.map(u => (
+                    <tr key={u.id}>
+                      <td className="font-mono">{u.username}</td>
+                      <td>
+                        <span className="badge badge-accent">{u.role}</span>
+                        {u.role === 'SUPER_ADMIN' && <span className="badge badge-success ml-1 mono-label">PLATFORM</span>}
+                      </td>
+                      <td className="font-mono text-xs">
+                        {u.tenantId
+                          ? u.tenantId.slice(0, 8) + '…'
+                          : <span className="text-muted">unscoped</span>}
+                      </td>
+                      <td className="font-mono">{u.department?.name ?? u.department ?? '—'}</td>
+                      <td>
+                        {u.linkedEmployee
+                          ? <span className="font-mono text-xs">{u.linkedEmployee.employeeNumber} · {u.linkedEmployee.lastName}, {u.linkedEmployee.firstName}</span>
+                          : <span className="text-muted text-xs">—</span>}
+                      </td>
+                      <td><span className={"badge " + badgeTone(u.status)}>{u.status}</span></td>
+                      <td className="text-right">
+                        <span className="inline-flex gap-1">
+                          <button type="button" className="btn btn-ghost px-2 text-xs" onClick={() => openEdit(u)}>
+                            <Edit size={14} />
+                            Edit
+                          </button>
+                          <button type="button" className="btn btn-ghost px-2 text-xs" onClick={() => setConfirm(u)}>
+                            {isActive(u) ? <><UserCheck size={14} /> Deactivate</> : <><Shield size={14} /> Activate</>}
+                          </button>
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            );
+          })()}
         </div>
       </div>
 
@@ -149,10 +186,51 @@ export default function Users() {
         </div>
       </div>
 
+      {myRole === 'SUPER_ADMIN' && (
+        <div className="card p-5 mt-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-display font-semibold text-ink flex items-center gap-2"><Building2 size={16}/> Tenants</h3>
+            <span className="mono-label">{tenants?.length ?? '…'} registered</span>
+          </div>
+          <div className="overflow-auto mb-3">
+            <table className="data-table">
+              <thead><tr><th>Code</th><th>Name</th><th>Domain</th><th>Status</th></tr></thead>
+              <tbody>
+                {(tenants ?? []).map(t => (
+                  <tr key={t.id}>
+                    <td className="font-mono">{t.code}</td>
+                    <td className="font-medium">{t.name}</td>
+                    <td className="font-mono text-xs">{t.domain ?? '—'}</td>
+                    <td>{t.isActive ? <span className="badge badge-success">Active</span> : <span className="badge">Disabled</span>}</td>
+                  </tr>
+                ))}
+                {tenants?.length === 0 && <tr><td colSpan={4} className="text-muted text-sm">No tenants yet.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+          <form className="grid sm:grid-cols-4 gap-2" onSubmit={async e => {
+            e.preventDefault();
+            if (!tenantForm.code.trim() || !tenantForm.name.trim()) { toast('Code and name are required', 'error'); return; }
+            try {
+              const t = await databaseApi.createTenant({ code: tenantForm.code.trim().toUpperCase(), name: tenantForm.name.trim(), domain: tenantForm.domain.trim() || undefined });
+              setTenants(ts => [...(ts ?? []), t]);
+              setTenantForm({ code: '', name: '', domain: '' });
+              toast('Tenant ' + t.code + ' created', 'success');
+            } catch (err) { toast(err?.response?.data?.error?.message || 'Could not create tenant', 'error'); }
+          }}>
+            <input className="input" placeholder="CODE" value={tenantForm.code} onChange={e => setTenantForm({ ...tenantForm, code: e.target.value })} aria-label="Tenant code" />
+            <input className="input" placeholder="LGU name" value={tenantForm.name} onChange={e => setTenantForm({ ...tenantForm, name: e.target.value })} aria-label="Tenant name" />
+            <input className="input" placeholder="domain (optional)" value={tenantForm.domain} onChange={e => setTenantForm({ ...tenantForm, domain: e.target.value })} aria-label="Tenant domain" />
+            <button type="submit" className="btn btn-primary gap-2"><Plus size={14}/> Add tenant</button>
+          </form>
+          <p className="text-[11px] text-muted mt-2">Scaffold scope: User + Department carry tenantId today. Full per-table rollout is tracked in PRE_PRODUCTION_CHECKLIST.</p>
+        </div>
+      )}
+
       <Modal
         open={formOpen}
         onClose={() => setFormOpen(false)}
-        title={editing ? `Edit User · ${editing.username}` : 'Add User'}
+        title={editing ? 'Edit User · ' + editing.username : 'Add User'}
         footer={
           <>
             <button type="button" className="btn btn-ghost gap-2" onClick={() => setFormOpen(false)}>

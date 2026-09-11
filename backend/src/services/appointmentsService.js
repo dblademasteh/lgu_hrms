@@ -11,10 +11,10 @@ const TYPE_MAP = {
 };
 
 export const appointmentsService = {
-  async list() {
-    return appointmentsRepository.findAll();
+  async list(req) {
+    return appointmentsRepository.findAll(req);
   },
-  async create(data) {
+  async create(req, data) {
     const mapped = {
       employeeId: data.employeeId ?? data.name,
       type: TYPE_MAP[data.type] ?? data.type?.toUpperCase(),
@@ -25,15 +25,15 @@ export const appointmentsService = {
       dept: data.dept ?? null,
       name: data.name ?? null
     };
-    return appointmentsRepository.create(mapped);
+    return appointmentsRepository.create(req, mapped);
   },
-  async update(id, data) {
+  async update(req, id, data) {
     const mapped = data.type
       ? { ...data, type: TYPE_MAP[data.type] ?? data.type?.toUpperCase() }
       : data;
-    return appointmentsRepository.update(id, mapped);
+    return appointmentsRepository.update(req, id, mapped);
   },
-  async remove(id) {
-    return appointmentsRepository.remove(id);
+  async remove(req, id) {
+    return appointmentsRepository.remove(req, id);
   }
 };

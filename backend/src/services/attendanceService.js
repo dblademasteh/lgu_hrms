@@ -1,5 +1,6 @@
 import { attendanceRepository } from '../repositories/attendanceRepository.js';
 import { prisma } from '../lib/prisma.js';
+import { withTenant, stampTenant } from '../middleware/tenant.js';
 
 function toUtcDate(v) {
   return typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)
@@ -8,12 +9,12 @@ function toUtcDate(v) {
 }
 
 export const attendanceService = {
-  async list(date) {
-    return attendanceRepository.findAll(date);
+  async list(req, date) {
+    return attendanceRepository.findAll(req, date);
   },
-  async create(data) {
+  async create(req, data) {
     const { date, timeIn, timeOut, ...rest } = data;
-    return attendanceRepository.create({
+    return attendanceRepository.create(req, {
       ...rest,
       date: toUtcDate(date),
       timeIn: timeIn ? new Date(timeIn) : null,
@@ -22,18 +23,19 @@ export const attendanceService = {
   },
 
   // Biometric punch in/out for employee self-service
-  async biometricPunch(employeeId, punchType) {
+  async biometricPunch(req, employeeId, punchType) {
     const today = new Date();
     const todayStr = today.toISOString().slice(0, 10);
     const startOfDay = new Date(`${todayStr}T00:00:00.000Z`);
     const endOfDay = new Date(`${todayStr}T23:59:59.999Z`);
 
     // Check if record exists for today
+    const baseWhere = {
+      employeeId,
+      date: { gte: startOfDay, lte: endOfDay }
+    };
     let record = await prisma.attendance.findFirst({
-      where: {
-        employeeId,
-        date: { gte: startOfDay, lte: endOfDay }
-      }
+      where: withTenant(req, baseWhere)
     });
 
     const now = new Date();
@@ -44,14 +46,16 @@ export const attendanceService = {
       }
       if (!record) {
         record = await prisma.attendance.create({
-          data: {
+          data: stampTenant(req, {
             employeeId,
             date: today,
             timeIn: now,
             remark: 'Punched in'
-          }
+          })
         });
       } else {
+        const scoped = await prisma.attendance.findFirst({ where: withTenant(req, { id: record.id }) });
+        if (!scoped) return { error: { code: 'FORBIDDEN', message: 'Cross-tenant access' } };
         record = await prisma.attendance.update({
           where: { id: record.id },
           data: { timeIn: now, remark: 'Punched in' }
@@ -64,7 +68,8 @@ export const attendanceService = {
       if (record?.timeOut) {
         return { message: 'Already punched out', record };
       }
-      // Calculate hours from timeIn to now
+      const scoped = await prisma.attendance.findFirst({ where: withTenant(req, { id: record.id }) });
+      if (!scoped) return { error: { code: 'FORBIDDEN', message: 'Cross-tenant access' } };
       const timeInDate = new Date(record.timeIn);
       const hours = (now - timeInDate) / (1000 * 60 * 60);
       record = await prisma.attendance.update({
@@ -77,18 +82,18 @@ export const attendanceService = {
   },
 
   // Get attendance for specific employee (self-service)
-  async listForEmployee(employeeId, month) {
-    const where = { employeeId };
+  async listForEmployee(req, employeeId, month) {
+    const baseWhere = { employeeId };
     if (month) {
       // Handle both YYYY-MM and YYYY-MM-DD formats
       const monthStart = month.length > 7 ? month.slice(0, 7) : month;
       const start = new Date(`${monthStart}-01T00:00:00.000Z`);
       const end = new Date(start);
       end.setMonth(end.getMonth() + 1);
-      where.date = { gte: start, lt: end };
+      baseWhere.date = { gte: start, lt: end };
     }
     return prisma.attendance.findMany({
-      where,
+      where: withTenant(req, baseWhere),
       orderBy: { date: 'desc' }
     });
   }

@@ -1,8 +1,10 @@
 import { prisma } from '../lib/prisma.js';
+import { withTenant, stampTenant } from '../middleware/tenant.js';
 
 export const userRepository = {
-  async findAll() {
+  async findAll(req) {
     return prisma.user.findMany({
+      where: withTenant(req),
       include: {
         department: true,
         linkedEmployee: { select: { id: true, employeeNumber: true, firstName: true, lastName: true, status: true } },
@@ -10,16 +12,20 @@ export const userRepository = {
       orderBy: { createdAt: 'desc' },
     });
   },
-  async findById(id) {
-    return prisma.user.findUnique({ where: { id }, include: { department: true } });
+  async findById(req, id) {
+    return prisma.user.findFirst({ where: withTenant(req, { id }), include: { department: true } });
   },
-  async create(data) {
-    return prisma.user.create({ data });
+  async create(req, data) {
+    const stamped = stampTenant(req, data);
+    return prisma.user.create({ data: stamped });
   },
-  async update(id, data) {
-    return prisma.user.update({ where: { id }, data });
+  async update(req, id, data) {
+    const stamped = stampTenant(req, data);
+    return prisma.user.update({ where: { id }, data: stamped });
   },
-  async delete(id) {
+  async delete(req, id) {
+    const exists = await prisma.user.findFirst({ where: withTenant(req, { id }) });
+    if (!exists) return null;
     return prisma.user.delete({ where: { id } });
   },
   async getSessions(userId) {

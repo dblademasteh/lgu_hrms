@@ -1,6 +1,7 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Login from './pages/Login.jsx';
+import TenantRegister from './pages/TenantRegister.jsx';
 import UserDashboard from './pages/UserDashboard.jsx';
 import Employees from './pages/Employees.jsx';
 import Organization from './pages/Organization.jsx';
@@ -22,6 +23,7 @@ import Recruitment from './pages/Recruitment.jsx';
 import ESS from './pages/ESS.jsx';
 import IPCR from './pages/IPCR.jsx';
 import Disqualifications from './pages/Disqualifications.jsx';
+import Help from './pages/Help.jsx';
 import NotFound from './components/NotFound.jsx';
 import ErrorBoundary from './components/ErrorBoundary.jsx';
 import CommandPalette from './components/CommandPalette.jsx';
@@ -51,6 +53,7 @@ export default function App() {
         <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
           <Routes>
             <Route path="/" element={<Login />} />
+            <Route path="/tenant-register" element={<TenantRegister />} />
             <Route path="/dashboard" element={<Protected><UserDashboard /></Protected>} />
             <Route path="/employees" element={<Protected roles={['ADMIN', 'HR_MANAGER', 'DEPARTMENT_HEAD']}><Employees /></Protected>} />
             <Route path="/organization" element={<Protected><Organization /></Protected>} />
@@ -72,6 +75,7 @@ export default function App() {
             <Route path="/ipcr" element={<Protected roles={['ADMIN', 'HR_MANAGER', 'DEPARTMENT_HEAD']}><IPCR /></Protected>} />
             <Route path="/disqualifications" element={<Protected roles={['ADMIN', 'HR_MANAGER']}><Disqualifications /></Protected>} />
             <Route path="/settings" element={<Protected><Settings /></Protected>} />
+            <Route path="/help" element={<Protected><Help /></Protected>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
           <CommandPalette />

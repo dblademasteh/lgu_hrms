@@ -1,0 +1,20 @@
+# ── Local development override ─────────────────────────────────────────────
+# Base compose (docker-compose.yml) is production-shaped. This file restores
+# the old dev ergonomics: host port publishing, source mounts, watch-mode.
+# Usage:  docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+services:
+  db:
+    ports:
+      - "5432:5432"
+  api:
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./backend/src:/app/src:ro
+      - ./backend/prisma:/app/prisma:ro
+    environment:
+      NODE_ENV: development
+    command: ["node", "--watch", "src/server.js"]
+  web:
+    ports:
+      - "5173:80"

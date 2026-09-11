@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { requireAuth } from '../middleware/auth.js';
+import { tenantContext } from '../middleware/tenant.js';
 import { auditLog } from '../middleware/audit.js';
 import accountRouter from './account.js';
 import authRouter from './auth.js';
@@ -27,11 +28,13 @@ import essRouter from './ess.js';
 import loansRouter from './loans.js';
 import reportsRouter from './reports.js';
 import databaseRouter from './database.js';
+import tenantsRouter from './tenants.js';
 
 const router = Router();
 
 router.use('/auth', authRouter);
 router.use('/', requireAuth);
+router.use('/', tenantContext);
 router.use('/', auditLog);
 router.use('/rules', rulesRouter);
 router.use('/bonus', bonusRouter);
@@ -58,5 +61,6 @@ router.use('/ess', essRouter);
 router.use('/loans', loansRouter);
 router.use('/reports', reportsRouter);
 router.use('/database', databaseRouter);
+router.use('/tenants', tenantsRouter);
 
 export default router;

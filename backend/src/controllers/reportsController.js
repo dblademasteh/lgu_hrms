@@ -1,4 +1,5 @@
 import { prisma } from '../lib/prisma.js';
+import { withTenant } from '../middleware/tenant.js';
 
 export const reportsController = {
   /**
@@ -11,20 +12,21 @@ export const reportsController = {
       const { runId, periodId } = req.query;
       let run;
       if (runId) {
-        run = await prisma.payrollRun.findUnique({
-          where: { id: runId },
+        run = await prisma.payrollRun.findFirst({
+          where: withTenant(req, { id: runId }),
           include: { period: true },
         });
         if (!run) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Payroll run not found' } });
       } else if (periodId) {
         run = await prisma.payrollRun.findFirst({
-          where: { periodId },
+          where: withTenant(req, { periodId }),
           orderBy: { runDate: 'desc' },
           include: { period: true },
         });
         if (!run) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'No runs for this period' } });
       } else {
         run = await prisma.payrollRun.findFirst({
+          where: withTenant(req),
           orderBy: { runDate: 'desc' },
           include: { period: true },
         });
@@ -32,7 +34,7 @@ export const reportsController = {
       }
 
       const agg = await prisma.payrollItem.aggregate({
-        where: { runId: run.id },
+        where: withTenant(req, { runId: run.id }),
         _count: true,
         _sum: { basicPay: true, allowances: true, deductions: true, netPay: true },
       });

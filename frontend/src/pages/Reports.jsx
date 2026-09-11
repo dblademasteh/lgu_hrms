@@ -11,6 +11,7 @@ export default function Reports() {
   const toast = useToast();
   const [summary, setSummary] = useState(null);
   const [loadingSummary, setLoadingSummary] = useState(false);
+  const [preview, setPreview] = useState(null);
 
   const loadSummary = async () => {
     setLoadingSummary(true);
@@ -47,48 +48,64 @@ export default function Reports() {
 
   return (
     <Layout>
-      <div className="flex items-end justify-between gap-4 mb-6">
+      <div className="flex items-start justify-between gap-4 mb-6">
         <div>
-          <h1 className="font-display text-xl font-bold text-ink">Reports</h1>
-          <p className="text-sm text-muted mt-0.5">COA-formatted and operational exports</p>
+          <h1 className="font-display text-2xl font-bold text-ink">Reports & Exports</h1>
+          <p className="text-sm text-muted mt-1">COA-formatted payroll, attendance and HR exports</p>
         </div>
         <span className="mono-label">pdfmake · ExcelJS</span>
       </div>
 
-      <div className="card p-5 mb-4">
-        <div className="flex items-center justify-between mb-3">
+      <div className="card p-6 mb-6">
+        <div className="flex items-center justify-between gap-4 mb-4">
           <div>
-            <h3 className="font-display font-semibold text-ink">Payroll Summary · Live</h3>
+            <h3 className="font-display font-semibold text-ink text-lg">Payroll Summary · Live</h3>
             <p className="text-sm text-muted mt-0.5">Aggregated from payroll items via <span className="font-mono">GET /reports/payroll-summary</span></p>
           </div>
           <span className="inline-flex gap-2">
             <button type="button" className="btn btn-ghost" onClick={loadSummary} disabled={loadingSummary}>
-              {loadingSummary ? 'Loading…' : 'Load Summary'}
+              {loadingSummary ? 'Loading…' : 'Refresh'}
             </button>
-            <button type="button" className="btn btn-primary" onClick={downloadSummaryCsv} disabled={!summary}>Download CSV</button>
+            <button type="button" className="btn btn-primary gap-2" onClick={downloadSummaryCsv} disabled={!summary}>
+              <Download size={16}/> Download CSV
+            </button>
           </span>
         </div>
         {summary ? (
-          <dl className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-3 text-sm">
-            <div><dt className="mono-label">Period</dt><dd className="font-medium mt-0.5">{summary.period?.name ?? '—'}</dd></div>
-            <div><dt className="mono-label">Status</dt><dd className="mt-0.5">{summary.status}</dd></div>
-            <div><dt className="mono-label">Headcount</dt><dd className="font-mono mt-0.5">{Number(summary.headcount ?? 0).toLocaleString()}</dd></div>
-            <div><dt className="mono-label">Total Net Pay</dt><dd className="font-mono mt-0.5 font-semibold">{peso(summary.totalNetPay)}</dd></div>
-            <div><dt className="mono-label">Basic Pay</dt><dd className="font-mono mt-0.5">{peso(summary.totalBasicPay)}</dd></div>
-            <div><dt className="mono-label">Allowances</dt><dd className="font-mono mt-0.5">{peso(summary.totalAllowances)}</dd></div>
-            <div><dt className="mono-label">Deductions</dt><dd className="font-mono mt-0.5">{peso(summary.totalDeductions)}</dd></div>
-            <div><dt className="mono-label">Generated</dt><dd className="font-mono mt-0.5">{summary.runDate ? String(summary.runDate).slice(0, 10) : '—'}</dd></div>
-          </dl>
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
+            {[
+              { label:'Period', value: summary.period?.name ?? '—' },
+              { label:'Status', value: summary.status },
+              { label:'Headcount', value: Number(summary.headcount ?? 0).toLocaleString() },
+              { label:'Net Pay', value: peso(summary.totalNetPay), highlight:true },
+              { label:'Basic Pay', value: peso(summary.totalBasicPay) },
+              { label:'Allowances', value: peso(summary.totalAllowances) },
+              { label:'Deductions', value: peso(summary.totalDeductions) },
+              { label:'Generated', value: summary.runDate ? String(summary.runDate).slice(0,10) : '—' },
+            ].map(k => (
+              <div key={k.label} className="rounded-xl border border-line bg-surface/50 p-3">
+                <div className="mono-label text-[10px] uppercase tracking-wide text-muted">{k.label}</div>
+                <div className={`mt-1 font-mono ${k.highlight ? 'font-semibold text-ink' : 'text-ink'}`}>{k.value}</div>
+              </div>
+            ))}
+          </div>
         ) : (
-          <p className="text-sm text-muted">No summary loaded yet — click “Load Summary”.</p>
+          <div className="rounded-xl border border-dashed border-line p-6 text-center text-sm text-muted">No summary loaded yet — click “Refresh”.</div>
         )}
       </div>
 
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="font-display font-semibold text-ink">Standard Reports</h2>
+        <div className="mono-label text-xs">3 templates</div>
+      </div>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {reports.map(r => (
-          <div key={r.id} className="card p-5 flex flex-col">
-            <span className="mono-label">{r.type === 'PDF' ? 'PDF Document' : 'Excel Workbook'}</span>
-            <h3 className="font-display font-semibold text-ink mt-2">{r.title}</h3>
+          <div key={r.id} className="card p-5 flex flex-col hover:shadow-lg transition-shadow">
+            <div className="flex items-center justify-between">
+              <span className="mono-label">{r.type === 'PDF' ? 'PDF Document' : 'Excel Workbook'}</span>
+              <FileText size={16} className="text-muted"/>
+            </div>
+            <h3 className="font-display font-semibold text-ink mt-3">{r.title}</h3>
             <p className="text-sm text-muted mt-1 flex-1">{r.desc}</p>
             <div className="flex gap-2 mt-4">
               <button
@@ -101,7 +118,7 @@ export default function Reports() {
               <button
                 type="button"
                 className="btn btn-ghost gap-2"
-                onClick={() => toast(`Preview for ${r.title} will open the report viewer once wired.`, 'info')}
+                onClick={() => setPreview(r)}
               >
                 <ExternalLink size={16} /> Preview
               </button>
@@ -109,6 +126,31 @@ export default function Reports() {
           </div>
         ))}
       </div>
+
+      {preview && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={()=>setPreview(null)}>
+          <div className="bg-surface border border-line rounded-2xl w-full max-w-4xl max-h-[85vh] flex flex-col shadow-lg" onClick={e=>e.stopPropagation()}>
+            <div className="flex items-center justify-between p-4 border-b border-line">
+              <div>
+                <h3 className="font-display font-semibold text-ink">{preview.title}</h3>
+                <p className="mono-label text-xs text-muted">{preview.type === 'PDF' ? 'PDF Document' : 'Excel Workbook'} · Preview</p>
+              </div>
+              <button className="btn btn-ghost" onClick={()=>setPreview(null)}>Close</button>
+            </div>
+            <div className="p-6 overflow-auto flex-1">
+              <div className="rounded-xl border border-dashed border-line p-8 text-center text-muted">
+                <FileText size={40} className="mx-auto mb-3 opacity-60"/>
+                <p className="font-medium text-ink mb-1">Preview not yet generated</p>
+                <p className="text-sm text-muted">This preview will render the {preview.type} via pdfmake/ExcelJS once the backend report endpoint is wired. For now, use Generate to trigger creation.</p>
+                <div className="mt-4 flex justify-center gap-2">
+                  <button className="btn btn-primary" onClick={()=>{toast(`${preview.title} generation queued.`, 'info'); setPreview(null);}}>Generate</button>
+                  <button className="btn btn-ghost" onClick={()=>setPreview(null)}>Close</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </Layout>
   );
 }

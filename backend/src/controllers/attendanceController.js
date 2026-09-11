@@ -4,7 +4,7 @@ import { prisma } from '../lib/prisma.js';
 export const attendanceController = {
   async list(req, res, next) {
     try {
-      const attendance = await attendanceService.list(req.query.date);
+      const attendance = await attendanceService.list(req, req.query.date);
       res.json(attendance);
     } catch (e) {
       next(e);
@@ -12,7 +12,7 @@ export const attendanceController = {
   },
   async create(req, res, next) {
     try {
-      const record = await attendanceService.create(req.body);
+      const record = await attendanceService.create(req, req.body);
       res.status(201).json(record);
     } catch (e) {
       next(e);
@@ -37,7 +37,7 @@ export const attendanceController = {
         return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Employee not found' }});
       }
 
-      const result = await attendanceService.biometricPunch(employee.id, punchType);
+      const result = await attendanceService.biometricPunch(req, employee.id, punchType);
       res.json(result);
     } catch (e) {
       next(e);
@@ -56,7 +56,7 @@ export const attendanceController = {
       }
 
       const { month } = req.query;
-      const records = await attendanceService.listForEmployee(employee.id, month);
+      const records = await attendanceService.listForEmployee(req, employee.id, month);
       res.json({ records });
     } catch (e) {
       next(e);

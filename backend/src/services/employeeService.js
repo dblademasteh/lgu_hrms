@@ -1,25 +1,25 @@
 import { findEmployees, findEmployeeById, insertEmployee, patchEmployee, softDeleteEmployee } from '../repositories/employeeRepository.js';
 import { AppError } from '../lib/errors.js';
 
-export async function listEmployees(params) {
-  return findEmployees(params);
+export async function listEmployees(req, params) {
+  return findEmployees(req, params);
 }
 
-export async function getEmployee(id) {
-  const emp = await findEmployeeById(id);
+export async function getEmployee(req, id) {
+  const emp = await findEmployeeById(req, id);
   if (!emp) {
     throw new AppError('Employee not found', 404, 'NOT_FOUND');
   }
   return emp;
 }
 
-export async function createEmployee(data) {
-  return insertEmployee(coerceDates(data));
+export async function createEmployee(req, data) {
+  return insertEmployee(req, coerceDates(data));
 }
 
-export async function updateEmployee(id, data) {
-  await getEmployee(id); // 404 if missing or soft-deleted
-  return patchEmployee(id, coerceDates(data));
+export async function updateEmployee(req, id, data) {
+  await getEmployee(req, id); // 404 if missing or soft-deleted
+  return patchEmployee(req, id, coerceDates(data));
 }
 
 /** Prisma @db.Date fields expect ISO-8601 DateTimes, not bare YYYY-MM-DD strings. */
@@ -33,7 +33,7 @@ function coerceDates(data) {
   return out;
 }
 
-export async function deleteEmployee(id) {
-  await getEmployee(id); // 404 if missing or soft-deleted
-  return softDeleteEmployee(id);
+export async function deleteEmployee(req, id) {
+  await getEmployee(req, id); // 404 if missing or soft-deleted
+  return softDeleteEmployee(req, id);
 }

@@ -8,20 +8,20 @@ function toUtcDate(v) {
 }
 
 export const leaveService = {
-  async listRequests() {
-    return leaveRepository.findAllRequests();
+  async listRequests(req) {
+    return leaveRepository.findAllRequests(req);
   },
-  async createRequest(data) {
+  async createRequest(req, data) {
     const { fromDate, toDate, ...rest } = data;
     if (toDate < fromDate) {
       throw new AppError('toDate cannot be before fromDate', 400, 'VALIDATION_ERROR');
     }
-    return leaveRepository.createRequest({ ...rest, fromDate: toUtcDate(fromDate), toDate: toUtcDate(toDate) });
+    return leaveRepository.createRequest(req, { ...rest, fromDate: toUtcDate(fromDate), toDate: toUtcDate(toDate) });
   },
-  async updateRequest(id, data) {
-    return leaveRepository.updateRequest(id, data);
+  async updateRequest(req, id, data) {
+    return leaveRepository.updateRequest(req, id, data);
   },
-  async listCredits(employeeId) {
-    return leaveRepository.findCredits(employeeId);
+  async listCredits(req, employeeId) {
+    return leaveRepository.findCredits(req, employeeId);
   }
 };

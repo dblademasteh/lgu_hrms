@@ -1,4 +1,10 @@
 import * as repo from '../repositories/payrollDeductionRepository.js';
-export const getLines = repo.findLinesByItem;
-export const addLines = repo.createLines;
-export const upsertPayslip = repo.upsertPayslip;
+export async function getLines(req, payrollItemId) {
+  return repo.findLinesByItem(req, payrollItemId);
+}
+export async function addLines(req, payrollItemId, lines) {
+  return repo.createLines(req, payrollItemId, lines);
+}
+export async function upsertPayslip(req, payrollItemId, pdfUrl) {
+  return repo.upsertPayslip(req, payrollItemId, pdfUrl);
+}

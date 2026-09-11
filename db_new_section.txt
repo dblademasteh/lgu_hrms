@@ -1,0 +1,86 @@
+            {active === 'database' && (
+              <section className="card p-6 space-y-5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="font-display font-semibold text-ink flex items-center gap-2"><Database size={18} className="text-accent"/> Database Management</h2>
+                    <p className="text-sm text-muted">Inspect and manage database tables (ADMIN only).</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button className="btn btn-ghost btn-sm gap-2" onClick={handleDbRefresh}><RefreshCw size={14}/> Refresh</button>
+                    {dbSelectedTable && (
+                      <>
+                        <button className="btn btn-ghost btn-sm gap-2" onClick={() => setShowDbCreateModal(true)} disabled={!dbTableSchema}><Plus size={14}/> Add Record</button>
+                        <button className="btn btn-ghost btn-sm gap-2" onClick={() => handleDbExport("csv")}><Download size={14}/> CSV</button>
+                        <button className="btn btn-ghost btn-sm gap-2" onClick={() => handleDbExport("json")}><Download size={14}/> JSON</button>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {dbError && <p className="text-error text-sm">{dbError}</p>}
+
+                {dbLoading ? (
+                  <p className="text-sm text-muted">Loading tables…</p>
+                ) : (
+                  <div className="grid md:grid-cols-3 gap-4">
+                    {dbTables.map(t => (
+                      <button key={t.name} onClick={() => handleDbTableSelect(t)} className={`card p-4 text-left border cursor-pointer transition ${dbSelectedTable?.name === t.name ? 'border-accent bg-accent/5' : 'border-line hover:bg-bg/60'}`}>
+                        <div className="flex items-center justify-between mb-2">
+                          <p className="font-medium text-ink">{t.label}</p>
+                          <span className="badge mono-label">{t.count !== undefined ? t.count : (t.rowCount === -1 ? '—' : t.rowCount)}</span>
+                        </div>
+                        <p className="text-xs text-muted">{t.description}</p>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {dbSelectedTable && dbTableSchema && (
+                  <div className="mt-6 card p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="font-display font-semibold text-ink flex items-center gap-2"><Table size={16}/> {dbSelectedTable.label}</h3>
+                      <div className="flex items-center gap-3 text-xs text-muted">
+                        <span>{dbRecordCount} total records</span>
+                        <button className="btn btn-ghost btn-sm" onClick={handleDbPrev} disabled={dbBrowseSkip === 0}>?</button>
+                        <button className="btn btn-ghost btn-sm" onClick={handleDbNext} disabled={dbBrowseSkip + dbBrowseTake >= dbRecordCount}>?</button>
+                      </div>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                      <table className="data-table w-full">
+                        <thead>
+                          <tr>
+                            {dbTableSchema.map(col => <th key={col.column_name}>{col.column_name}</th>)}
+                            <th className="text-center">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {dbRecords.map(rec => (
+                            <tr key={rec.id}>
+                              {dbTableSchema.map(col => (
+                                <td key={col.column_name} className="font-mono text-xs">
+                                  {rec[col.column_name] !== null && rec[col.column_name] !== undefined
+                                    ? String(rec[col.column_name])
+                                    : '—'}
+                                </td>
+                              ))}
+                              <td className="text-center">
+                                <button className="btn btn-ghost btn-sm text-xs" onClick={() => { setDbEditingRecord(rec); setShowDbEditModal(true); }}>
+                                  <Pencil size={14}/> Edit
+                                </button>
+                                <button className="btn btn-ghost btn-sm text-xs text-error" onClick={() => setShowDeleteConfirm({ table: dbSelectedTable, record: rec })}>
+                                  <Trash2 size={14}/> Delete
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                          {dbRecords.length === 0 && (
+                            <tr><td colSpan={dbTableSchema.length + 1} className="text-muted text-sm py-6 text-center">No records</td></tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </section>
+            )}

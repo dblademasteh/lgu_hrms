@@ -1,10 +1,17 @@
-import React, { useEffect, useState } from 'react';
-import { Moon, Sun, LayoutGrid, Bell, User, ShieldCheck, Info, Settings as SettingsIcon, Database, Table, X, Save, Check, Plus, Download, Key, LogOut, UserX, Pencil, Trash2, Type, Palette } from 'lucide-react';
+﻿import React, { useEffect, useState } from 'react';
+import { Moon, Sun, LayoutGrid, Bell, User, ShieldCheck, Info, Settings as SettingsIcon, Database, Table, X, Save, Check, Plus, Download, Key, LogOut, UserX, Pencil, Trash2, Type, Palette, RefreshCw, Edit3, Server, Activity, Clock, HardDrive, Hash, AlertTriangle } from 'lucide-react';
 import Layout from '../components/Layout.jsx';
 import { useTheme, toggleTheme } from '../theme.js';
+import { useSidebarStyle, setSidebarStyle, SIDEBAR_STYLES, SIDEBAR_STYLE_META } from '../sidebarStyle.js';
+import { useToastStyle, setToastStyle, TOAST_STYLES, TOAST_STYLE_META } from '../toastStyle.js';
 import { useToast } from '../components/Toast.jsx';
+import { useAuthStore } from '../stores/authStore.js';
 import { accountApi } from '../api/account.js';
+import { setupPin, removePin } from '../api/auth.js';
 import { databaseApi } from '../api/database.js';
+import { auditApi } from '../api/audit.js';
+import { rulesApi } from '../api/rules.js';
+import { usersApi } from '../api/users.js';
 import Modal from '../components/Modal.jsx';
 import ConfirmDialog from '../components/ConfirmDialog.jsx';
 
@@ -19,6 +26,8 @@ const tabs = [
 
 export default function Settings() {
   const theme = useTheme();
+  const sidebarStyle = useSidebarStyle();
+  const toastStyle = useToastStyle();
   const [active, setActive] = useState('appearance');
   const [notificationsEnabled, setNotificationsEnabled] = useState(() => localStorage.getItem('lgu-notif-inapp') !== 'false');
   const [emailNotifications, setEmailNotifications] = useState(() => localStorage.getItem('lgu-notif-email') !== 'false');
@@ -44,21 +53,94 @@ export default function Settings() {
   const [editContact, setEditContact] = useState('');
   const [editEmergency, setEditEmergency] = useState('');
   const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [showPinModal, setShowPinModal] = useState(false);
+  const [pinNew, setPinNew] = useState('');
+  const [pinConfirm, setPinConfirm] = useState('');
   const [pwdCurrent, setPwdCurrent] = useState('');
   const [pwdNew, setPwdNew] = useState('');
   const [pwdConfirm, setPwdConfirm] = useState('');
   const [pwdConfirmTouched, setPwdConfirmTouched] = useState(false);
   const [dbTables, setDbTables] = useState([]);
+  const [dbTotalTables, setDbTotalTables] = useState(0);
+  const [dbTotalRecords, setDbTotalRecords] = useState(0);
+  const [dbSearch, setDbSearch] = useState('');
+  const [dbOps, setDbOps] = useState(null);
+  const [dbOpsLoading, setDbOpsLoading] = useState(false);
+  const [dbSlow, setDbSlow] = useState(null);
+  const [dbRetention, setDbRetention] = useState(null);
+  const [dbRetentionDays, setDbRetentionDays] = useState(90);
+  const [dbSql, setDbSql] = useState('SELECT id, username, role FROM "User" LIMIT 10');
+  const [dbSqlResult, setDbSqlResult] = useState(null);
+  const [dbSqlBusy, setDbSqlBusy] = useState(false);
+  const [dbImportText, setDbImportText] = useState('');
+  const [dbImportResult, setDbImportResult] = useState(null);
+  const [dbImportBusy, setDbImportBusy] = useState(false);
+  const [dbDeps, setDbDeps] = useState(null);
+  const [dbPurgeTarget, setDbPurgeTarget] = useState(null);
+  const [sysInfo, setSysInfo] = useState(null);
+  const [sysLoading, setSysLoading] = useState(false);
+  const sessionUser = useAuthStore(s => s.user);
   const [dbLoading, setDbLoading] = useState(false);
   const [dbError, setDbError] = useState(null);
   const [dbSelectedTable, setDbSelectedTable] = useState(null);
   const [dbTableSchema, setDbTableSchema] = useState(null);
+  const [cmpLoading, setCmpLoading] = useState(false);
+  const [cmpAudit, setCmpAudit] = useState(null);
+  const [cmpRules, setCmpRules] = useState(null);
+  const [cmpUsers, setCmpUsers] = useState(null);
+  const [cmpSessions, setCmpSessions] = useState(null);
   const [dbRecords, setDbRecords] = useState([]);
   const [dbRecordCount, setDbRecordCount] = useState(0);
   const [dbBrowseSkip, setDbBrowseSkip] = useState(0);
   const [dbBrowseTake] = useState(20);
+  const [showDbCreateModal, setShowDbCreateModal] = useState(false);
+  const [showDbEditModal, setShowDbEditModal] = useState(false);
+  const [dbEditingRecord, setDbEditingRecord] = useState(null);
+  const [dbCreateForm, setDbCreateForm] = useState({});
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
   const toast = useToast();
+
+  useEffect(() => {
+    if (active === 'compliance') {
+      setCmpLoading(true);
+      const get = async (fn) => { try { const r = await fn(); return r?.data ?? r; } catch { return null; } };
+      Promise.all([
+        get(() => auditApi.list({ limit: 1 })),
+        get(() => rulesApi.listContributions()),
+        get(() => rulesApi.listTaxBrackets()),
+        get(() => rulesApi.listLeaveRules()),
+        get(() => usersApi.list()),
+        get(() => accountApi.getSessions()),
+      ]).then(([audit, contrib, tax, leave, users, sessions]) => {
+        setCmpAudit(audit);
+        setCmpRules({ contributions: contrib, tax, leave });
+        setCmpUsers(users);
+        setCmpSessions(sessions);
+        setCmpLoading(false);
+      });
+    }
+  }, [active]);
+
+  const loadSysInfo = () => {
+    setSysLoading(true);
+    const t0 = performance.now();
+    const apiBase = import.meta.env.VITE_API_BASE || 'http://localhost:4000/api/v1';
+    const get = async (fn) => { try { return await fn(); } catch { return null; } };
+    Promise.all([
+      get(() => fetch(`${apiBase}/health`).then(r => r.json()).then(d => ({ ...d, ms: Math.round(performance.now() - t0) }))),
+      get(() => databaseApi.health()),
+      get(() => databaseApi.migrations()),
+      get(() => databaseApi.summary()),
+    ]).then(([backend, db, migrations, summary]) => {
+      setSysInfo({ backend, db, migrations, summary, apiBase });
+      setSysLoading(false);
+    });
+  };
+
+  useEffect(() => {
+    if (active === 'system') loadSysInfo();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active]);
 
   useEffect(() => {
     if (active === 'account') {
@@ -73,9 +155,13 @@ export default function Settings() {
     if (active === 'database') {
       setDbLoading(true);
       setDbError(null);
+      setDbOpsLoading(true);
       databaseApi.summary()
-        .then(res => { setDbTables(res.tables); setDbLoading(false); })
+        .then(res => { setDbTables(res.tables); setDbTotalTables(res.totalTables ?? res.tables.length); setDbTotalRecords(res.totalRecords ?? 0); setDbLoading(false); })
         .catch(() => { setDbError('Could not load database info'); setDbLoading(false); });
+      const get = async (fn) => { try { const r = await fn(); return r; } catch { return null; } };
+      Promise.all([get(() => databaseApi.health()), get(() => databaseApi.migrations()), get(() => databaseApi.slowQueries()), get(() => databaseApi.retention(90))])
+        .then(([health, migrations, slow, retention]) => { setDbOps({ health, migrations }); setDbSlow(slow); setDbRetention(retention); setDbOpsLoading(false); });
     }
   }, [active]);
 
@@ -158,6 +244,52 @@ export default function Settings() {
     setDbBrowseSkip(0);
   };
 
+  const handleDbCreate = async (data) => {
+    try {
+      await databaseApi.create(dbSelectedTable.name, data);
+      toast('Record created', 'success');
+      setShowDbCreateModal(false);
+      const res = await databaseApi.browse(dbSelectedTable.name, { skip: dbBrowseSkip, take: dbBrowseTake });
+      setDbRecords(res.data);
+      setDbRecordCount(res.count);
+    } catch (e) {
+      toast('Could not create record', 'error');
+    }
+  };
+
+  const handleDbUpdate = async (id, changes) => {
+    try {
+      await databaseApi.update(dbSelectedTable.name, id, changes);
+      toast('Record updated', 'success');
+      setShowDbEditModal(false);
+      const res = await databaseApi.browse(dbSelectedTable.name, { skip: dbBrowseSkip, take: dbBrowseTake });
+      setDbRecords(res.data);
+      setDbRecordCount(res.count);
+    } catch (e) {
+      toast('Could not update record', 'error');
+    }
+  };
+
+  const handleDbExport = (format) => {
+    if (!dbSelectedTable) return;
+    databaseApi.exportData(dbSelectedTable.name, format);
+  };
+
+  const handleDbRefresh = () => {
+    setDbBrowseSkip(0);
+    databaseApi.summary()
+      .then(res => { setDbTables(res.tables); setDbTotalTables(res.totalTables ?? res.tables.length); setDbTotalRecords(res.totalRecords ?? 0); })
+      .catch(() => { setDbError('Could not load database info'); });
+    if (dbSelectedTable) {
+      databaseApi.tableSchema(dbSelectedTable.name)
+        .then(res => setDbTableSchema(res))
+        .catch(() => setDbTableSchema(null));
+      databaseApi.browse(dbSelectedTable.name, { skip: 0, take: dbBrowseTake })
+        .then(res => { setDbRecords(res.data); setDbRecordCount(res.count); })
+        .catch(() => { setDbRecords([]); setDbRecordCount(0); });
+    }
+  };
+
   const handleDbPrev = () => setDbBrowseSkip(s => Math.max(0, s - dbBrowseTake));
   const handleDbNext = () => {
     if (dbBrowseSkip + dbBrowseTake < dbRecordCount) setDbBrowseSkip(s => s + dbBrowseTake);
@@ -171,7 +303,7 @@ export default function Settings() {
       setDbRecords(res.data);
       setDbRecordCount(res.count);
     } catch {
-      toast('Could not delete record — foreign key constraint or missing permission', 'error');
+      toast('Could not delete record â€” foreign key constraint or missing permission', 'error');
     }
   };
 
@@ -223,6 +355,27 @@ export default function Settings() {
                     </div>
                   </div>
                   <div className="p-5 border border-line rounded-xl bg-bg/50 space-y-3">
+                    <p className="text-sm font-medium text-ink flex items-center gap-2"><LayoutGrid size={16}/> Sidebar style</p>
+                    <p className="text-xs text-muted">Pick the navigation layout — switches instantly</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {SIDEBAR_STYLES.map(id => {
+                        const meta = SIDEBAR_STYLE_META[id];
+                        const isCurrent = sidebarStyle === id;
+                        return (
+                          <button
+                            key={id}
+                            onClick={() => { if (!isCurrent) { setSidebarStyle(id); save(`Sidebar style: ${meta.label}`); } }}
+                            className={`text-left rounded-lg border px-3 py-2.5 transition ${isCurrent ? 'border-accent bg-accent/10' : 'border-line hover:bg-bg/60'}`}
+                            aria-pressed={isCurrent}
+                          >
+                            <div className={`text-sm font-medium ${isCurrent ? 'text-accent' : 'text-ink'}`}>{meta.label}</div>
+                            <div className="text-[11px] text-muted">{meta.desc}</div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  <div className="p-5 border border-line rounded-xl bg-bg/50 space-y-3">
                     <p className="text-sm font-medium text-ink flex items-center gap-2"><LayoutGrid size={16}/> UI density</p>
                     <p className="text-xs text-muted">Scale spacing & components 80-120%</p>
                     <input type="range" min="80" max="120" value={uiScale} onChange={e => { setUiScale(Number(e.target.value)); }} className="w-full" />
@@ -251,7 +404,7 @@ export default function Settings() {
                         const active = accent.toLowerCase() === c.toLowerCase();
                         return (
                           <button key={c} onClick={() => { setAccent(c); save('Accent preset applied'); }} className={`aspect-square rounded-lg border-2 flex items-center justify-center text-[10px] mono-label transition ${active ? 'border-accent' : 'border-line hover:border-accent/60'}`} style={{background:`${c}20`, color:c}}>
-                            {active ? '✓' : ''}
+                            {active ? 'âœ“' : ''}
                           </button>
                         );
                       })}
@@ -267,22 +420,166 @@ export default function Settings() {
 
             {active === 'database' && (
               <section className="card p-6 space-y-5">
-                <h2 className="font-display font-semibold text-ink flex items-center gap-2"><Database size={18} className="text-accent"/> Database Management</h2>
-                <p className="text-sm text-muted">Inspect and manage database tables (ADMIN only).</p>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="font-display font-semibold text-ink flex items-center gap-2"><Database size={18} className="text-accent"/> Database Management</h2>
+                    <p className="text-sm text-muted">Inspect and manage database tables (ADMIN only) · {dbTotalTables} tables · {Number(dbTotalRecords).toLocaleString()} records</p>
+                    <input value={dbSearch} onChange={e => setDbSearch(e.target.value)} placeholder="Filter tables…" aria-label="Filter tables" className="input w-full max-w-xs mt-2" />
+                  </div>
+                  <div className="flex gap-2">
+                    <button className="btn btn-ghost btn-sm gap-2" onClick={handleDbRefresh}><RefreshCw size={14}/> Refresh</button>
+                    {dbSelectedTable && !dbSelectedTable.readOnly && (
+                      <>
+                        <button className="btn btn-ghost btn-sm gap-2" onClick={() => setShowDbCreateModal(true)} disabled={!dbTableSchema}><Plus size={14}/> Add Record</button>
+                        <button className="btn btn-ghost btn-sm gap-2" onClick={() => handleDbExport("csv")}><Download size={14}/> CSV</button>
+                        <button className="btn btn-ghost btn-sm gap-2" onClick={() => handleDbExport("json")}><Download size={14}/> JSON</button>
+                      </>
+                    )}
+                  </div>
+                </div>
 
                 {dbError && <p className="text-error text-sm">{dbError}</p>}
+
+                <div className="grid md:grid-cols-3 gap-4">
+                  <div className="p-4 border border-line rounded-xl bg-bg/50">
+                    <p className="mono-label">Connection</p>
+                    <p className={`font-display font-bold text-ink mt-1 ${dbOps?.health ? 'text-success' : ''}`}>{dbOpsLoading ? '…' : dbOps?.health ? `${dbOps.health.latencyMs}ms` : '—'}</p>
+                    <p className="text-[11px] text-muted mt-0.5">{dbOps?.health?.uptime ? `Up ${dbOps.health.uptime}` : 'Postgres latency + uptime'}</p>
+                  </div>
+                  <div className="p-4 border border-line rounded-xl bg-bg/50">
+                    <p className="mono-label">DB size</p>
+                    <p className="font-display font-bold text-ink mt-1">{dbOpsLoading ? '…' : dbOps?.health?.sizeBytes != null ? `${(dbOps.health.sizeBytes / 1048576).toFixed(1)} MB` : '—'}</p>
+                    <p className="text-[11px] text-muted mt-0.5 truncate" title={dbOps?.health?.version ?? ''}>{dbOps?.health?.version ? dbOps.health.version.split(' ').slice(0, 2).join(' ') : 'pg_database_size'}</p>
+                  </div>
+                  <div className="p-4 border border-line rounded-xl bg-bg/50">
+                    <p className="mono-label">Migrations</p>
+                    <p className={`font-display font-bold text-ink mt-1 ${dbOps?.migrations ? (dbOps.migrations.inSync ? 'text-success' : 'text-error') : ''}`}>{dbOpsLoading ? '…' : dbOps?.migrations ? (dbOps.migrations.inSync ? 'In sync' : `${dbOps.migrations.pendingCount} pending`) : '—'}</p>
+                    <p className="text-[11px] text-muted mt-0.5">{dbOps?.migrations ? `${dbOps.migrations.appliedCount} applied` : 'Prisma _prisma_migrations'}</p>
+                  </div>
+                </div>
+
+                {dbOps?.migrations && dbOps.migrations.pending.length > 0 && (
+                  <div className="p-4 border border-error/40 rounded-xl bg-error/5 space-y-1">
+                    <p className="text-sm font-medium text-ink">Pending migrations — run <span className="font-mono">npx prisma migrate deploy</span> on the server</p>
+                    {dbOps.migrations.pending.map(m => <p key={m} className="font-mono text-xs text-muted">{m}</p>)}
+                  </div>
+                )}
+
+                {dbOps?.migrations?.history?.length > 0 && (
+                  <details className="p-4 border border-line rounded-xl bg-bg/50">
+                    <summary className="text-sm font-medium text-ink cursor-pointer">
+                      Migration history · {dbOps.migrations.appliedCount} applied
+                      {dbOps.migrations.lastApplied && <span className="text-muted font-normal"> · last {new Date(dbOps.migrations.lastApplied).toLocaleString()}</span>}
+                    </summary>
+                    <ul className="mt-2 space-y-1 max-h-48 overflow-auto">
+                      {[...dbOps.migrations.history].reverse().map(h => (
+                        <li key={h.name} className="flex items-center justify-between gap-2 text-xs">
+                          <span className="font-mono text-muted truncate">{h.name}</span>
+                          <span className="font-mono text-muted shrink-0">{h.finishedAt ? new Date(h.finishedAt).toLocaleDateString() : 'pending'}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                )}
+
+                <div className="flex flex-wrap gap-2 items-center">
+                  <button className="btn btn-ghost btn-sm gap-2" onClick={() => { databaseApi.backup(); toast('Backup download started', 'success'); }}><Download size={14}/> Full JSON backup</button>
+                  <button className="btn btn-ghost btn-sm gap-2" onClick={async () => { try { await databaseApi.dump(false); toast('SQL dump download started', 'success'); } catch (e) { toast(e?.response?.data?.error?.message || 'Dump unavailable', 'error'); } }}><Download size={14}/> SQL dump</button>
+                  <button className="btn btn-ghost btn-sm gap-2" onClick={async () => { try { await databaseApi.dump(true); toast('Data-only dump started', 'success'); } catch (e) { toast(e?.response?.data?.error?.message || 'Dump unavailable', 'error'); } }}><Download size={14}/> Data only</button>
+                  <span className="mono-label">restorable .sql via pg_dump · JSON is portable + stripped</span>
+                </div>
+
+                <div className="grid lg:grid-cols-2 gap-4">
+                  <div className="p-4 border border-line rounded-xl bg-bg/50 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-medium text-ink">Query console <span className="mono-label">read-only · SELECT/WITH · 200 rows</span></p>
+                      <div className="flex gap-2">
+                        <button className="btn btn-ghost btn-sm" disabled={dbSqlBusy} onClick={async () => { setDbSqlBusy(true); try { setDbSqlResult(await databaseApi.query(dbSql, false)); } catch (e) { toast(e?.response?.data?.error?.message || 'Query failed', 'error'); setDbSqlResult(null); } setDbSqlBusy(false); }}>Run</button>
+                        <button className="btn btn-ghost btn-sm" disabled={dbSqlBusy} onClick={async () => { setDbSqlBusy(true); try { setDbSqlResult(await databaseApi.query(dbSql, true)); } catch (e) { toast(e?.response?.data?.error?.message || 'Explain failed', 'error'); } setDbSqlBusy(false); }}>Explain</button>
+                      </div>
+                    </div>
+                    <textarea value={dbSql} onChange={e => setDbSql(e.target.value)} rows={3} spellCheck={false} className="input font-mono text-xs w-full" aria-label="SQL query" />
+                    {dbSqlResult?.explain && <pre className="text-[11px] font-mono overflow-auto max-h-48 bg-bg/60 border border-line rounded-lg p-2">{JSON.stringify(dbSqlResult.explain, null, 1)}</pre>}
+                    {dbSqlResult?.rows && (
+                      <div className="overflow-auto max-h-56 border border-line rounded-lg">
+                        <table className="data-table">
+                          <thead><tr>{Object.keys(dbSqlResult.rows[0] || {}).map(c => <th key={c}>{c}</th>)}</tr></thead>
+                          <tbody>{dbSqlResult.rows.map((r, i) => <tr key={i}>{Object.values(r).map((v, j) => <td key={j} className="font-mono text-xs">{v == null ? '—' : String(v).slice(0, 80)}</td>)}</tr>)}</tbody>
+                        </table>
+                        <p className="mono-label p-2">{dbSqlResult.count} rows · {dbSqlResult.ms}ms · capped</p>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="p-4 border border-line rounded-xl bg-bg/50 space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-sm font-medium text-ink">Retention</p>
+                        <label className="flex items-center gap-2 text-xs text-muted">Older than <input type="number" min={1} max={3650} value={dbRetentionDays} onChange={e => setDbRetentionDays(Number(e.target.value))} className="input w-20" /> days
+                          <button className="btn btn-ghost btn-sm" onClick={async () => { try { setDbRetention(await databaseApi.retention(dbRetentionDays)); } catch { toast('Retention check failed', 'error'); } }}>Preview</button>
+                        </label>
+                      </div>
+                      {dbRetention ? (
+                        <ul className="text-xs space-y-1.5">
+                          <li className="flex items-center justify-between gap-2"><span className="text-muted">Login events · {dbRetention.candidates.loginEvents}</span><button className="btn btn-ghost btn-sm text-xs" disabled={!dbRetention.candidates.loginEvents} onClick={() => setDbPurgeTarget('loginEvents')}>Purge</button></li>
+                          <li className="flex items-center justify-between gap-2"><span className="text-muted">Revoked sessions · {dbRetention.candidates.revokedSessions}</span><button className="btn btn-ghost btn-sm text-xs" disabled={!dbRetention.candidates.revokedSessions} onClick={() => setDbPurgeTarget('revokedSessions')}>Purge</button></li>
+                          <li className="flex items-center justify-between gap-2"><span className="text-muted">Audit logs · {dbRetention.candidates.auditLogs === -1 ? 'n/a' : dbRetention.candidates.auditLogs} <span className="mono-label">(preview only)</span></span></li>
+                          <li className="flex items-center justify-between gap-2"><span className="text-muted">Soft-deleted employees · {dbRetention.candidates.softDeletedEmployees} <span className="mono-label">(restore via Employees)</span></span></li>
+                        </ul>
+                      ) : <p className="text-xs text-muted">{dbOpsLoading ? 'Checking…' : 'No preview yet.'}</p>}
+                    </div>
+
+                    <div className="p-4 border border-line rounded-xl bg-bg/50 space-y-2">
+                      <p className="text-sm font-medium text-ink">CSV import {dbSelectedTable && <span className="text-muted font-normal">→ {dbSelectedTable.label}</span>}</p>
+                      {!dbSelectedTable
+                        ? <p className="text-xs text-muted">Select a table below first.</p>
+                        : dbSelectedTable.readOnly
+                          ? <p className="text-xs text-muted">Table is read-only.</p>
+                          : <>
+                              <textarea value={dbImportText} onChange={e => { setDbImportText(e.target.value); setDbImportResult(null); }} rows={3} spellCheck={false} placeholder="header1,header2&#10;val1,val2" className="input font-mono text-xs w-full" aria-label="CSV text" />
+                              <div className="flex gap-2">
+                                <button className="btn btn-ghost btn-sm" disabled={dbImportBusy || !dbImportText.trim()} onClick={async () => { setDbImportBusy(true); try { setDbImportResult(await databaseApi.importCsv(dbSelectedTable.name, dbImportText, true)); } catch (e) { toast(e?.response?.data?.error?.message || 'Validation failed', 'error'); } setDbImportBusy(false); }}>Dry-run</button>
+                                <button className="btn btn-primary btn-sm" disabled={dbImportBusy || !dbImportResult?.dryRun} onClick={async () => { setDbImportBusy(true); try { const r = await databaseApi.importCsv(dbSelectedTable.name, dbImportText, false); setDbImportResult(r); toast(`Inserted ${r.inserted}`, 'success'); handleDbRefresh(); } catch (e) { toast(e?.response?.data?.error?.message || 'Import failed', 'error'); } setDbImportBusy(false); }}>Commit</button>
+                              </div>
+                              {dbImportResult && (
+                                <div className="text-xs">
+                                  {dbImportResult.dryRun
+                                    ? <p className="text-muted">{dbImportResult.rowCount} rows · columns: <span className="font-mono">{dbImportResult.columns.join(', ')}</span> · preview {dbImportResult.preview.length} shown</p>
+                                    : <p className="text-muted">Inserted {dbImportResult.inserted} · failed {dbImportResult.failed}{dbImportResult.errors?.length > 0 && ` · row ${dbImportResult.errors[0].row}: ${dbImportResult.errors[0].message}`}</p>}
+                                </div>
+                              )}
+                            </>}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-4 border border-line rounded-xl bg-bg/50">
+                  <p className="text-sm font-medium text-ink mb-2">Slow queries {dbSlow && !dbSlow.available && <span className="mono-label font-normal">· {dbSlow.hint}</span>}</p>
+                  {dbSlow?.available ? (
+                    <div className="overflow-auto max-h-56">
+                      <table className="data-table">
+                        <thead><tr><th>Query</th><th className="text-right">Calls</th><th className="text-right">Total ms</th><th className="text-right">Mean ms</th><th className="text-right">%</th></tr></thead>
+                        <tbody>{dbSlow.queries.map((q, i) => <tr key={i}><td className="font-mono text-xs max-w-md truncate" title={q.query}>{q.query}</td><td className="font-mono text-xs text-right">{q.calls}</td><td className="font-mono text-xs text-right">{q.totalMs}</td><td className="font-mono text-xs text-right">{q.meanMs}</td><td className="font-mono text-xs text-right">{q.pct}</td></tr>)}</tbody>
+                      </table>
+                    </div>
+                  ) : <p className="text-xs text-muted">{dbOpsLoading ? 'Checking…' : 'pg_stat_statements not enabled — run CREATE EXTENSION pg_stat_statements; in Postgres.'}</p>}
+                </div>
 
                 {dbLoading ? (
                   <p className="text-sm text-muted">Loading tables…</p>
                 ) : (
                   <div className="grid md:grid-cols-3 gap-4">
-                    {dbTables.map(t => (
+                    {dbTables.filter(t => !dbSearch.trim() || t.label.toLowerCase().includes(dbSearch.trim().toLowerCase()) || t.name.toLowerCase().includes(dbSearch.trim().toLowerCase())).map(t => (
                       <button key={t.name} onClick={() => handleDbTableSelect(t)} className={`card p-4 text-left border cursor-pointer transition ${dbSelectedTable?.name === t.name ? 'border-accent bg-accent/5' : 'border-line hover:bg-bg/60'}`}>
-                        <div className="flex items-center justify-between mb-2">
-                          <p className="font-medium text-ink">{t.label}</p>
-                          <span className="badge mono-label">{t.count !== undefined ? t.count : (t.rowCount === -1 ? '—' : t.rowCount)}</span>
+                        <div className="flex items-center justify-between mb-2 gap-2">
+                          <p className="font-medium text-ink truncate">{t.label}</p>
+                          <span className="flex items-center gap-1.5 shrink-0">
+                            {t.readOnly && <span className="badge mono-label">read-only</span>}
+                            <span className="badge mono-label">{t.count !== undefined ? (t.count === -1 ? '—' : t.count) : (t.rowCount === -1 ? '—' : t.rowCount)}</span>
+                          </span>
                         </div>
                         <p className="text-xs text-muted">{t.description}</p>
+                        <p className="mono-label text-[10px] mt-1">{t.name}</p>
                       </button>
                     ))}
                   </div>
@@ -292,10 +589,10 @@ export default function Settings() {
                   <div className="mt-6 card p-4">
                     <div className="flex items-center justify-between mb-3">
                       <h3 className="font-display font-semibold text-ink flex items-center gap-2"><Table size={16}/> {dbSelectedTable.label}</h3>
-                      <div className="flex items-center gap-2 text-xs text-muted">
+                      <div className="flex items-center gap-3 text-xs text-muted">
                         <span>{dbRecordCount} total records</span>
-                        <button className="btn btn-ghost btn-sm gap-2" onClick={handleDbPrev} disabled={dbBrowseSkip === 0}><X size={12}/> <span aria-hidden>←</span></button>
-                        <button className="btn btn-ghost btn-sm gap-2" onClick={handleDbNext} disabled={dbBrowseSkip + dbBrowseTake >= dbRecordCount}><span aria-hidden>→</span></button>
+                        <button className="btn btn-ghost btn-sm" onClick={handleDbPrev} disabled={dbBrowseSkip === 0}>?</button>
+                        <button className="btn btn-ghost btn-sm" onClick={handleDbNext} disabled={dbBrowseSkip + dbBrowseTake >= dbRecordCount}>?</button>
                       </div>
                     </div>
 
@@ -304,7 +601,7 @@ export default function Settings() {
                         <thead>
                           <tr>
                             {dbTableSchema.map(col => <th key={col.column_name}>{col.column_name}</th>)}
-                            <th className="text-center">Actions</th>
+                            <th className="text-center">{dbSelectedTable.readOnly ? 'View' : 'Actions'}</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -318,9 +615,24 @@ export default function Settings() {
                                 </td>
                               ))}
                               <td className="text-center">
-                                <button className="btn btn-ghost btn-sm text-xs text-error" onClick={() => setShowDeleteConfirm({ table: dbSelectedTable, record: rec })}>
-                                  <Trash2 size={14} /> Delete
-                                </button>
+                                {dbSelectedTable.readOnly ? (
+                                  <span className="mono-label text-[10px]">locked</span>
+                                ) : (
+                                  <>
+                                    <button className="btn btn-ghost btn-sm text-xs" onClick={() => { setDbEditingRecord(rec); setDbCreateForm({ ...rec }); setShowDbEditModal(true); }}>
+                                      <Pencil size={14}/> Edit
+                                    </button>
+                                    <button className="btn btn-ghost btn-sm text-xs text-error" onClick={async () => {
+                                      try {
+                                        const deps = await databaseApi.dependents(dbSelectedTable.name, rec.id);
+                                        setDbDeps({ table: dbSelectedTable, record: rec, ...deps });
+                                      } catch { setShowDeleteConfirm({ table: dbSelectedTable, record: rec }); }
+                                      setDbImportResult(null);
+                                    }}>
+                                      <Trash2 size={14}/> Delete
+                                    </button>
+                                  </>
+                                )}
                               </td>
                             </tr>
                           ))}
@@ -334,7 +646,6 @@ export default function Settings() {
                 )}
               </section>
             )}
-
             {active === 'notifications' && (
               <section className="card p-6 space-y-6">
                 <h2 className="font-display font-semibold text-ink flex items-center gap-2"><Bell size={18} className="text-accent"/> Notifications</h2>
@@ -353,6 +664,27 @@ export default function Settings() {
                       <input type="checkbox" checked={item.value} onChange={e => { item.setter(e.target.checked); save('Notification preference saved'); }} className="w-4 h-4 accent-accent" />
                     </label>
                   ))}
+                </div>
+                <div className="p-4 border border-line rounded-xl bg-bg/50 space-y-3">
+                  <p className="text-sm font-medium text-ink flex items-center gap-2"><Bell size={16}/> Toast style</p>
+                  <p className="text-xs text-muted">How in-app toast notifications look — switches instantly</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {TOAST_STYLES.map(id => {
+                      const meta = TOAST_STYLE_META[id];
+                      const isCurrent = toastStyle === id;
+                      return (
+                        <button
+                          key={id}
+                          onClick={() => { if (!isCurrent) { setToastStyle(id); save(`Toast style: ${meta.label}`); } }}
+                          className={`text-left rounded-lg border px-3 py-2.5 transition ${isCurrent ? 'border-accent bg-accent/10' : 'border-line hover:bg-bg/60'}`}
+                          aria-pressed={isCurrent}
+                        >
+                          <div className={`text-sm font-medium ${isCurrent ? 'text-accent' : 'text-ink'}`}>{meta.label}</div>
+                          <div className="text-[11px] text-muted">{meta.desc}</div>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
                 <div className="p-4 border border-line rounded-xl bg-bg/50 space-y-2">
                   <p className="text-sm font-medium text-ink">Quiet hours</p>
@@ -377,7 +709,7 @@ export default function Settings() {
                     {(() => {
                       const u = profile?.user;
                       const initials = (u?.username || 'AB').slice(0,2).toUpperCase();
-                      const displayName = u?.username || '—';
+                      const displayName = u?.username || 'â€”';
                       const email = u?.username?.includes('@') ? u.username : `${u?.username || 'admin'}@lgu.gov.ph`;
                       const role = u?.role || 'ADMIN';
                       const dept = u?.department?.name || 'HR Admin';
@@ -411,8 +743,8 @@ export default function Settings() {
                     <p className="text-sm font-medium text-ink">Role & Scope</p>
                     <p className="text-xs text-muted">Effective permissions derived from JWT</p>
                     <ul className="text-xs text-muted list-disc pl-4 space-y-1">
-                      <li>Role: {profile?.user?.role || '—'}</li>
-                      <li>Department: {profile?.user?.department?.name || '—'}</li>
+                      <li>Role: {profile?.user?.role || 'â€”'}</li>
+                      <li>Department: {profile?.user?.department?.name || 'â€”'}</li>
                       <li>Two-factor: {profile?.user?.twoFactorEnabled ? 'Enabled' : 'Disabled'}</li>
                     </ul>
                   </div>
@@ -421,7 +753,35 @@ export default function Settings() {
                 <div className="grid md:grid-cols-2 gap-4">
                   <div className="p-5 border border-line rounded-xl bg-bg/50 space-y-3">
                     <p className="text-sm font-medium text-ink flex items-center gap-2"><ShieldCheck size={16} className="text-accent"/> Security</p>
+                    {(() => {
+                      const changed = profile?.user?.passwordChangedAt ? new Date(profile.user.passwordChangedAt) : null;
+                      const ageDays = changed ? Math.floor((Date.now() - changed.getTime()) / 86400000) : null;
+                      const left = ageDays == null ? null : 30 - ageDays;
+                      const expired = left != null && left < 0;
+                      const urgent = left != null && left >= 0 && left <= 5;
+                      return (
+                        <div className={`flex items-center justify-between gap-2 p-3 rounded-lg border text-sm ${expired ? 'border-error/40 bg-error/5' : urgent ? 'border-accent/40 bg-accent/5' : 'border-line bg-bg/60'}`}>
+                          <div className="flex items-center gap-2">
+                            {expired ? <AlertTriangle size={15} className="text-error shrink-0"/> : <Clock size={15} className="text-muted shrink-0"/>}
+                            <div>
+                              <p className="text-ink font-medium">{expired ? 'Password expired — change required' : left == null ? 'Password age unknown' : left === 0 ? 'Password expires today' : `${left} day${left === 1 ? '' : 's'} left`}</p>
+                              <p className="text-xs text-muted">Policy: passwords rotate every 30 days · last changed {changed ? changed.toLocaleDateString() : 'never'}</p>
+                            </div>
+                          </div>
+                          <button className="btn btn-ghost text-sm gap-2 shrink-0" onClick={() => setShowPasswordModal(true)}><Key size={14} /> Change</button>
+                        </div>
+                      );
+                    })()}
                     <div className="space-y-3 text-sm">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-ink">Sign-in PIN</p>
+                          <p className="text-xs text-muted">{profile?.user?.pinEnabled ? '4–6 digit PIN enabled for quick sign-in' : 'Faster sign-in on trusted workstations'}</p>
+                        </div>
+                        {profile?.user?.pinEnabled
+                          ? <button className="btn btn-ghost text-sm gap-2 text-error" onClick={async () => { try { await removePin(); toast('PIN removed', 'success'); accountApi.getProfile().then(r => setProfile(r.data)).catch(()=>{}); } catch { toast('Could not remove PIN', 'error'); } }}><Hash size={14} /> Remove</button>
+                          : <button className="btn btn-ghost text-sm gap-2" onClick={() => { setPinNew(''); setPinConfirm(''); setShowPinModal(true); }}><Hash size={14} /> Set PIN</button>}
+                      </div>
                       <div className="flex items-center justify-between">
                         <div>
                           <p className="text-ink">Password</p>
@@ -450,7 +810,7 @@ export default function Settings() {
                         <div key={s.id || i} className="flex items-center justify-between p-2 rounded-lg bg-bg/60 border border-line">
                           <div>
                             <p className="text-ink">{s.userAgent || s.device || 'Unknown device'}</p>
-                            <p className="mono-label">{s.ip || '—'} · {s.lastActive ? new Date(s.lastActive).toLocaleString() : 'Now'}</p>
+                            <p className="mono-label">{s.ip || 'â€”'} Â· {s.lastActive ? new Date(s.lastActive).toLocaleString() : 'Now'}</p>
                           </div>
                           <button className="btn btn-ghost text-xs gap-2" onClick={async ()=>{
                             try {
@@ -476,7 +836,7 @@ export default function Settings() {
                     ) : (
                       loginEvents.map((e, i) => (
                         <div key={i} className="p-2 rounded-lg bg-bg/60 border border-line">
-                          <p className="text-ink mono-label">{new Date(e.createdAt).toLocaleString()} · {e.ipAddress || e.ip || '—'} · {e.success ? 'Success' : 'Failed'} · {e.userAgent || e.device || ''}</p>
+                          <p className="text-ink mono-label">{new Date(e.createdAt).toLocaleString()} Â· {e.ipAddress || e.ip || 'â€”'} Â· {e.success ? 'Success' : 'Failed'} Â· {e.userAgent || e.device || ''}</p>
                         </div>
                       ))
                     )}
@@ -498,8 +858,8 @@ export default function Settings() {
                       delegations.map((d, i) => (
                         <div key={i} className="p-2 rounded-lg bg-bg/60 border border-line flex justify-between items-center">
                           <div>
-                            <p className="text-ink mono-label">{d.delegator?.displayName || d.delegator?.username} → {d.delegatee?.displayName || d.delegatee?.username}</p>
-                            <p className="text-muted">{new Date(d.startsAt).toLocaleDateString()} to {new Date(d.endsAt).toLocaleDateString()} · {d.scope || 'All'}</p>
+                            <p className="text-ink mono-label">{d.delegator?.displayName || d.delegator?.username} â†’ {d.delegatee?.displayName || d.delegatee?.username}</p>
+                            <p className="text-muted">{new Date(d.startsAt).toLocaleDateString()} to {new Date(d.endsAt).toLocaleDateString()} Â· {d.scope || 'All'}</p>
                           </div>
                           <button className="btn btn-ghost text-xs gap-2" onClick={async()=>{ await accountApi.deleteDelegation(d.id); const r = await accountApi.getDelegations(); setDelegations(r.data||[]); }}><Trash2 size={14} /> Revoke</button>
                         </div>
@@ -535,23 +895,120 @@ export default function Settings() {
             )}
 
             {active === 'compliance' && (
-              <section className="card p-6 space-y-4">
-                <h2 className="font-display font-semibold text-ink flex items-center gap-2"><ShieldCheck size={18} className="text-accent"/> Compliance</h2>
-                <ul className="text-sm text-muted space-y-2 list-disc pl-5">
-                  <li>RA 10173 Data Privacy Act – consent logging enabled</li>
-                  <li>COA audit trail – append-only logs active</li>
-                  <li>CSC Omnibus Rules – leave accrual configured</li>
-                </ul>
+              <section className="card p-6 space-y-6">
+                <div className="flex items-center justify-between">
+                  <h2 className="font-display font-semibold text-ink flex items-center gap-2"><ShieldCheck size={18} className="text-accent"/> Compliance</h2>
+                  <button className="btn btn-ghost text-sm gap-2" onClick={() => setActive('compliance')} disabled={cmpLoading}><RefreshCw size={14} className={cmpLoading ? 'animate-spin' : ''} /> {cmpLoading ? 'Checking…' : 'Re-check'}</button>
+                </div>
+                {(() => {
+                  const auditLogs = cmpAudit?.data ?? (Array.isArray(cmpAudit) ? cmpAudit : []);
+                  const auditTotal = cmpAudit?.total ?? auditLogs.length;
+                  const lastAudit = auditLogs[0]?.timestamp;
+                  const contrib = Array.isArray(cmpRules?.contributions) ? cmpRules.contributions : (cmpRules?.contributions?.data ?? []);
+                  const tax = Array.isArray(cmpRules?.tax) ? cmpRules.tax : (cmpRules?.tax?.data ?? []);
+                  const leave = Array.isArray(cmpRules?.leave) ? cmpRules.leave : (cmpRules?.leave?.data ?? []);
+                  const users = Array.isArray(cmpUsers) ? cmpUsers : (cmpUsers?.data ?? []);
+                  const inactive = users.filter(u => u.status === 'INACTIVE').length;
+                  const roles = [...new Set(users.map(u => u.role).filter(Boolean))];
+                  const sessions = Array.isArray(cmpSessions) ? cmpSessions : (cmpSessions?.data ?? []);
+                  const ok = (v) => v ? 'text-success' : 'text-muted';
+                  const cards = [
+                    { title: 'COA audit trail', value: auditTotal ? `${Number(auditTotal).toLocaleString()} events` : (cmpAudit ? '0 events' : '—'), sub: lastAudit ? `Last write ${new Date(lastAudit).toLocaleString()}` : 'Append-only log', live: !!cmpAudit },
+                    { title: 'Payroll rules', value: `${contrib.length + tax.length + leave.length} rules`, sub: `${contrib.length} contributions · ${tax.length} tax · ${leave.length} leave`, live: !!cmpRules },
+                    { title: 'Access control', value: users.length ? `${users.length} users` : '—', sub: roles.length ? `${roles.length} roles · ${inactive} inactive` : 'RBAC enforced', live: users.length > 0 },
+                    { title: 'Sessions', value: sessions.length ? `${sessions.length} active` : (cmpSessions ? 'None active' : '—'), sub: 'Current account sessions', live: !!cmpSessions },
+                  ];
+                  return (
+                    <>
+                      <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        {cards.map(c => (
+                          <div key={c.title} className="p-4 border border-line rounded-xl bg-bg/50">
+                            <p className="mono-label">{c.title}</p>
+                            <p className={`font-display font-bold text-ink mt-1 ${ok(c.live)}`}>{cmpLoading && !c.live ? '…' : c.value}</p>
+                            <p className="text-[11px] text-muted mt-0.5">{c.sub}</p>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="p-4 border border-line rounded-xl bg-bg/50 space-y-2">
+                        <p className="text-sm font-medium text-ink">Frameworks</p>
+                        {[
+                          ['RA 10173 Data Privacy Act', 'Consent + access logging via audit trail'],
+                          ['COA audit requirements', 'Append-only AuditLog on all mutations'],
+                          ['CSC Omnibus Rules', 'Leave accrual + DIBAR checks configured'],
+                        ].map(([t, d]) => (
+                          <div key={t} className="flex items-center justify-between gap-2 text-sm">
+                            <span className="text-ink">{t} <span className="text-muted text-xs">· {d}</span></span>
+                            <span className="badge badge-success shrink-0">Active</span>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <button className="btn btn-ghost text-sm gap-2" onClick={async () => { try { const r = await accountApi.exportData(); toast(`Export queued: ${r?.data?.url ?? r?.url ?? 'ready'}`, 'success'); } catch { toast('Export failed', 'error'); } }}><Download size={14} /> Request my data export</button>
+                        <button className="btn btn-ghost text-sm gap-2" onClick={() => { setShowPasswordModal(true); }}><Key size={14} /> Rotate password</button>
+                      </div>
+                      <div className="p-4 border border-line rounded-xl bg-bg/30 text-xs text-muted">
+                        Export covers the RA 10173 right to data portability. Password rotation and session revocation (Account tab) support access-control hygiene. Full trail lives under Audit Trail.
+                      </div>
+                    </>
+                  );
+                })()}
               </section>
             )}
 
             {active === 'system' && (
-              <section className="card p-6 space-y-4">
-                <h2 className="font-display font-semibold text-ink flex items-center gap-2"><Info size={18} className="text-accent"/> System</h2>
-                <div className="grid md:grid-cols-3 gap-4 text-sm">
-                  <div className="p-3 border border-line rounded-xl bg-bg/50"><p className="mono-label">Version</p><p className="text-ink font-medium">v0.1</p></div>
-                  <div className="p-3 border border-line rounded-xl bg-bg/50"><p className="mono-label">Mode</p><p className="text-ink font-medium">On-prem</p></div>
-                  <div className="p-3 border border-line rounded-xl bg-bg/50"><p className="mono-label">DB</p><p className="text-ink font-medium">PostgreSQL 16</p></div>
+              <section className="card p-6 space-y-6">
+                <div className="flex items-center justify-between">
+                  <h2 className="font-display font-semibold text-ink flex items-center gap-2"><Info size={18} className="text-accent"/> System</h2>
+                  <button className="btn btn-ghost text-sm gap-2" onClick={loadSysInfo} disabled={sysLoading}><RefreshCw size={14} className={sysLoading ? 'animate-spin' : ''}/> {sysLoading ? 'Checking…' : 'Re-check'}</button>
+                </div>
+
+                <div className="grid md:grid-cols-3 gap-4">
+                  <div className="p-4 border border-line rounded-xl bg-bg/50">
+                    <p className="mono-label flex items-center gap-1.5"><Server size={12}/> Backend API</p>
+                    <p className={`font-display font-bold text-ink mt-1 ${sysInfo?.backend ? 'text-success' : ''}`}>{sysLoading && !sysInfo?.backend ? '…' : sysInfo?.backend ? `Online · ${sysInfo.backend.ms}ms` : 'Unreachable'}</p>
+                    <p className="text-[11px] text-muted mt-0.5 truncate" title={sysInfo?.apiBase ?? ''}>{sysInfo?.backend?.service ?? 'lgu-hrms-backend'} · {sysInfo?.apiBase ?? '…'}</p>
+                  </div>
+                  <div className="p-4 border border-line rounded-xl bg-bg/50">
+                    <p className="mono-label flex items-center gap-1.5"><HardDrive size={12}/> Database</p>
+                    <p className={`font-display font-bold text-ink mt-1 ${sysInfo?.db ? 'text-success' : ''}`}>{sysLoading && !sysInfo?.db ? '…' : sysInfo?.db ? `${(sysInfo.db.sizeBytes / 1048576).toFixed(1)} MB · ${sysInfo.db.latencyMs}ms` : '—'}</p>
+                    <p className="text-[11px] text-muted mt-0.5 truncate" title={sysInfo?.db?.version ?? ''}>{sysInfo?.db?.version ? sysInfo.db.version.split(' ').slice(0, 2).join(' ') : 'PostgreSQL'} {sysInfo?.db?.uptime ? `· up ${sysInfo.db.uptime}` : ''}</p>
+                  </div>
+                  <div className="p-4 border border-line rounded-xl bg-bg/50">
+                    <p className="mono-label flex items-center gap-1.5"><Activity size={12}/> Data</p>
+                    <p className="font-display font-bold text-ink mt-1">{sysLoading && !sysInfo?.summary ? '…' : sysInfo?.summary ? `${Number(sysInfo.summary.totalRecords).toLocaleString()} records` : '—'}</p>
+                    <p className="text-[11px] text-muted mt-0.5">{sysInfo?.summary ? `${sysInfo.summary.totalTables} tables` : '—'}{sysInfo?.migrations ? ` · ${sysInfo.migrations.inSync ? 'migrations in sync' : `${sysInfo.migrations.pendingCount} pending`}` : ''}</p>
+                  </div>
+                </div>
+
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div className="p-5 border border-line rounded-xl bg-bg/50 space-y-2">
+                    <p className="text-sm font-medium text-ink">Environment</p>
+                    <ul className="text-xs space-y-1.5">
+                      <li className="flex items-center justify-between gap-2"><span className="text-muted">App version</span><span className="font-mono text-ink">v0.1</span></li>
+                      <li className="flex items-center justify-between gap-2"><span className="text-muted">Deployment</span><span className="font-mono text-ink">On-prem · docker-compose</span></li>
+                      <li className="flex items-center justify-between gap-2"><span className="text-muted">Web origin</span><span className="font-mono text-ink truncate max-w-[60%]" title={typeof window !== 'undefined' ? window.location.origin : ''}>{typeof window !== 'undefined' ? window.location.origin : '—'}</span></li>
+                      <li className="flex items-center justify-between gap-2"><span className="text-muted">API endpoint</span><span className="font-mono text-ink truncate max-w-[60%]" title={sysInfo?.apiBase ?? ''}>{sysInfo?.apiBase ?? '—'}</span></li>
+                      <li className="flex items-center justify-between gap-2"><span className="text-muted flex items-center gap-1"><Clock size={12}/> Server time</span><span className="font-mono text-ink">{sysInfo?.db?.checkedAt ? new Date(sysInfo.db.checkedAt).toLocaleString() : '—'}</span></li>
+                    </ul>
+                  </div>
+                  <div className="p-5 border border-line rounded-xl bg-bg/50 space-y-2">
+                    <p className="text-sm font-medium text-ink">Session</p>
+                    <ul className="text-xs space-y-1.5">
+                      <li className="flex items-center justify-between gap-2"><span className="text-muted">Signed in as</span><span className="font-mono text-ink">{sessionUser?.username ?? '—'}</span></li>
+                      <li className="flex items-center justify-between gap-2"><span className="text-muted">Role</span><span className="badge badge-accent">{sessionUser?.role ?? '—'}</span></li>
+                      <li className="flex items-center justify-between gap-2"><span className="text-muted">Auth</span><span className="font-mono text-ink">JWT 15m + refresh rotation</span></li>
+                      <li className="flex items-center justify-between gap-2"><span className="text-muted">Audit</span><span className="font-mono text-ink">Append-only · every mutation</span></li>
+                    </ul>
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      <button className="btn btn-ghost text-xs gap-2" onClick={() => setActive('database')}><Database size={14}/> Database tools</button>
+                      <button className="btn btn-ghost text-xs gap-2" onClick={() => setActive('compliance')}><ShieldCheck size={14}/> Compliance</button>
+                      <button className="btn btn-ghost text-xs gap-2" onClick={() => setActive('account')}><User size={14}/> Account</button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-4 border border-line rounded-xl bg-bg/30 text-xs text-muted">
+                  Backend <span className="font-mono">/api/v1/health</span> is public; database vitals reuse the ADMIN-only ops endpoints. If the backend shows unreachable, check <span className="font-mono">node --watch src/server.js</span> and <span className="font-mono">docker ps</span> for the db container.
                 </div>
               </section>
             )}
@@ -587,6 +1044,39 @@ export default function Settings() {
               <input type="password" className="input" value={pwdConfirm} onChange={e=>setPwdConfirm(e.target.value)} onBlur={()=>setPwdConfirmTouched(true)} aria-invalid={pwdConfirmTouched && pwdNew !== pwdConfirm} />
               {pwdConfirmTouched && pwdNew !== pwdConfirm && <p className="text-[11px] text-error mt-1">Passwords do not match</p>}
             </div>
+            <p className="text-[11px] text-muted">Resets the 30-day rotation timer.</p>
+          </div>
+        </Modal>
+        <Modal open={showPinModal} onClose={() => setShowPinModal(false)} title="Set sign-in PIN" size="sm" footer={
+          <>
+            <button className="btn btn-ghost gap-2" onClick={() => setShowPinModal(false)}>
+              <X size={16} />
+              Cancel
+            </button>
+            <button className="btn btn-primary gap-2" disabled={!/^\d{4,6}$/.test(pinNew) || pinNew !== pinConfirm} onClick={async () => {
+              try {
+                await setupPin(pinNew);
+                toast('PIN saved — you can now sign in with it', 'success');
+                setShowPinModal(false); setPinNew(''); setPinConfirm('');
+                accountApi.getProfile().then(r => setProfile(r.data)).catch(()=>{});
+              } catch { toast('Could not save PIN', 'error'); }
+            }}>
+              <Save size={16} />
+              Save PIN
+            </button>
+          </>
+        }>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-ink mb-1">New PIN (4–6 digits)</label>
+              <input inputMode="numeric" pattern="[0-9]*" maxLength={6} className="input font-mono tracking-[0.5em] text-center" value={pinNew} onChange={e=>setPinNew(e.target.value.replace(/\D/g, '').slice(0, 6))} aria-invalid={pinNew !== '' && !/^\d{4,6}$/.test(pinNew)} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-ink mb-1">Confirm PIN</label>
+              <input inputMode="numeric" pattern="[0-9]*" maxLength={6} className="input font-mono tracking-[0.5em] text-center" value={pinConfirm} onChange={e=>setPinConfirm(e.target.value.replace(/\D/g, '').slice(0, 6))} />
+              {pinConfirm !== '' && pinNew !== pinConfirm && <p className="text-[11px] text-error mt-1">PINs do not match</p>}
+            </div>
+            <p className="text-[11px] text-muted">Stored bcrypt-hashed, never plain. Locked after 8 failed attempts in 15 minutes. Use only on trusted workstations.</p>
           </div>
         </Modal>
         <Modal open={showProfileEdit} onClose={() => setShowProfileEdit(false)} title="Edit profile" size="sm" footer={
@@ -666,6 +1156,98 @@ export default function Settings() {
         </Modal>
         <ConfirmDialog open={showDeactivateConfirm} onClose={()=>setShowDeactivateConfirm(false)} title="Deactivate account" message="This will soft-delete your account. Continue?" confirmLabel="Deactivate" danger onConfirm={async()=>{ await accountApi.deactivateAccount(); toast('Account deactivated', 'success'); setShowDeactivateConfirm(false); }} />
         <ConfirmDialog open={!!showDeleteConfirm} onClose={()=>setShowDeleteConfirm(null)} title="Delete record" message={`Delete ${showDeleteConfirm?.table?.label} record #${showDeleteConfirm?.record?.id}? This cannot be undone.`} confirmLabel="Delete" danger onConfirm={async()=>{ if (showDeleteConfirm) { await handleDeleteRecord(showDeleteConfirm.table.name, showDeleteConfirm.record.id); setShowDeleteConfirm(null); } }} />
+        <Modal open={!!dbDeps} onClose={() => setDbDeps(null)} title={`Delete ${dbDeps?.table?.label} #${dbDeps?.record?.id}`} size="sm" footer={
+          <>
+            <button className="btn btn-ghost gap-2" onClick={() => setDbDeps(null)}><X size={16}/> Cancel</button>
+            <button className="btn btn-danger gap-2" disabled={dbDeps?.blocked} onClick={async () => { if (dbDeps) { await handleDeleteRecord(dbDeps.table.name, dbDeps.record.id); setDbDeps(null); } }}>
+              <Trash2 size={14}/> {dbDeps?.blocked ? 'Blocked' : 'Delete anyway'}
+            </button>
+          </>
+        }>
+          {dbDeps && (dbDeps.total === 0
+            ? <p className="text-sm text-muted">No dependent rows found — safe to delete.</p>
+            : <div className="space-y-2 text-sm">
+                <p className="text-error font-medium">Blocked by {dbDeps.total} dependent row{dbDeps.total === 1 ? '' : 's'}:</p>
+                {dbDeps.dependents.filter(d => d.count > 0).map(d => (
+                  <p key={`${d.table}.${d.column}`} className="font-mono text-xs text-muted">{d.count}× {d.table}.{d.column}</p>
+                ))}
+                <p className="text-xs text-muted">Delete or reassign dependents first.</p>
+              </div>)}
+        </Modal>
+        <ConfirmDialog open={!!dbPurgeTarget} onClose={()=>setDbPurgeTarget(null)} title="Purge old rows" message={`Delete ${dbRetention?.candidates?.[dbPurgeTarget === 'loginEvents' ? 'loginEvents' : 'revokedSessions'] ?? '?'} rows older than ${dbRetentionDays} days from ${dbPurgeTarget}? Export first if you need them.`} confirmLabel="Purge" danger onConfirm={async()=>{ try { const r = await databaseApi.retentionRun(dbPurgeTarget, dbRetentionDays); toast(`Purged ${r.deleted}`, 'success'); setDbRetention(await databaseApi.retention(dbRetentionDays)); } catch { toast('Purge failed', 'error'); } setDbPurgeTarget(null); }} />
+        <Modal open={showDbCreateModal} onClose={() => setShowDbCreateModal(false)} title={`Add record to ${dbSelectedTable?.label}`} size="md" footer={
+          <> 
+            <button className="btn btn-ghost gap-2" onClick={() => { setShowDbCreateModal(false); setDbCreateForm({}); }}><X size={16}/> Cancel</button>
+            <button className="btn btn-primary gap-2" onClick={async () => {
+              if (!dbTableSchema) return;
+              const payload = {};
+              for (const col of dbTableSchema) {
+                const val = dbCreateForm[col.column_name];
+                if (val === "" || val === undefined) continue;
+                // Convert numeric strings to numbers for integer/numeric types
+                if (col.data_type?.includes("integer") || col.data_type?.includes("numeric") || col.data_type?.includes("decimal")) {
+                  const num = Number(val);
+                  if (!isNaN(num)) payload[col.column_name] = num; else payload[col.column_name] = val;
+                } else if (col.data_type?.includes("boolean")) {
+                  payload[col.column_name] = val === "true" || val === true;
+                } else {
+                  payload[col.column_name] = val;
+                }
+              }
+              await handleDbCreate(payload);
+              setDbCreateForm({});
+            }}><Save size={16}/> Save</button>
+          </>
+        }>
+          <div className="space-y-3 text-sm">
+            {dbTableSchema && dbTableSchema.map(col => (
+              <div key={col.column_name}>
+                <label className="block text-sm font-medium text-ink mb-1">{col.column_name}</label>
+                <input className="input w-full" value={dbCreateForm[col.column_name] || ""} onChange={e => setDbCreateForm({...dbCreateForm, [col.column_name]: e.target.value})} placeholder={col.is_nullable === "YES" ? "nullable" : "required"} />
+              </div>
+            ))}
+          </div>
+        </Modal>
+        <Modal open={showDbEditModal} onClose={() => setShowDbEditModal(false)} title={`Edit ${dbSelectedTable?.label} record #${dbEditingRecord?.id}`} size="md" footer={
+          <>
+            <button className="btn btn-ghost gap-2" onClick={() => setShowDbEditModal(false)}><X size={16}/> Cancel</button>
+            <button className="btn btn-primary gap-2" onClick={async () => {
+              if (!dbTableSchema || !dbEditingRecord) return;
+              const changes = {};
+              for (const col of dbTableSchema) {
+                const key = col.column_name;
+                if (!(key in dbCreateForm)) continue;
+                const val = dbCreateForm[key];
+                if (val === "" || val === undefined) continue;
+                if (col.data_type?.includes("integer") || col.data_type?.includes("numeric") || col.data_type?.includes("decimal")) {
+                  const num = Number(val);
+                  if (!isNaN(num)) changes[key] = num; else changes[key] = val;
+                } else if (col.data_type?.includes("boolean")) {
+                  changes[key] = val === "true" || val === true;
+                } else {
+                  changes[key] = val;
+                }
+              }
+              await handleDbUpdate(dbEditingRecord.id, changes);
+            }}><Save size={16}/> Save</button>
+          </>
+        }>
+          <div className="space-y-3 text-sm">
+            {dbTableSchema && dbSelectedTable && (() => {
+              const form = dbCreateForm;
+              return dbTableSchema.map(col => (
+                <div key={col.column_name}>
+                  <label className="block text-sm font-medium text-ink mb-1">{col.column_name}</label>
+                  <input className="input w-full" value={String(form[col.column_name] || "")} onChange={e => setDbCreateForm({...dbCreateForm, [col.column_name]: e.target.value})} />
+                </div>
+              ));
+            })()}
+          </div>
+        </Modal>
+
     </Layout>
   );
 }
+
+
+

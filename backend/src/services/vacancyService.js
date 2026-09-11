@@ -1,6 +1,6 @@
 import * as repo from '../repositories/vacancyRepository.js';
-export const listVacancies = repo.findVacancies;
-export const getVacancy = repo.findVacancyById;
-export const createVacancy = repo.createVacancy;
-export const updateVacancy = repo.updateVacancy;
-export const deleteVacancy = repo.deleteVacancy;
+export const listVacancies = (req, opts) => repo.findVacancies(req, opts);
+export const getVacancy = (req, id) => repo.findVacancyById(req, id);
+export const createVacancy = (req, data) => repo.createVacancy(req, data);
+export const updateVacancy = (req, id, data) => repo.updateVacancy(req, id, data);
+export const deleteVacancy = (req, id) => repo.deleteVacancy(req, id);

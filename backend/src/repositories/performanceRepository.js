@@ -1,7 +1,8 @@
 import { prisma } from '../lib/prisma.js';
+import { withTenant, stampTenant } from '../middleware/tenant.js';
 
-export async function findPerformanceReviews({ page = 1, limit = 50, employeeId, reviewYear, status }) {
-  const where = {};
+export async function findPerformanceReviews(req, { page = 1, limit = 50, employeeId, reviewYear, status } = {}) {
+  let where = withTenant(req, {});
   if (employeeId) where.employeeId = employeeId;
   if (reviewYear) where.reviewYear = reviewYear;
   if (status) where.status = status;
@@ -20,28 +21,30 @@ export async function findPerformanceReviews({ page = 1, limit = 50, employeeId,
   return { items, total, page, limit };
 }
 
-export async function findPerformanceReviewById(id) {
+export async function findPerformanceReviewById(req, id) {
   return prisma.performanceReview.findUnique({
-    where: { id },
+    where: withTenant(req, { id }),
     include: { employee: { include: { department: true, position: true } } },
   });
 }
 
-export async function createPerformanceReview(data) {
+export async function createPerformanceReview(req, data) {
+  const stamped = stampTenant(req, data);
   return prisma.performanceReview.create({
-    data,
+    data: stamped,
     include: { employee: { include: { department: true, position: true } } },
   });
 }
 
-export async function updatePerformanceReview(id, data) {
+export async function updatePerformanceReview(req, id, data) {
+  const stamped = stampTenant(req, data);
   return prisma.performanceReview.update({
-    where: { id },
-    data,
+    where: withTenant(req, { id }),
+    data: stamped,
     include: { employee: { include: { department: true, position: true } } },
   });
 }
 
-export async function deletePerformanceReview(id) {
-  return prisma.performanceReview.delete({ where: { id } });
+export async function deletePerformanceReview(req, id) {
+  return prisma.performanceReview.delete({ where: withTenant(req, { id }) });
 }

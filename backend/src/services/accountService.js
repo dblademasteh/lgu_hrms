@@ -6,7 +6,9 @@ export const accountService = {
     const user = await userRepository.findById(userId);
     if (!user) throw new Error('User not found');
     const completeness = calculateCompleteness(user);
-    return { user, completeness };
+    // Never expose credential hashes to the client.
+    const { passwordHash, pinHash, twoFactorSecret, ...safe } = user;
+    return { user: { ...safe, pinEnabled: !!pinHash }, completeness };
   },
   async updateProfile(userId, data) {
     return userRepository.update(userId, data);

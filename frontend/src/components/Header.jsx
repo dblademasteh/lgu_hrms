@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+﻿import React, { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { toggleTheme, useTheme } from '../theme.js';
 import { useAuthStore } from '../stores/authStore.js';
@@ -75,7 +75,7 @@ export default function Header({ onToggleSidebar }) {
           </div>
           <div className="min-w-0">
             <h1 className="font-display font-bold text-ink text-lg leading-tight truncate">{titles[location.pathname] ?? 'LGU HRMS'}</h1>
-            <p className="hidden sm:block text-xs text-muted truncate">{location.pathname.replace('/','').toUpperCase()} · On-prem · RA 10173</p>
+            <p className="hidden sm:block text-xs text-muted truncate">{location.pathname.replace('/','').toUpperCase()} Â· On-prem Â· RA 10173</p>
           </div>
         </div>
 
@@ -84,18 +84,18 @@ export default function Header({ onToggleSidebar }) {
             type="button"
             className="btn btn-ghost px-2 md:px-3"
             onClick={() => window.dispatchEvent(new CustomEvent('lgu:open-palette'))}
-            aria-label="Quick search (Ctrl+K) - press to open"
-            title="Quick search (Ctrl+K)"
+            aria-label="Quick search (Ctrl+F) - press to open"
+            title="Quick search (Ctrl+F)"
           >
             <Search size={18} />
             <span className="hidden md:inline ml-1 text-sm">Search</span>
-            <span className="hidden lg:inline mono-label ml-2">⌘K</span>
+            <span className="hidden lg:inline mono-label ml-2">Ctrl F</span>
           </button>
 
           <button
             type="button"
             className="btn btn-ghost px-2 md:px-3"
-            onClick={() => {}}
+            onClick={() => navigate('/help')}
             aria-label="Help"
             title="Help"
           >
@@ -141,17 +141,17 @@ export default function Header({ onToggleSidebar }) {
                       <Bell size={20} className="text-muted" />
                     </div>
                     <p className="text-sm font-medium text-ink">Notifications muted</p>
-                    <p className="text-xs text-muted mt-1">Turn on In-app notifications under Settings → Notifications.</p>
+                    <p className="text-xs text-muted mt-1">Turn on In-app notifications under Settings â†’ Notifications.</p>
                   </div>
                 ) : loading ? (
-                  <p className="text-sm text-muted px-4 py-8 text-center">Loading notifications…</p>
+                  <p className="text-sm text-muted px-4 py-8 text-center">Loading notificationsâ€¦</p>
                 ) : items.length === 0 ? (
                   <div className="py-12 text-center">
                     <div className="mx-auto w-12 h-12 rounded-full bg-bg grid place-items-center mb-3">
                       <Bell size={20} className="text-muted" />
                     </div>
                     <p className="text-sm font-medium text-ink">No notifications</p>
-                    <p className="text-xs text-muted mt-1">You’re all caught up</p>
+                    <p className="text-xs text-muted mt-1">Youâ€™re all caught up</p>
                   </div>
                 ) : (
                   <ul className="max-h-95 overflow-auto divide-y divide-line">
@@ -211,7 +211,7 @@ export default function Header({ onToggleSidebar }) {
               </div>
               <div className="hidden md:block text-left leading-tight">
                 <p className="text-sm font-semibold text-ink truncate max-w-28">{user?.username ?? 'Account'}</p>
-                <p className="text-[10px] mono-label text-muted">{user?.role?.replaceAll('_', ' ') ?? '—'}</p>
+                <p className="text-[10px] mono-label text-muted">{user?.role?.replaceAll('_', ' ') ?? 'â€”'}</p>
               </div>
               <ChevronDown size={14} className="text-muted" />
             </button>
@@ -219,7 +219,7 @@ export default function Header({ onToggleSidebar }) {
               <div className="dropdown-panel w-56" role="menu" aria-label="User menu">
                 <div className="px-4 py-3 border-b border-line">
                   <p className="font-semibold text-ink text-sm">Signed in as</p>
-                  <p className="mono-label text-xs text-muted truncate">{user?.username ?? '—'}{user?.role ? ` · ${user.role.replaceAll('_', ' ')}` : ''}</p>
+                  <p className="mono-label text-xs text-muted truncate">{user?.username ?? 'â€”'}{user?.role ? ` Â· ${user.role.replaceAll('_', ' ')}` : ''}</p>
                 </div>
                 <button
                   className="w-full text-left px-4 py-2.5 text-sm hover:bg-bg/60 flex items-center gap-2"

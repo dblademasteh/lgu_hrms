@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { prisma } from '../lib/prisma.js';
+import { withTenant } from '../middleware/tenant.js';
 
 const router = Router();
 
@@ -7,6 +8,7 @@ const router = Router();
 router.get('/', async (req, res, next) => {
   try {
     const positions = await prisma.position.findMany({
+      where: withTenant(req),
       orderBy: [{ salaryGrade: 'asc' }, { title: 'asc' }],
     });
     res.json(positions);

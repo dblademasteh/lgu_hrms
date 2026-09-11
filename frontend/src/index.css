@@ -346,6 +346,40 @@
   .toast-success { --toast-color: var(--success); }
   .toast-error   { --toast-color: var(--error); }
   .toast-info    { --toast-color: var(--accent); }
+
+  /* toast styles — picked in Settings → Notifications ([data-toast-style]) */
+  html[data-toast-style='pill'] .toast {
+    border-radius: 9999px;
+    border-left-width: 1px;
+    padding: 0.6rem 1.1rem;
+    box-shadow: 0 16px 40px -16px rgb(2 6 23 / 0.45);
+  }
+  html[data-toast-style='banner'] .toast-stack {
+    right: 0;
+    left: 0;
+    top: 0;
+    align-items: stretch;
+    padding: 0.5rem 1rem;
+    pointer-events: none;
+  }
+  html[data-toast-style='banner'] .toast {
+    max-width: none;
+    border-radius: 0;
+    border-left-width: 0;
+    border-top: 0;
+    border-right: 0;
+    border-bottom: 3px solid var(--toast-color, var(--accent));
+    pointer-events: auto;
+  }
+  html[data-toast-style='minimal'] .toast {
+    background: transparent;
+    border: 0;
+    border-bottom: 2px solid var(--toast-color, var(--accent));
+    border-radius: 0;
+    box-shadow: none;
+    padding: 0.5rem 0.25rem;
+    min-width: 14rem;
+  }
   .toast-x {
     margin-left: auto;
     background: none;

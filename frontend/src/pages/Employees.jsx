@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Save, X } from 'lucide-react';
+import { Plus, Save, X, ChevronDown } from 'lucide-react';
 import Layout from '../components/Layout.jsx';
 import { badgeTone } from '../data/mock.js';
 import DetailPane from '../components/DetailPane.jsx';
@@ -196,24 +196,31 @@ export default function Employees() {
           className="input flex-1 min-w-40"
           aria-label="Search employees"
         />
-        <select
-          value={filterDept}
-          onChange={e => { setFilterDept(e.target.value); setPage(1); }}
-          className="input w-auto"
-          aria-label="Filter by department"
-        >
-          <option value="">All departments</option>
-          {departments.map(d => <option key={d.id} value={d.id}>{d.code} · {d.name}</option>)}\n        </select>
-        <select
-          value={filterStatus}
-          onChange={e => { setFilterStatus(e.target.value); setPage(1); }}
-          className="input w-auto"
-          aria-label="Filter by status"
-        >
-          <option value="">All statuses</option>
-          <option value="ACTIVE">Active</option>
-          <option value="INACTIVE">Inactive</option>
-        </select>
+        <div className="relative">
+          <select
+            value={filterDept}
+            onChange={e => { setFilterDept(e.target.value); setPage(1); }}
+            className="input w-auto appearance-none pr-8"
+            aria-label="Filter by department"
+          >
+            <option value="">All departments</option>
+            {departments.map(d => <option key={d.id} value={d.id}>{d.code} · {d.name}</option>)}
+          </select>
+          <ChevronDown size={16} className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-muted"/>
+        </div>
+        <div className="relative">
+          <select
+            value={filterStatus}
+            onChange={e => { setFilterStatus(e.target.value); setPage(1); }}
+            className="input w-auto appearance-none pr-8"
+            aria-label="Filter by status"
+          >
+            <option value="">All statuses</option>
+            <option value="ACTIVE">Active</option>
+            <option value="INACTIVE">Inactive</option>
+          </select>
+          <ChevronDown size={16} className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-muted"/>
+        </div>
       </div>
       
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
