@@ -2,11 +2,16 @@
 
 ## Commands
 - Frontend dev: `cd frontend && npm run dev` → http://localhost:5173
-- Frontend build must pass: `cd frontend && npm run build`
+- Frontend build must pass: `cd frontend && npm run build` (only real "verify" gate)
 - Backend dev: `cd backend && npm run dev` → http://localhost:4000
+- Backend prod start: `cd backend && npm run start` (node src/server.js)
 - Syntax-check backend fast: `cd backend && node --check src/routes/<name>.js` (no boot needed)
+- DB up: `docker compose up -d db` (dead DB container = 500s on login)
 - Prisma migrate: `cd backend && npx prisma migrate dev`
+- Prisma generate: stop backend watch first, then `cd backend && npx prisma generate`
+- Prisma studio (DB inspector): `cd backend && npx prisma studio`
 - Seed: `cd backend && node prisma/seed.js` after migrate (multi-tenant for DEFAULT and TARLAC)
+- No ESLint/typecheck/test runner exists — verify with `npm run build` + `node --check` + color lint
 - Color lint: `Get-ChildItem frontend/src -Recurse -Include *.jsx,*.js | Select-String -Pattern '#[0-9a-fA-F]{3,8}\b|slate-|gray-|bg-white|text-white'`
 - Create summary of the output and update into corresponding md in src/docs
 - Create TODO's when analysis, search for gaps and bugs, when task is finish update todo's
@@ -66,6 +71,38 @@
 - All mutating endpoints must write AuditLog (exactly once — global mount only, no per-route duplicates)
 - Soft delete via `deleted_at` when wiring models
 - Sidebar groups: Workforce, RSP, Performance & L&D, Payroll & Benefits, Compliance & Audit, Administration
+
+## Coding Best Practices
+- Never ship a mock or hardcoded workflow: wire to the API layer first, then verify the component actually calls it
+- One concern per file: routes = HTTP + validation, repositories = queries, services/controllers = business logic; keep routes thin
+- Always use `try/catch` with `next(e)` in async Express handlers; never `catch (e) { console.log(e) }` and swallow
+- Validate every external input with Zod (body, params, query) — never trust `req.body`/`req.query` raw
+- Money: use Prisma Decimal, coerce to number only for display; dates: broker YYYY-MM-DD and convert to UTC in services, format to Asia/Manila on the UI
+- Never build raw SQL; use Prisma with `withTenant` scope on reads and `stampTenant` on writes — any query missing them is a tenant bug
+- All mutating routes must flow through the global audit middleware exactly once; no per-route duplicate AuditLog writes
+- Prefer constants/enums over magic strings (statuses, roles, leave types); keep them in one source of truth
+- Guard against null/optional fields before use (`?.` or explicit defaults); no silent `.map` on possibly-missing arrays
+- Keep components presentational: data fetching in hooks/pages/API modules, UI in components, state minimal
+- Reuse existing components (MasterTable, DetailPane, badges, ConfirmDialog, toasts) instead of duplicating markup
+- Preserve design tokens — never hardcode colors, spacing, or font sizes (`bg-white`, `text-white`, `slate-` are forbidden)
+- Run the verify gates before finishing: `npm run build`, `node --check`, color lint
+- No dead code: if a module/export becomes unused, remove it or mark it deprecated — never leave leftover mocks
+- No secrets in code or commits — `.env` + `.env.example` only; never log tokens/keys
+- Commit per unit with conventional messages (`feat|fix|chore|polish|refactor|docs`)
+
+## Dev & Production Best Practices
+- **Dev workflow:** edit → verify (`npm run build`, `node --check`, color lint) → commit; don't re-run dev servers unless needed, and check existing terminals first to avoid duplicate watchers
+- **Run exactly one dev instance:** stale watchers hold file locks (breaks `prisma generate` on Windows) and mask hot-reload — always reuse running terminals
+- **Environment discipline:** config via `.env` (+ `.env.example`); `NODE_ENV` guards dev-only behavior (request logging is off in production); never commit secrets
+- **No debug leftovers:** no `console.log` spam in prod paths, no commented-out code, no local mocks — wire the API and remove the fixture
+- **Error handling:** centralized error middleware in `server.js` returns `{error:{code,message}}`; services throw with `status`/`code`; never leak stack traces or DB internals to clients
+- **Security defaults already in place — keep them:** helmet, CORS allowlist (never wildcard `*` in prod), `authLimiter` on credentials (15m/30) + `apiLimiter` on `/api/` (60s/600), body size cap 10mb
+- **Rate limiting:** in-memory buckets are single-process only — for multi-instance prod replace with a Redis counter (`backend/src/middleware/rateLimit.js`)
+- **Payroll/money integrity:** never compute money outside Decimal; never trust client-sent totals — recompute server-side from stored rates
+- **Audit & RBAC in every release:** any new mutating endpoint automatically passes through the global `auditLog` mount; verify with a request, don't assume
+- **Frontend prod hygiene:** rely on `npm run build` (Vite) as the release gate; keep design tokens in `index.css`, zero hardcoded colors; validate form input even when backend re-validates
+- **Logging:** production ships structured logs via the platform collector (per `server.js`); `NODE_ENV !== 'production'` suppresses per-request spam
+- **Health & monitoring:** `GET /api/v1/health` stays alive for LB checks; use Sentry to capture errors in dev and prod
 
 ## Operational
 - API 500 on login usually dead DB container → `docker ps` then `docker compose up -d db`
