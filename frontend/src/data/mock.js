@@ -73,15 +73,20 @@ export const users = [
   { id: 3, username: 'mtorres', role: 'PAYROLL_OFFICER', department: 'TRE', status: 'Active' },
   { id: 4, username: 'cbautista', role: 'DEPARTMENT_HEAD', department: 'ENG', status: 'Active' },
   { id: 5, username: 'raquino', role: 'AUDITOR', department: 'ACC', status: 'Inactive' },
+  { id: 6, username: 'r.villanueva', role: 'EMPLOYEE', department: 'PGO', status: 'Active' },
 ];
 
 export const roleMatrix = [
-  { capability: 'Manage users & roles', ADMIN: true, HR_MANAGER: false, PAYROLL_OFFICER: false, DEPARTMENT_HEAD: false, AUDITOR: false },
-  { capability: 'Employee records CRUD', ADMIN: true, HR_MANAGER: true, PAYROLL_OFFICER: false, DEPARTMENT_HEAD: false, AUDITOR: false },
-  { capability: 'Create / approve payroll runs', ADMIN: true, HR_MANAGER: false, PAYROLL_OFFICER: true, DEPARTMENT_HEAD: false, AUDITOR: false },
-  { capability: 'Approve leave (dept scope)', ADMIN: true, HR_MANAGER: true, PAYROLL_OFFICER: false, DEPARTMENT_HEAD: true, AUDITOR: false },
-  { capability: 'View audit trail', ADMIN: true, HR_MANAGER: false, PAYROLL_OFFICER: false, DEPARTMENT_HEAD: false, AUDITOR: true },
-  { capability: 'Generate COA reports', ADMIN: true, HR_MANAGER: true, PAYROLL_OFFICER: true, DEPARTMENT_HEAD: false, AUDITOR: true },
+  { capability: 'Manage users & roles', ADMIN: true, HR_MANAGER: false, PAYROLL_OFFICER: false, DEPARTMENT_HEAD: false, AUDITOR: false, EMPLOYEE: false },
+  { capability: 'Employee records CRUD', ADMIN: true, HR_MANAGER: true, PAYROLL_OFFICER: false, DEPARTMENT_HEAD: false, AUDITOR: false, EMPLOYEE: false },
+  { capability: 'Create / approve payroll runs', ADMIN: true, HR_MANAGER: false, PAYROLL_OFFICER: true, DEPARTMENT_HEAD: false, AUDITOR: false, EMPLOYEE: false },
+  { capability: 'Approve leave (dept scope)', ADMIN: true, HR_MANAGER: true, PAYROLL_OFFICER: false, DEPARTMENT_HEAD: true, AUDITOR: false, EMPLOYEE: false },
+  { capability: 'View audit trail', ADMIN: true, HR_MANAGER: false, PAYROLL_OFFICER: false, DEPARTMENT_HEAD: false, AUDITOR: true, EMPLOYEE: false },
+  { capability: 'Generate COA reports', ADMIN: true, HR_MANAGER: true, PAYROLL_OFFICER: true, DEPARTMENT_HEAD: false, AUDITOR: true, EMPLOYEE: false },
+  { capability: 'ESS: view own profile', ADMIN: true, HR_MANAGER: true, PAYROLL_OFFICER: true, DEPARTMENT_HEAD: true, AUDITOR: true, EMPLOYEE: true },
+  { capability: 'ESS: file leave requests', ADMIN: true, HR_MANAGER: true, PAYROLL_OFFICER: true, DEPARTMENT_HEAD: true, AUDITOR: true, EMPLOYEE: true },
+  { capability: 'ESS: view own attendance', ADMIN: true, HR_MANAGER: true, PAYROLL_OFFICER: true, DEPARTMENT_HEAD: true, AUDITOR: true, EMPLOYEE: true },
+  { capability: 'ESS: view own payslips', ADMIN: true, HR_MANAGER: true, PAYROLL_OFFICER: true, DEPARTMENT_HEAD: true, AUDITOR: true, EMPLOYEE: true },
 ];
 
 export const leaveCredits = [

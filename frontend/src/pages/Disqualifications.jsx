@@ -150,7 +150,7 @@ export default function Disqualifications() {
       <div className="flex items-end justify-between gap-4 mb-6">
         <div>
           <h1 className="font-display text-xl font-bold text-ink flex items-center gap-2">
-            <ShieldAlert size={20} className="text-destructive" />
+            <ShieldAlert size={20} className="text-error" />
             DIBAR Records
           </h1>
           <p className="text-sm text-muted mt-0.5">CS Form No. 8 - Disqualified, Barred, or Disqualified Individuals</p>
@@ -253,11 +253,11 @@ export default function Disqualifications() {
                         <td className="font-mono">{r.date || '—'}</td>
                         <td className="font-mono">{r.validity || 'None'}</td>
                         <td>{r.isBarred ? 'Yes' : 'No'}</td>
-                        <td>
-                          <span className={`badge ${r.isBarred ? 'badge-destructive' : 'badge-success'}`}>
-                            {r.isBarred ? 'Barred' : 'Inactive'}
-                          </span>
-                        </td>
+                         <td>
+                           <span className={`badge ${r.isBarred ? 'badge-error' : 'badge-success'}`}>
+                             {r.isBarred ? 'Barred' : 'Inactive'}
+                           </span>
+                         </td>
                       </tr>
                     ))
                   )}

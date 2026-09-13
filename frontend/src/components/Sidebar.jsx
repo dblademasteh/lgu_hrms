@@ -7,13 +7,13 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore.js';
 import { useSidebarStyle } from '../sidebarStyle.js';
+import { ROLE_RANK, ROLE_BADGE_TONES } from '../config/permissions.js';
 
 /**
  * Minimal role = least-privileged role that may see the item.
- * Hierarchy (low → high): AUDITOR < DEPARTMENT_HEAD < PAYROLL_OFFICER < HR_MANAGER < ADMIN.
+ * Hierarchy (low → high): EMPLOYEE < AUDITOR < DEPARTMENT_HEAD < PAYROLL_OFFICER < HR_MANAGER < ADMIN.
  * Items without `roles` are visible to every authenticated user.
  */
-const ROLE_RANK = { AUDITOR: 0, DEPARTMENT_HEAD: 1, PAYROLL_OFFICER: 2, HR_MANAGER: 3, ADMIN: 4 };
 
 const groups = [
   {
@@ -41,7 +41,7 @@ const groups = [
       { name: 'Performance', path: '/performance', icon: BarChart3, roles: ['HR_MANAGER', 'ADMIN', 'DEPARTMENT_HEAD'] },
       { name: 'Learning', path: '/learning', icon: Landmark },
       { name: 'Attendance DTR', path: '/attendance', icon: Clock, roles: ['HR_MANAGER', 'ADMIN', 'DEPARTMENT_HEAD'] },
-      { name: 'Biometric Attendance', path: '/biometric', icon: Fingerprint, roles: ['HR_MANAGER', 'ADMIN', 'DEPARTMENT_HEAD', 'PAYROLL_OFFICER'] },
+      { name: 'Attendance Portal', path: '/attendance-portal', icon: Clock },
     ]
   },
   {

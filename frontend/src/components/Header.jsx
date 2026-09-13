@@ -50,6 +50,19 @@ export default function Header({ onToggleSidebar }) {
     return () => document.removeEventListener('mousedown', onDown);
   }, [userOpen]);
 
+  useEffect(() => {
+    const onKey = (e) => {
+      const isMac = navigator.platform.toUpperCase().includes('MAC');
+      const mod = isMac ? e.metaKey : e.ctrlKey;
+      if (mod && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent('lgu:open-palette'));
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, []);
+
   const openItem = (n) => {
     markRead(n.id);
     setBellOpen(false);
@@ -84,12 +97,12 @@ export default function Header({ onToggleSidebar }) {
             type="button"
             className="btn btn-ghost px-2 md:px-3"
             onClick={() => window.dispatchEvent(new CustomEvent('lgu:open-palette'))}
-            aria-label="Quick search (Ctrl+F) - press to open"
-            title="Quick search (Ctrl+F)"
+            aria-label="Quick search - press to open"
+            title="Quick search"
           >
             <Search size={18} />
             <span className="hidden md:inline ml-1 text-sm">Search</span>
-            <span className="hidden lg:inline mono-label ml-2">Ctrl F</span>
+            <span className="hidden lg:inline mono-label ml-2">{navigator.platform.toUpperCase().includes('MAC') ? '⌘K' : 'Ctrl K'}</span>
           </button>
 
           <button
@@ -201,32 +214,56 @@ export default function Header({ onToggleSidebar }) {
           <div className="dropdown" ref={userRef}>
             <button
               type="button"
-              className="flex items-center gap-2 pl-2 pr-2.5 py-1 rounded-[10px] hover:bg-bg/60 border border-transparent hover:border-line transition"
+              className="flex items-center gap-2.5 pl-1 pr-2.5 py-1 rounded-[12px] hover:bg-bg/60 border border-transparent hover:border-line transition"
               onClick={() => setUserOpen(o => !o)}
               aria-expanded={userOpen}
               aria-label="User menu"
             >
-              <div className="w-10 h-10 rounded-[12px] bg-accent/10 text-accent flex items-center justify-center" aria-hidden="true">
-                <User size={18} />
+              <div className="w-9 h-9 rounded-[10px] bg-gradient-to-br from-accent/20 to-accent/5 text-accent grid place-items-center shrink-0 ring-1 ring-accent/10">
+                <span className="font-display font-bold text-[13px]">{user?.username?.[0]?.toUpperCase() ?? 'U'}</span>
               </div>
-              <div className="hidden md:block text-left leading-tight">
+              <div className="hidden lg:block text-left leading-tight">
                 <p className="text-sm font-semibold text-ink truncate max-w-28">{user?.username ?? 'Account'}</p>
-                <p className="text-[10px] mono-label text-muted">{user?.role?.replaceAll('_', ' ') ?? 'â€”'}</p>
+                <p className="text-[10px] mono-label text-muted">{user?.role?.replaceAll('_', ' ') ?? '—'}</p>
               </div>
-              <ChevronDown size={14} className="text-muted" />
+              <ChevronDown size={14} className="text-muted hidden lg:block" />
             </button>
             {userOpen && (
-              <div className="dropdown-panel w-56" role="menu" aria-label="User menu">
-                <div className="px-4 py-3 border-b border-line">
-                  <p className="font-semibold text-ink text-sm">Signed in as</p>
-                  <p className="mono-label text-xs text-muted truncate">{user?.username ?? 'â€”'}{user?.role ? ` Â· ${user.role.replaceAll('_', ' ')}` : ''}</p>
+              <div className="dropdown-panel w-64 shadow-lg" role="menu" aria-label="User menu">
+                <div className="px-4 py-4 border-b border-line">
+                  <div className="flex items-center gap-3">
+                    <div className="w-11 h-11 rounded-[12px] bg-gradient-to-br from-accent/20 to-accent/5 text-accent grid place-items-center ring-1 ring-accent/10">
+                      <span className="font-display font-bold">{user?.username?.[0]?.toUpperCase() ?? 'U'}</span>
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-semibold text-ink text-sm truncate">{user?.username ?? 'Account'}</p>
+                      <p className="mono-label text-[11px] text-muted truncate">{user?.role?.replaceAll('_', ' ')}</p>
+                      <p className="mono-label text-[10px] text-muted mt-0.5 truncate">{user?.tenantId ? `Tenant · ${user.tenantId}` : 'No tenant'}</p>
+                    </div>
+                  </div>
                 </div>
-                <button
-                  className="w-full text-left px-4 py-2.5 text-sm hover:bg-bg/60 flex items-center gap-2"
-                  onClick={() => { logout(); setUserOpen(false); navigate('/'); }}
-                >
-                  <LogOut size={16} /> Sign out
-                </button>
+                <div className="py-1">
+                  <button
+                    className="w-full text-left px-4 py-2.5 text-sm hover:bg-bg/60 flex items-center gap-2"
+                    onClick={() => { setUserOpen(false); navigate('/settings'); }}
+                  >
+                    <User size={16} /> Profile & Settings
+                  </button>
+                  <button
+                    className="w-full text-left px-4 py-2.5 text-sm hover:bg-bg/60 flex items-center gap-2"
+                    onClick={() => { setUserOpen(false); navigate('/help'); }}
+                  >
+                    <HelpCircle size={16} /> Help Center
+                  </button>
+                </div>
+                <div className="border-t border-line py-1">
+                  <button
+                    className="w-full text-left px-4 py-2.5 text-sm hover:bg-bg/60 flex items-center gap-2 text-error"
+                    onClick={() => { logout(); setUserOpen(false); navigate('/'); }}
+                  >
+                    <LogOut size={16} /> Sign out
+                  </button>
+                </div>
               </div>
             )}
           </div>

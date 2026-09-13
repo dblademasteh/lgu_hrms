@@ -1,0 +1,41 @@
+# Local test Identity Provider for LGU HRMS + IMS SSO (dev only).
+# Serves OIDC discovery at http://localhost:5556/dex
+issuer: http://localhost:5556/dex
+
+storage:
+  type: memory
+
+web:
+  http: 0.0.0.0:5556
+
+# Static demo users — password login at the IdP (this IS the "one credential").
+staticClients:
+  - id: lgu-hrms
+    secret: lgu-hrms-secret-dev
+    name: 'LGU HRMS (dev)'
+    redirectURIs:
+      - 'http://localhost:4000/api/v1/auth/oidc/callback'
+  - id: lgu-ims
+    secret: lgu-ims-secret-dev
+    name: 'LGU IMS (dev)'
+    redirectURIs:
+      - 'http://localhost:4001/api/v1/auth/oidc/callback'
+
+connectors: []
+# No upstream connectors: use staticPasswords below as the demo directory.
+
+staticPasswords:
+  - email: 'admin@lgu.local'
+    # bcrypt hash of 'admin123' (cost 10).
+    hash: '$2b$10$TIM9SLU5Fl.fmWm2uOd27ed82QwnJpC5tIepP3LYe2g5gMW.UJBOy'
+    username: 'admin'
+    userID: '08a8684b-db88-4b73-9bb9-a054022df5d0'
+  - email: 'juan.delacruz@lgu.local'
+    hash: '$2b$10$TIM9SLU5Fl.fmWm2uOd27ed82QwnJpC5tIepP3LYe2g5gMW.UJBOy'
+    username: 'juan.delacruz'
+    userID: '11111111-2222-3333-4444-555555555555'
+
+oauth2:
+  skipApprovalScreen: true
+
+enablePasswordDB: true

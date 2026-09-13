@@ -1,5 +1,7 @@
 import { attendanceService } from '../services/attendanceService.js';
 import { prisma } from '../lib/prisma.js';
+import { requireRole } from '../middleware/rbac.js';
+import { withTenant } from '../middleware/tenant.js';
 
 export const attendanceController = {
   async list(req, res, next) {
@@ -18,6 +20,32 @@ export const attendanceController = {
       next(e);
     }
   },
+  async update(req, res, next) {
+    try {
+      const record = await attendanceService.update(req, req.params.id, req.body);
+      if (!record) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Attendance record not found' } });
+      res.json(record);
+    } catch (e) {
+      next(e);
+    }
+  },
+  async remove(req, res, next) {
+    try {
+      const record = await attendanceService.remove(req, req.params.id);
+      if (!record) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Attendance record not found' } });
+      res.json({ message: 'Attendance record deleted' });
+    } catch (e) {
+      next(e);
+    }
+  },
+  async bulkImport(req, res, next) {
+    try {
+      const results = await attendanceService.bulkImport(req, req.body.records);
+      res.json({ results });
+    } catch (e) {
+      next(e);
+    }
+  },
   // Biometric punch in/out - self-service for employees
   async punchBiometric(req, res, next) {
     try {
@@ -26,7 +54,6 @@ export const attendanceController = {
         return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'punchType must be IN or OUT' }});
       }
 
-      // Get user's linked employee record
       const user = await prisma.user.findUnique({ where: { id: req.user.id } });
       if (!user?.externalId) {
         return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Employee linkage not found' }});
@@ -65,11 +92,11 @@ export const attendanceController = {
   // Get today's attendance for quick status check
   async getTodayAttendance(req, res, next) {
     try {
-      const user = await prisma.user.findUnique({ where: { id: req.user.id } });
+      const user = await prisma.user.findUnique({ where: { ...withTenant(req), id: req.user.id } });
       if (!user?.externalId) {
         return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Employee linkage not found' }});
       }
-      const employee = await prisma.employee.findUnique({ where: { employeeNumber: user.externalId }});
+      const employee = await prisma.employee.findUnique({ where: { ...withTenant(req), employeeNumber: user.externalId }});
       if (!employee) {
         return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Employee not found' }});
       }
@@ -80,13 +107,46 @@ export const attendanceController = {
       const endOfDay = new Date(`${todayStr}T23:59:59.999Z`);
 
       const record = await prisma.attendance.findFirst({
-        where: {
+        where: withTenant(req, {
           employeeId: employee.id,
           date: { gte: startOfDay, lte: endOfDay }
-        }
+        })
       });
 
       res.json({ record });
+    } catch (e) { next(e); }
+  },
+
+  // Public biometric punch - no JWT required, uses employeeNumber
+  async punchBiometricPublic(req, res, next) {
+    try {
+      const { employeeNumber, punchType, tenantCode, deviceId } = req.body;
+      if (!employeeNumber || !punchType || (punchType !== 'IN' && punchType !== 'OUT')) {
+        return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'employeeNumber and punchType (IN|OUT) are required' }});
+      }
+
+      let tenantId = req.tenantId || null;
+      if (!tenantId && tenantCode) {
+        const tenant = await prisma.tenant.findUnique({ where: { code: tenantCode } });
+        if (!tenant) {
+          return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Tenant not found' }});
+        }
+        tenantId = tenant.id;
+        req.tenantId = tenantId;
+      }
+      if (!tenantId) {
+        return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'tenantCode is required for public punch' }});
+      }
+
+      const employee = await prisma.employee.findFirst({
+        where: { employeeNumber, tenantId }
+      });
+      if (!employee) {
+        return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Employee not found' }});
+      }
+
+      const result = await attendanceService.biometricPunch(req, employee.id, punchType);
+      res.json({ ...result, employeeNumber, deviceId });
     } catch (e) {
       next(e);
     }

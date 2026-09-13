@@ -5,6 +5,7 @@ import {
   FileText, Edit3, Search, ChevronRight, Users, Banknote,
   LayoutGrid, Keyboard
 } from 'lucide-react';
+import { ROLE_BADGE_TONES } from '../config/permissions.js';
 
 /* ── Quick Links ──────────────────────────────────────────────────────────── */
 const quickLinks = [
@@ -13,16 +14,8 @@ const quickLinks = [
   { label: 'Payroll', desc: 'Pay runs & payslips', icon: Banknote, color: 'text-accent', chip: 'bg-accent/10', target: 'modules' },
   { label: 'Leave', desc: 'Requests & approvals', icon: Calendar, color: 'text-warning', chip: 'bg-warning/10', target: 'modules' },
   { label: 'Performance', desc: 'IPCR & OPCR', icon: BarChart3, color: 'text-accent', chip: 'bg-accent/10', target: 'modules' },
-  { label: 'Audit Trail', desc: 'System activity log', icon: Shield, color: 'text-error', chip: 'bg-error/10', target: 'modules' },
+  { label: 'Multi-Tenant', desc: 'Tenant setup & onboarding', icon: Building, color: 'text-success', chip: 'bg-success/10', target: 'multi-tenancy' },
 ];
-
-const roleBadgeTones = {
-  ADMIN: 'bg-error/10 text-error border-error/20',
-  HR_MANAGER: 'bg-accent/10 text-accent border-accent/20',
-  PAYROLL_OFFICER: 'bg-success/10 text-success border-success/20',
-  DEPARTMENT_HEAD: 'bg-warning/10 text-warning border-warning/20',
-  AUDITOR: 'bg-bg text-muted border-line',
-};
 
 export default function Help() {
   const [openSection, setOpenSection] = useState(null);
@@ -41,13 +34,14 @@ export default function Help() {
             { label: 'Administrative Account', description: 'First-time admin: initial password is admin123. Please change immediately after login.' },
             { label: 'PIN Sign-In', description: 'Set a 4–6 digit PIN in Settings → Account → Security, then use the PIN tab on the login page. Locked after 8 failed attempts in 15 minutes.' },
             { label: 'Password Rotation', description: 'Passwords expire every 30 days. The login page routes you to Settings when expired; renew in Account → Security.' },
+            { label: 'Tenant Selection', description: 'SUPER_ADMIN can pick an LGU via Advanced options on login. Subdomain or X-Tenant-Id auto-detects tenant. Regular users see auto-detect only.' },
           ]
         },
         {
           title: 'Understanding the Interface',
           items: [
             { label: 'Sidebar Menu', description: 'Primary navigation - click items to access modules. Groups: Workforce, RSP, Performance & L&D, Payroll, Compliance, Administration.' },
-            { label: 'App Bar', description: 'Global controls: Search (Ctrl+F), Help, Notifications, Theme toggle, User menu.' },
+            { label: 'App Bar', description: 'Global controls: Search (Ctrl/Cmd+K), Help, Notifications, Theme toggle, User menu.' },
             { label: 'Content Area', description: 'Main workspace showing selected module. Cards/tables with actionable data.' },
             { label: 'Breadcrumbs', description: 'Shows your path through the application for easy navigation.' },
           ]
@@ -55,9 +49,33 @@ export default function Help() {
         {
           title: 'Role-Based Access',
           items: [
-            { label: 'Your Role', description: 'Access is based on your assigned role (ADMIN, HR_MANAGER, PAYROLL_OFFICER, DEPARTMENT_HEAD, or AUDITOR).' },
+            { label: 'Your Role', description: 'Access is based on your assigned role (ADMIN, HR_MANAGER, PAYROLL_OFFICER, DEPARTMENT_HEAD, AUDITOR, or EMPLOYEE).' },
             { label: 'Feature Visibility', description: 'Higher roles inherit access to lower role features.' },
             { label: 'Support', description: 'Contact system administrator for role changes or access issues.' },
+          ]
+        }
+      ]
+    },
+    {
+      id: 'multi-tenancy',
+      title: 'Multi-Tenancy & Onboarding',
+      icon: Building,
+      items: [
+        {
+          title: 'Tenant Concepts',
+          items: [
+            { label: 'What is a Tenant?', description: 'An LGU instance with isolated data sharing the same HRMS platform.' },
+            { label: 'Tenant ID', description: 'All business tables carry tenantId. Data is scoped automatically per logged-in user.' },
+            { label: 'Subdomain Access', description: 'Access via <code>lgu.hrms.local</code>. Subdomain maps to tenant in tenant middleware.' },
+            { label: 'SUPER_ADMIN Override', description: 'SUPER_ADMIN can switch tenants via X-Tenant-Id header, query param, or login Advanced options.' },
+          ]
+        },
+        {
+          title: 'Tenant Registration',
+          items: [
+            { label: 'Onboarding Portal', description: 'Go to /tenant-register to create a new LGU tenant. Requires platform operator access.' },
+            { label: 'Seed Data', description: 'After creation, run seedTenant for DEFAULT/TARLAC to populate initial departments, users, employees, payroll.' },
+            { label: 'Provisioning Docs', description: 'See docs/TENANT_PROVISIONING.md for full provisioning steps.' },
           ]
         }
       ]
@@ -123,6 +141,7 @@ export default function Help() {
             { label: 'Audit - Filter by User', description: 'See all actions performed by a specific user.' },
             { label: 'DIBAR - Disqualification', description: 'Record employee disqualifications. Set status to DISEMPOWERED.' },
             { label: 'Reports - Generate', description: 'Payroll summary, CSV exports, compliance reports.' },
+            { label: 'Reports - Preview', description: 'Click Preview to open report viewer modal. Generate uses pdfmake/ExcelJS.' },
           ]
         },
         {
@@ -173,7 +192,7 @@ export default function Help() {
         {
           title: 'App Bar Controls',
           items: [
-            { label: 'Global Search', description: 'Press Ctrl+F. Type query and press Enter to search all modules.' },
+            { label: 'Global Search', description: 'Press Ctrl/Cmd+K. Type query and press Enter to search all modules.' },
             { label: 'Help Link', description: 'Click the Help icon to view this documentation page.' },
             { label: 'Notifications', description: 'Click bell icon. Red badge shows unread count. Click to view and clear.' },
             { label: 'Theme Toggle', description: 'Click sun/moon icon to switch between light and dark mode.' },
@@ -204,6 +223,7 @@ export default function Help() {
             { label: 'PAYROLL_OFFICER', description: 'Process payroll, manage bonuses, loans, view reports.' },
             { label: 'DEPARTMENT_HEAD', description: 'View employees, process leave/approvals for own department.' },
             { label: 'AUDITOR', description: 'Read-only access to Audit Trail and Reports. Cannot make changes.' },
+            { label: 'EMPLOYEE', description: 'Employee self-service: ESS portal, payslips, leave filing, attendance. No admin access.' },
           ]
         },
         {
@@ -406,7 +426,7 @@ export default function Help() {
                     <>
                       <div className="mt-1.5 mb-4 p-3.5 rounded-lg bg-bg/50 border border-line/50">
                         <div className="flex flex-wrap gap-1.5">
-                          {['ADMIN', 'HR_MANAGER', 'PAYROLL_OFFICER', 'DEPARTMENT_HEAD', 'AUDITOR'].map((role) => (
+                          {['ADMIN', 'HR_MANAGER', 'PAYROLL_OFFICER', 'DEPARTMENT_HEAD', 'AUDITOR', 'EMPLOYEE'].map((role) => (
                             <span
                               key={role}
                               className={`inline-flex items-center px-2 py-0.5 rounded-md border text-[10px] font-mono font-semibold uppercase tracking-wider ${roleBadgeTones[role]}`}
@@ -431,7 +451,7 @@ export default function Help() {
         {/* ── Keyboard hint footer ── */}
         <div className="flex items-center justify-center gap-2 pt-2 pb-6 text-[11px] text-muted">
           <Keyboard size={13} className="text-muted/70" />
-          <span>Press <kbd className="px-1.5 py-0.5 rounded border border-line bg-surface font-mono text-[10px]">Ctrl + F</kbd> anywhere to search the app</span>
+          <span>Press <kbd className="px-1.5 py-0.5 rounded border border-line bg-surface font-mono text-[10px]">Ctrl + K</kbd> anywhere to search the app</span>
         </div>
       </div>
     </Layout>

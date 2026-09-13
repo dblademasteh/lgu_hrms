@@ -98,6 +98,17 @@
   }
 }
 
+/* Utility classes */
+@layer utilities {
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+}
+
 /* ============ Component class system (docs §2.5 — no UI library) ============ */
 @layer components {
   .mono-label {

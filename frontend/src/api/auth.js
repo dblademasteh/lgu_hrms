@@ -26,3 +26,20 @@ export async function refreshToken(refreshToken) {
   const res = await api.post('/auth/refresh', { refreshToken });
   return res.data;
 }
+
+// SSO (OIDC): status is public; login/callback follow the standard session shape.
+export async function oidcStatus() {
+  const res = await api.get('/auth/oidc/status');
+  return res.data;
+}
+
+export async function oidcLoginUrl(tenantId) {
+  const params = tenantId ? `?tenantId=${encodeURIComponent(tenantId)}` : '';
+  const res = await api.get(`/auth/oidc/login${params}`);
+  return res.data;
+}
+
+export async function oidcConsume(ticket) {
+  const res = await api.post('/auth/oidc/consume', { ticket });
+  return res.data;
+}

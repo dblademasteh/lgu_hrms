@@ -40,16 +40,33 @@ async function seedTenant(tenantId, tenantCode, hash) {
     },
   });
 
-  const roles = ['ADMIN', 'HR_MANAGER', 'PAYROLL_OFFICER', 'DEPARTMENT_HEAD', 'AUDITOR'];
-  for (const role of roles) {
+  const roles = ['ADMIN', 'HR_MANAGER', 'PAYROLL_OFFICER', 'DEPARTMENT_HEAD', 'AUDITOR', 'EMPLOYEE'];
+  for (const roleName of roles) {
+    const existing = await prisma.role.findFirst({ where: { name: roleName, tenantId } });
+    if (existing) {
+      await prisma.role.update({ where: { id: existing.id }, data: { description: `System role: ${roleName}`, isSystem: true, tenantId } });
+    } else {
+      await prisma.role.create({ data: { name: roleName, description: `System role: ${roleName}`, isSystem: true, tenantId } });
+    }
+  }
+
+  const roleUsers = [
+    { username: `admin-${tenantCode.toLowerCase()}`, role: 'ADMIN' },
+    { username: `hr_manager-${tenantCode.toLowerCase()}`, role: 'HR_MANAGER' },
+    { username: `payroll_officer-${tenantCode.toLowerCase()}`, role: 'PAYROLL_OFFICER' },
+    { username: `department_head-${tenantCode.toLowerCase()}`, role: 'DEPARTMENT_HEAD' },
+    { username: `auditor-${tenantCode.toLowerCase()}`, role: 'AUDITOR' },
+    { username: `employee-${tenantCode.toLowerCase()}`, role: 'EMPLOYEE' },
+  ];
+  for (const u of roleUsers) {
     await prisma.user.upsert({
-      where: { username: `${role.toLowerCase()}-${tenantCode.toLowerCase()}` },
-      update: { passwordHash: hash, passwordChangedAt: new Date(), tenantId },
+      where: { username: u.username },
+      update: { passwordHash: hash, passwordChangedAt: new Date(), tenantId, role: u.role },
       create: {
-        username: `${role.toLowerCase()}-${tenantCode.toLowerCase()}`,
+        username: u.username,
         passwordHash: hash,
         passwordChangedAt: new Date(),
-        role,
+        role: u.role,
         departmentId: deptPGO.id,
         tenantId,
       },
@@ -130,6 +147,45 @@ async function seedTenant(tenantId, tenantCode, hash) {
       departmentId: deptPGO.id,
       positionId: posAdmin.id,
       hiredDate: new Date('2020-03-10'),
+    },
+    {
+      employeeNumber: `EMP-${tenantCode}-0004`,
+      firstName: 'Carlos',
+      lastName: 'Mendoza',
+      middleName: 'R.',
+      birthDate: new Date('1985-11-15'),
+      gender: 'Male',
+      civilStatus: 'Married',
+      address: 'Camiling, Tarlac',
+      departmentId: deptPGO.id,
+      positionId: posAdmin.id,
+      hiredDate: new Date('2012-07-01'),
+    },
+    {
+      employeeNumber: `EMP-${tenantCode}-0005`,
+      firstName: 'Elena',
+      lastName: 'Rodriguez',
+      middleName: 'S.',
+      birthDate: new Date('1995-08-22'),
+      gender: 'Female',
+      civilStatus: 'Single',
+      address: 'Tarlac City, Tarlac',
+      departmentId: deptFIN.id,
+      positionId: posPayroll.id,
+      hiredDate: new Date('2019-01-15'),
+    },
+    {
+      employeeNumber: `EMP-${tenantCode}-0006`,
+      firstName: 'Roberto',
+      lastName: 'Villanueva',
+      middleName: 'T.',
+      birthDate: new Date('1993-03-18'),
+      gender: 'Male',
+      civilStatus: 'Single',
+      address: 'Tarlac City, Tarlac',
+      departmentId: deptPGO.id,
+      positionId: posAdmin.id,
+      hiredDate: new Date('2021-05-10'),
     },
   ];
 
@@ -258,6 +314,7 @@ async function seedTenant(tenantId, tenantCode, hash) {
     [`admin-${tenantCode.toLowerCase()}`]: `EMP-${tenantCode}-0003`,
     [`hr_manager-${tenantCode.toLowerCase()}`]: `EMP-${tenantCode}-0001`,
     [`payroll_officer-${tenantCode.toLowerCase()}`]: `EMP-${tenantCode}-0002`,
+    [`employee-${tenantCode.toLowerCase()}`]: `EMP-${tenantCode}-0006`,
   };
   for (const [username, employeeNumber] of Object.entries(userLinks)) {
     await prisma.user.updateMany({ where: { username }, data: { externalId: employeeNumber } });

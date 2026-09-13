@@ -1,0 +1,11 @@
+{
+  "source": "HRMS",
+  "employees": [
+    {"employeeNumber": "EMP-DEFAULT-0001", "firstName": "Maria", "lastName": "Santos", "email": null, "departmentId": null},
+    {"employeeNumber": "EMP-DEFAULT-0002", "firstName": "Juan", "lastName": "Dela Cruz", "email": null, "departmentId": null},
+    {"employeeNumber": "EMP-DEFAULT-0003", "firstName": "Ana", "lastName": "Reyes", "email": null, "departmentId": null},
+    {"employeeNumber": "EMP-DEFAULT-0004", "firstName": "Carlos", "lastName": "Mendoza", "email": null, "departmentId": null},
+    {"employeeNumber": "EMP-DEFAULT-0005", "firstName": "Elena", "lastName": "Rodriguez", "email": null, "departmentId": null}
+  ],
+  "options": {"mode": "upsert"}
+}

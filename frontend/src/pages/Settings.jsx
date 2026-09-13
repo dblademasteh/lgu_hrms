@@ -1,5 +1,5 @@
 ﻿import React, { useEffect, useState } from 'react';
-import { Moon, Sun, LayoutGrid, Bell, User, ShieldCheck, Info, Settings as SettingsIcon, Database, Table, X, Save, Check, Plus, Download, Key, LogOut, UserX, Pencil, Trash2, Type, Palette, RefreshCw, Edit3, Server, Activity, Clock, HardDrive, Hash, AlertTriangle } from 'lucide-react';
+import { Moon, Sun, LayoutGrid, Bell, User, ShieldCheck, Info, Settings as SettingsIcon, Database, Table, X, Save, Check, Plus, Download, Key, LogOut, UserX, Pencil, Trash2, Type, Palette, RefreshCw, Edit3, Server, Activity, Clock, HardDrive, Hash, AlertTriangle, Link2, Power, PowerOff, Globe, Webhook } from 'lucide-react';
 import Layout from '../components/Layout.jsx';
 import { useTheme, toggleTheme } from '../theme.js';
 import { useSidebarStyle, setSidebarStyle, SIDEBAR_STYLES, SIDEBAR_STYLE_META } from '../sidebarStyle.js';
@@ -12,6 +12,7 @@ import { databaseApi } from '../api/database.js';
 import { auditApi } from '../api/audit.js';
 import { rulesApi } from '../api/rules.js';
 import { usersApi } from '../api/users.js';
+import { integrationsApi } from '../api/integrations.js';
 import Modal from '../components/Modal.jsx';
 import ConfirmDialog from '../components/ConfirmDialog.jsx';
 
@@ -19,6 +20,7 @@ const tabs = [
   { id: 'appearance', label: 'Appearance', icon: LayoutGrid },
   { id: 'notifications', label: 'Notifications', icon: Bell },
   { id: 'account', label: 'Account', icon: User },
+  { id: 'integrations', label: 'Integrations', icon: Link2 },
   { id: 'database', label: 'Database', icon: Database },
   { id: 'compliance', label: 'Compliance', icon: ShieldCheck },
   { id: 'system', label: 'System', icon: Info },
@@ -43,6 +45,37 @@ export default function Settings() {
   const [delegations, setDelegations] = useState([]);
   const [showProfileEdit, setShowProfileEdit] = useState(false);
   const [showDeactivateConfirm, setShowDeactivateConfirm] = useState(false);
+  const [showRevokeAllConfirm, setShowRevokeAllConfirm] = useState(false);
+  const [showApiKeyModal, setShowApiKeyModal] = useState(false);
+  const [apiKeyName, setApiKeyName] = useState('');
+  const [createdApiKey, setCreatedApiKey] = useState(null);
+  const [revealApiKey, setRevealApiKey] = useState(false);
+  const [copyApiKey, setCopyApiKey] = useState(false);
+  const [apiKeys, setApiKeys] = useState([]);
+  const [deleteKeyTarget, setDeleteKeyTarget] = useState(null);
+  const [webhooks, setWebhooks] = useState([]);
+  const [createdWebhook, setCreatedWebhook] = useState(null);
+  const [revealWebhookSecret, setRevealWebhookSecret] = useState(false);
+  const [copyWebhookSecret, setCopyWebhookSecret] = useState(false);
+  const [rotateSecretTarget, setRotateSecretTarget] = useState(null);
+  const [disableWebhookTarget, setDisableWebhookTarget] = useState(null);
+  const [deleteWebhookTarget, setDeleteWebhookTarget] = useState(null);
+  const [showWebhookModal, setShowWebhookModal] = useState(false);
+  const [webhookFormSecretVisible, setWebhookFormSecretVisible] = useState(false);
+  const [externalSystems, setExternalSystems] = useState([]);
+  const generateSecret = () => {
+    const bytes = new Uint8Array(24);
+    crypto.getRandomValues(bytes);
+    return Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+  };
+  
+  const openWebhookModal = () => {
+    setWebhookForm({ name: '', url: '', events: [], secret: generateSecret() });
+    setShowWebhookModal(true);
+  };
+  const [showExternalSystemModal, setShowExternalSystemModal] = useState(false);
+  const [webhookForm, setWebhookForm] = useState({ name: '', url: '', events: [], secret: generateSecret() });
+  const [externalSystemForm, setExternalSystemForm] = useState({ name: '', type: 'HRIS', description: '', baseUrl: '', apiKey: '', apiSecret: '', headers: '', syncDirection: 'pull' });
   const [show2FAModal, setShow2FAModal] = useState(false);
   const [twoFASecret, setTwoFASecret] = useState(null);
   const [twoFACode, setTwoFACode] = useState('');
@@ -182,11 +215,57 @@ export default function Settings() {
   useEffect(() => { localStorage.setItem('lgu-notif-sms', String(smsNotifications)); }, [smsNotifications]);
   useEffect(() => { localStorage.setItem('lgu-notif-push', String(pushNotifications)); }, [pushNotifications]);
   useEffect(() => { localStorage.setItem('lgu-notif-quiet', quietHours); }, [quietHours]);
+  useEffect(() => {
+    if (active === 'integrations') {
+      integrationsApi.listKeys().then(setApiKeys).catch(() => {});
+      integrationsApi.listWebhooks().then(setWebhooks).catch(() => {});
+      integrationsApi.listExternalSystems().then(setExternalSystems).catch(() => {});
+    }
+  }, [active]);
   useEffect(() => { localStorage.setItem('lgu-accent', accent); document.documentElement.style.setProperty('--accent', accent); }, [accent]);
   useEffect(() => { localStorage.setItem('lgu-font-family', fontFamily); document.documentElement.style.setProperty('--font-sans', `"${fontFamily}", var(--font-sans-fallback)`); document.body.style.fontFamily = `"${fontFamily}", var(--font-sans-fallback)`; }, [fontFamily]);
   useEffect(() => { localStorage.setItem('lgu-ui-scale', String(uiScale)); document.documentElement.style.setProperty('--ui-scale', `${uiScale}%`); }, [uiScale]);
 
   const save = (msg) => toast(msg, 'success');
+
+  const confirmDeleteApiKey = async () => {
+    if (!deleteKeyTarget) return;
+    try {
+      await integrationsApi.deleteKey(deleteKeyTarget.id);
+      toast('API key permanently deleted', 'success');
+      setDeleteKeyTarget(null);
+      integrationsApi.listKeys().then(setApiKeys).catch(() => {});
+    } catch (e) {
+      toast(e?.response?.data?.error?.message || 'Failed to delete API key', 'error');
+      setDeleteKeyTarget(null);
+    }
+  };
+
+  const confirmDisableWebhook = async () => {
+    if (!disableWebhookTarget) return;
+    try {
+      await integrationsApi.updateWebhook(disableWebhookTarget.id, { isActive: !disableWebhookTarget.isActive });
+      toast(disableWebhookTarget.isActive ? 'Webhook deactivated' : 'Webhook activated', 'success');
+      setDisableWebhookTarget(null);
+      integrationsApi.listWebhooks().then(setWebhooks).catch(() => {});
+    } catch (e) {
+      toast(e?.response?.data?.error?.message || 'Failed to update webhook', 'error');
+      setDisableWebhookTarget(null);
+    }
+  };
+
+  const confirmDeleteWebhook = async () => {
+    if (!deleteWebhookTarget) return;
+    try {
+      await integrationsApi.deleteWebhook(deleteWebhookTarget.id);
+      toast('Webhook deleted', 'success');
+      setDeleteWebhookTarget(null);
+      integrationsApi.listWebhooks().then(setWebhooks).catch(() => {});
+    } catch (e) {
+      toast(e?.response?.data?.error?.message || 'Failed to delete webhook', 'error');
+      setDeleteWebhookTarget(null);
+    }
+  };
 
   const isValidEmail = (val) => !val || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val);
   const isValidPhone = (val) => !val || /^[\d\s\+\-\(\)]{7,15}$/.test(val);
@@ -376,10 +455,13 @@ export default function Settings() {
                     </div>
                   </div>
                   <div className="p-5 border border-line rounded-xl bg-bg/50 space-y-3">
-                    <p className="text-sm font-medium text-ink flex items-center gap-2"><LayoutGrid size={16}/> UI density</p>
-                    <p className="text-xs text-muted">Scale spacing & components 80-120%</p>
-                    <input type="range" min="80" max="120" value={uiScale} onChange={e => { setUiScale(Number(e.target.value)); }} className="w-full" />
-                    <div className="flex justify-between text-xs mono-label text-muted"><span>80%</span><span>{uiScale}%</span><span>120%</span></div>
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-medium text-ink flex items-center gap-2"><LayoutGrid size={16}/> UI density</p>
+                      <span className="mono-label text-xs">{uiScale}%</span>
+                    </div>
+                    <p className="text-xs text-muted">Scale spacing & components</p>
+                    <input type="range" min="80" max="120" value={uiScale} onChange={e => { setUiScale(Number(e.target.value)); save(`UI density ${uiScale}%`); }} className="w-full accent-accent" />
+                    <div className="flex justify-between text-[10px] mono-label text-muted"><span>Comfortable</span><span>Compact</span></div>
                   </div>
                   <div className="p-5 border border-line rounded-xl bg-bg/50 space-y-3">
                     <p className="text-sm font-medium text-ink flex items-center gap-2"><Type size={16}/> Font family</p>
@@ -649,7 +731,7 @@ export default function Settings() {
             {active === 'notifications' && (
               <section className="card p-6 space-y-6">
                 <h2 className="font-display font-semibold text-ink flex items-center gap-2"><Bell size={18} className="text-accent"/> Notifications</h2>
-                <div className="grid md:grid-cols-2 gap-4">
+                <div className="grid md:grid-cols-2 gap-3">
                   {[
                     { key: 'inapp', label: 'In-app', desc: 'Toast notifications in browser', value: notificationsEnabled, setter: setNotificationsEnabled },
                     { key: 'email', label: 'Email', desc: 'Send email alerts for approvals', value: emailNotifications, setter: setEmailNotifications },
@@ -657,11 +739,11 @@ export default function Settings() {
                     { key: 'sms', label: 'SMS', desc: 'SMS alerts for critical payroll events', value: smsNotifications, setter: setSmsNotifications },
                   ].map(item => (
                     <label key={item.key} className="flex items-center justify-between p-4 border border-line rounded-xl bg-bg/50 cursor-pointer hover:bg-bg/70 transition">
-                      <div>
-                        <p className="text-sm font-medium text-ink">{item.label}</p>
-                        <p className="text-xs text-muted">{item.desc}</p>
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-ink truncate">{item.label}</p>
+                        <p className="text-xs text-muted truncate">{item.desc}</p>
                       </div>
-                      <input type="checkbox" checked={item.value} onChange={e => { item.setter(e.target.checked); save('Notification preference saved'); }} className="w-4 h-4 accent-accent" />
+                      <input type="checkbox" checked={item.value} onChange={e => { item.setter(e.target.checked); save('Notification preference saved'); }} className="w-4 h-4 accent-accent shrink-0" />
                     </label>
                   ))}
                 </div>
@@ -686,13 +768,102 @@ export default function Settings() {
                     })}
                   </div>
                 </div>
-                <div className="p-4 border border-line rounded-xl bg-bg/50 space-y-2">
-                  <p className="text-sm font-medium text-ink">Quiet hours</p>
-                  <p className="text-xs text-muted">Do not send non-critical notifications during this window</p>
-                  <input type="text" value={quietHours} onChange={e => { setQuietHours(e.target.value); save('Quiet hours updated'); }} className="input w-full max-w-xs mt-2" placeholder="22:00-07:00" />
-                </div>
+                 <div className="p-4 border border-line rounded-xl bg-bg/50 space-y-2">
+                   <p className="text-sm font-medium text-ink">Quiet hours</p>
+                   <p className="text-xs text-muted">Do not send non-critical notifications during this window</p>
+                   <input type="text" value={quietHours} onChange={e => { setQuietHours(e.target.value); save('Quiet hours updated'); }} className="input w-full max-w-xs mt-2 h-10" placeholder="22:00-07:00" />
+                 </div>
                 <div className="p-4 border border-line rounded-xl bg-bg/30 text-xs text-muted">
                   Note: Email/SMS require backend integration. Settings are persisted locally until wired to the API and audit log.
+                </div>
+              </section>
+            )}
+
+            {active === 'integrations' && (
+              <section className="card p-6 space-y-6">
+                <h2 className="font-display font-semibold text-ink flex items-center gap-2"><Link2 size={18} className="text-accent"/> Integrations</h2>
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div className="p-5 border border-line rounded-xl bg-bg/50 space-y-3">
+                    <p className="text-sm font-medium text-ink">API Keys</p>
+                    <p className="text-xs text-muted">Create keys for external HR systems to read employees</p>
+                    <button className="btn btn-primary text-sm gap-2" onClick={()=>setShowApiKeyModal(true)}>Create API Key</button>
+                    <p className="text-[11px] text-muted">Store securely. Rotate every 90 days.</p>
+                     {apiKeys.length > 0 && (
+                       <div className="mt-3 space-y-2">
+                         {apiKeys.map(k => (
+                           <div key={k.id} className="flex items-center justify-between text-xs p-2 bg-bg/40 rounded">
+                             <span className="text-muted truncate">{k.name}</span>
+                             <div className="flex items-center gap-2">
+                               <span className={`badge ${k.isActive !== false ? 'badge-success' : 'badge-ghost'}`}>{k.isActive !== false ? 'Active' : 'Inactive'}</span>
+                               <span className="badge badge-accent">{k.scopes?.join(', ') || 'employees:read'}</span>
+                                <button className="btn btn-ghost btn-sm text-error" onClick={() => integrationsApi.revokeKey(k.id).then((r) => { toast(r?.isActive ? 'API key reactivated' : 'API key deactivated', 'success'); integrationsApi.listKeys().then(setApiKeys).catch(() => {}); })}>
+                                  {k.isActive !== false ? <PowerOff size={12}/> : <Power size={12}/>}
+                                </button>
+                                <button className="btn btn-ghost btn-sm text-error" onClick={() => setDeleteKeyTarget(k)} title="Permanently delete">
+                                  <Trash2 size={12}/>
+                                </button>
+                             </div>
+                           </div>
+                         ))}
+                       </div>
+                     )}
+                  </div>
+                   <div className="p-5 border border-line rounded-xl bg-bg/50 space-y-3">
+                     <p className="text-sm font-medium text-ink">Webhooks</p>
+                     <p className="text-xs text-muted">Subscribe to employee events: created, updated, deleted</p>
+                      <button className="btn btn-primary text-sm gap-2" onClick={openWebhookModal}><Plus size={14}/> Add Webhook</button>
+                     {webhooks.length > 0 && (
+                       <div className="mt-3 space-y-2">
+                         {webhooks.map(w => (
+                           <div key={w.id} className="flex items-center justify-between text-xs p-2 bg-bg/40 rounded">
+                             <div className="min-w-0">
+                               <span className="text-ink truncate block">{w.name}</span>
+                               <span className="text-muted truncate block">{w.url}</span>
+                             </div>
+                               <div className="flex items-center gap-2">
+                                 <span className={`badge ${w.isActive ? 'badge-success' : 'badge-ghost'}`}>{w.isActive ? 'Active' : 'Inactive'}</span>
+                                 <button className="btn btn-ghost btn-xs" onClick={() => integrationsApi.testWebhook(w.id).then(() => toast('Test payload sent', 'success')).catch(() => toast('Test failed', 'error'))} title="Send test event"><Webhook size={12}/></button>
+                                 <button className="btn btn-ghost btn-xs" onClick={() => setRotateSecretTarget(w)} title="Rotate secret"><RefreshCw size={12}/></button>
+                                 <button className="btn btn-ghost btn-xs" onClick={() => setDisableWebhookTarget(w)} title={w.isActive ? 'Disable' : 'Activate'}>
+                                   {w.isActive ? <PowerOff size={12}/> : <Power size={12}/>}
+                                 </button>
+                                 <button className="btn btn-ghost btn-sm text-error" onClick={() => setDeleteWebhookTarget(w)} title="Delete">
+                                   <Trash2 size={12}/>
+                                 </button>
+                               </div>
+                           </div>
+                         ))}
+                       </div>
+                     )}
+                   </div>
+                   <div className="md:col-span-2 p-5 border border-line rounded-xl bg-bg/50 space-y-3">
+                     <div className="flex items-center justify-between">
+                       <div>
+                         <p className="text-sm font-medium text-ink">External Systems</p>
+                         <p className="text-xs text-muted">Prime HR, Civil Service portal, Payroll provider</p>
+                       </div>
+                       <button className="btn btn-primary text-sm gap-2" onClick={() => setShowExternalSystemModal(true)}><Plus size={14}/> Add System</button>
+                     </div>
+                     {externalSystems.length > 0 ? (
+                       <div className="mt-3 space-y-2">
+                         {externalSystems.map(s => (
+                           <div key={s.id} className="flex items-center justify-between text-xs p-2 bg-bg/40 rounded">
+                             <div className="min-w-0">
+                               <span className="text-ink truncate block">{s.name}</span>
+                               <span className="text-muted truncate block">{s.baseUrl}</span>
+                             </div>
+                             <div className="flex items-center gap-2">
+                               <span className="badge badge-accent">{s.type}</span>
+                               <span className={`badge ${s.isActive ? 'badge-success' : 'badge-ghost'}`}>{s.isActive ? 'Active' : 'Inactive'}</span>
+                               <button className="btn btn-ghost btn-sm text-error" onClick={() => integrationsApi.deleteExternalSystem(s.id).then(() => { toast('External system deleted', 'success'); integrationsApi.listExternalSystems().then(setExternalSystems).catch(() => {}); })}><Trash2 size={12}/></button>
+                             </div>
+                           </div>
+                         ))}
+                       </div>
+                     ) : (
+                       <p className="text-xs text-muted">No external systems configured yet.</p>
+                     )}
+                   </div>
                 </div>
               </section>
             )}
@@ -705,33 +876,32 @@ export default function Settings() {
                 </div>
 
                 <div className="grid md:grid-cols-3 gap-4">
-                  <div className="md:col-span-2 p-5 border border-line rounded-xl bg-bg/50 space-y-3">
+                  <div className="md:col-span-2 p-5 border border-line rounded-xl bg-bg/50 space-y-4">
                     {(() => {
                       const u = profile?.user;
                       const initials = (u?.username || 'AB').slice(0,2).toUpperCase();
-                      const displayName = u?.username || 'â€”';
+                      const displayName = u?.username || '—';
                       const email = u?.username?.includes('@') ? u.username : `${u?.username || 'admin'}@lgu.gov.ph`;
                       const role = u?.role || 'ADMIN';
                       const dept = u?.department?.name || 'HR Admin';
                       const completeness = profile?.completeness ?? 78;
                       return (
                         <>
-                          <div className="flex items-center gap-3">
-                            <div className="w-12 h-12 rounded-full bg-accent/15 flex items-center justify-center text-accent font-display font-bold">{initials}</div>
-                            <div>
-                              <p className="text-sm font-medium text-ink">{displayName}</p>
-                              <p className="text-xs text-muted">{email}</p>
+                          <div className="flex items-center gap-4">
+                            <div className="w-14 h-14 rounded-[14px] bg-gradient-to-br from-accent/20 to-accent/5 text-accent grid place-items-center font-display font-bold ring-1 ring-accent/10">{initials}</div>
+                            <div className="min-w-0">
+                              <p className="text-base font-semibold text-ink truncate">{displayName}</p>
+                              <p className="text-xs text-muted truncate">{email}</p>
+                              <div className="flex items-center gap-2 mt-2">
+                                <span className="badge badge-accent">{role}</span>
+                                <span className="mono-label text-[10px]">Dept: {dept}</span>
+                              </div>
                             </div>
                           </div>
-                          <div className="flex items-center gap-2">
-                            <span className="badge badge-accent">{role}</span>
-                            <span className="badge">HRMO</span>
-                            <span className="mono-label text-[10px]">Dept: {dept}</span>
-                          </div>
                           <div className="space-y-2">
-                            <div className="flex justify-between text-xs"><span className="text-muted">Profile completeness</span><span className="mono-label">{completeness}%</span></div>
+                            <div className="flex justify-between text-xs"><span className="text-muted">Profile completeness</span><span className="mono-label font-medium">{completeness}%</span></div>
                             <div className="h-2 rounded-full bg-line overflow-hidden">
-                              <div className="h-full bg-accent" style={{width:`${completeness}%`}}></div>
+                              <div className="h-full bg-accent transition-all" style={{width:`${completeness}%`}}></div>
                             </div>
                             <p className="text-[11px] text-muted">Complete avatar, contact number, and emergency contact to reach 100%</p>
                           </div>
@@ -739,19 +909,19 @@ export default function Settings() {
                       );
                     })()}
                   </div>
-                  <div className="p-5 border border-line rounded-xl bg-bg/50 space-y-2">
-                    <p className="text-sm font-medium text-ink">Role & Scope</p>
+                  <div className="p-5 border border-line rounded-xl bg-bg/50 space-y-3">
+                    <p className="text-sm font-medium text-ink flex items-center gap-2"><ShieldCheck size={16} className="text-accent"/> Role & Scope</p>
                     <p className="text-xs text-muted">Effective permissions derived from JWT</p>
-                    <ul className="text-xs text-muted list-disc pl-4 space-y-1">
-                      <li>Role: {profile?.user?.role || 'â€”'}</li>
-                      <li>Department: {profile?.user?.department?.name || 'â€”'}</li>
-                      <li>Two-factor: {profile?.user?.twoFactorEnabled ? 'Enabled' : 'Disabled'}</li>
+                    <ul className="text-xs text-muted space-y-1.5">
+                      <li className="flex justify-between"><span>Role</span><span className="mono-label text-ink">{profile?.user?.role || '—'}</span></li>
+                      <li className="flex justify-between"><span>Department</span><span className="mono-label text-ink truncate ml-2">{profile?.user?.department?.name || '—'}</span></li>
+                      <li className="flex justify-between"><span>2FA</span><span className={`mono-label ${profile?.user?.twoFactorEnabled ? 'text-success' : 'text-muted'}`}>{profile?.user?.twoFactorEnabled ? 'Enabled' : 'Disabled'}</span></li>
                     </ul>
                   </div>
                 </div>
 
                 <div className="grid md:grid-cols-2 gap-4">
-                  <div className="p-5 border border-line rounded-xl bg-bg/50 space-y-3">
+                  <div className="p-5 border border-line rounded-xl bg-bg/50 space-y-4">
                     <p className="text-sm font-medium text-ink flex items-center gap-2"><ShieldCheck size={16} className="text-accent"/> Security</p>
                     {(() => {
                       const changed = profile?.user?.passwordChangedAt ? new Date(profile.user.passwordChangedAt) : null;
@@ -760,12 +930,12 @@ export default function Settings() {
                       const expired = left != null && left < 0;
                       const urgent = left != null && left >= 0 && left <= 5;
                       return (
-                        <div className={`flex items-center justify-between gap-2 p-3 rounded-lg border text-sm ${expired ? 'border-error/40 bg-error/5' : urgent ? 'border-accent/40 bg-accent/5' : 'border-line bg-bg/60'}`}>
-                          <div className="flex items-center gap-2">
-                            {expired ? <AlertTriangle size={15} className="text-error shrink-0"/> : <Clock size={15} className="text-muted shrink-0"/>}
-                            <div>
-                              <p className="text-ink font-medium">{expired ? 'Password expired — change required' : left == null ? 'Password age unknown' : left === 0 ? 'Password expires today' : `${left} day${left === 1 ? '' : 's'} left`}</p>
-                              <p className="text-xs text-muted">Policy: passwords rotate every 30 days · last changed {changed ? changed.toLocaleDateString() : 'never'}</p>
+                        <div className={`flex items-start justify-between gap-3 p-3 rounded-lg border text-sm ${expired ? 'border-error/40 bg-error/5' : urgent ? 'border-accent/40 bg-accent/5' : 'border-line bg-bg/60'}`}>
+                          <div className="flex items-start gap-2 min-w-0">
+                            {expired ? <AlertTriangle size={15} className="text-error shrink-0 mt-0.5"/> : <Clock size={15} className="text-muted shrink-0 mt-0.5"/>}
+                            <div className="min-w-0">
+                              <p className="text-ink font-medium truncate">{expired ? 'Password expired — change required' : left == null ? 'Password age unknown' : left === 0 ? 'Password expires today' : `${left} day${left === 1 ? '' : 's'} left`}</p>
+                              <p className="text-xs text-muted">Policy: rotate every 30 days · last changed {changed ? changed.toLocaleDateString() : 'never'}</p>
                             </div>
                           </div>
                           <button className="btn btn-ghost text-sm gap-2 shrink-0" onClick={() => setShowPasswordModal(true)}><Key size={14} /> Change</button>
@@ -773,37 +943,38 @@ export default function Settings() {
                       );
                     })()}
                     <div className="space-y-3 text-sm">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-ink">Sign-in PIN</p>
-                          <p className="text-xs text-muted">{profile?.user?.pinEnabled ? '4–6 digit PIN enabled for quick sign-in' : 'Faster sign-in on trusted workstations'}</p>
+                      <div className="flex items-center justify-between gap-3 p-3 rounded-lg border border-line bg-bg/40">
+                        <div className="min-w-0">
+                          <p className="text-ink font-medium flex items-center gap-1.5"><Hash size={14} className="text-muted"/> Sign-in PIN</p>
+                          <p className="text-xs text-muted truncate">{profile?.user?.pinEnabled ? '4–6 digit PIN enabled for quick sign-in' : 'Faster sign-in on trusted workstations'}</p>
                         </div>
                         {profile?.user?.pinEnabled
-                          ? <button className="btn btn-ghost text-sm gap-2 text-error" onClick={async () => { try { await removePin(); toast('PIN removed', 'success'); accountApi.getProfile().then(r => setProfile(r.data)).catch(()=>{}); } catch { toast('Could not remove PIN', 'error'); } }}><Hash size={14} /> Remove</button>
-                          : <button className="btn btn-ghost text-sm gap-2" onClick={() => { setPinNew(''); setPinConfirm(''); setShowPinModal(true); }}><Hash size={14} /> Set PIN</button>}
+                          ? <button className="btn btn-ghost text-xs gap-1.5 text-error" onClick={async () => { try { await removePin(); toast('PIN removed', 'success'); accountApi.getProfile().then(r => setProfile(r.data)).catch(()=>{}); } catch { toast('Could not remove PIN', 'error'); } }}>Remove</button>
+                          : <button className="btn btn-ghost text-xs gap-1.5" onClick={() => { setPinNew(''); setPinConfirm(''); setShowPinModal(true); }}>Set PIN</button>}
                       </div>
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-ink">Password</p>
-                          <p className="text-xs text-muted">
-                            Last changed {profile?.user?.passwordChangedAt ? new Date(profile.user.passwordChangedAt).toLocaleDateString() : 'Never'}
-                          </p>
+                      <div className="flex items-center justify-between gap-3 p-3 rounded-lg border border-line bg-bg/40">
+                        <div className="min-w-0">
+                          <p className="text-ink font-medium flex items-center gap-1.5"><Key size={14} className="text-muted"/> Password</p>
+                          <p className="text-xs text-muted">Last changed {profile?.user?.passwordChangedAt ? new Date(profile.user.passwordChangedAt).toLocaleDateString() : 'Never'}</p>
                         </div>
-                        <button className="btn btn-ghost text-sm gap-2" onClick={() => setShowPasswordModal(true)}><Key size={14} /> Change</button>
+                        <button className="btn btn-ghost text-xs gap-1.5" onClick={() => setShowPasswordModal(true)}>Change</button>
                       </div>
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-ink">Two-factor authentication</p>
+                      <div className="flex items-center justify-between gap-3 p-3 rounded-lg border border-line bg-bg/40">
+                        <div className="min-w-0">
+                          <p className="text-ink font-medium flex items-center gap-1.5"><ShieldCheck size={14} className="text-muted"/> Two-factor authentication</p>
                           <p className="text-xs text-muted">{profile?.user?.twoFactorEnabled ? 'Enabled' : 'TOTP for privileged roles'}</p>
                         </div>
-                        <button className="btn btn-ghost text-sm gap-2" onClick={async()=>{ const r = await accountApi.setup2FA(); setTwoFASecret(r.data); setShow2FAModal(true); }}>
-                          {profile?.user?.twoFactorEnabled ? <><ShieldCheck size={14} /> Manage</> : <><ShieldCheck size={14} /> Setup</>}
+                        <button className="btn btn-ghost text-xs gap-1.5" onClick={async()=>{ const r = await accountApi.setup2FA(); setTwoFASecret(r.data); setShow2FAModal(true); }}>
+                          {profile?.user?.twoFactorEnabled ? 'Manage' : 'Setup'}
                         </button>
                       </div>
                     </div>
                   </div>
                   <div className="p-5 border border-line rounded-xl bg-bg/50 space-y-3">
-                    <p className="text-sm font-medium text-ink">Sessions</p>
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-medium text-ink">Sessions</p>
+                      <button className="btn btn-ghost text-xs gap-2 text-error" onClick={()=>setShowRevokeAllConfirm(true)}><LogOut size={14} /> Revoke All</button>
+                    </div>
                     <p className="text-xs text-muted">Active sessions</p>
                     <div className="space-y-2 text-xs">
                       {sessions.map((s,i)=>(
@@ -1087,27 +1258,30 @@ export default function Settings() {
             </button>
             <button className="btn btn-primary gap-2" onClick={handleProfileUpdate} disabled={!editDisplayName.trim() || (editEmail && !isValidEmail(editEmail)) || (editContact && !isValidPhone(editContact))}>
               <Save size={16} />
-              Save
+              Save changes
             </button>
           </>
         }>
           <div className="space-y-4 text-sm">
-            <div>
-              <label className="block text-sm font-medium text-ink mb-1">Display name</label>
-              <input className="input" value={editDisplayName} onChange={e=>setEditDisplayName(e.target.value)} aria-invalid={!editDisplayName.trim()} />
+            <div className="p-3 rounded-lg bg-bg/60 border border-line">
+              <p className="mono-label text-[10px] uppercase tracking-wide text-muted mb-1">Display</p>
+              <input className="input h-11" placeholder="Full name" value={editDisplayName} onChange={e=>setEditDisplayName(e.target.value)} aria-invalid={!editDisplayName.trim()} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-muted mb-1">Email</label>
+                <input className="input h-11" type="email" placeholder="name@lgu.gov.ph" value={editEmail} onChange={e=>setEditEmail(e.target.value)} aria-invalid={editEmail && !isValidEmail(editEmail)} />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-muted mb-1">Contact</label>
+                <input className="input h-11" placeholder="0917-000-0000" value={editContact} onChange={e=>setEditContact(e.target.value)} aria-invalid={editContact && !isValidPhone(editContact)} />
+              </div>
             </div>
             <div>
-              <label className="block text-sm font-medium text-ink mb-1">Email</label>
-              <input className="input" value={editEmail} onChange={e=>setEditEmail(e.target.value)} aria-invalid={editEmail && !isValidEmail(editEmail)} />
+              <label className="block text-xs font-medium text-muted mb-1">Emergency contact</label>
+              <input className="input h-11" placeholder="Name / number" value={editEmergency} onChange={e=>setEditEmergency(e.target.value)} />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-ink mb-1">Contact number</label>
-              <input className="input" value={editContact} onChange={e=>setEditContact(e.target.value)} aria-invalid={editContact && !isValidPhone(editContact)} />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-ink mb-1">Emergency contact</label>
-              <input className="input" value={editEmergency} onChange={e=>setEditEmergency(e.target.value)} />
-            </div>
+            <p className="text-[11px] text-muted">Changes update your profile completeness and are audit-logged.</p>
           </div>
         </Modal>
         <Modal open={show2FAModal} onClose={()=>{setShow2FAModal(false); setTwoFASecret(null);}} title="Two-factor authentication" size="sm" footer={
@@ -1146,7 +1320,23 @@ export default function Settings() {
         }>
           <form id="deleg-form" onSubmit={async(e)=>{e.preventDefault(); await accountApi.createDelegation(delegationForm); setShowDelegationModal(false); const r = await accountApi.getDelegations(); setDelegations(r.data||[]); toast('Delegation created', 'success');}} className="space-y-3 text-sm">
             <div><label className="block text-sm font-medium text-ink mb-1">Delegatee ID</label><input className="input" value={delegationForm.delegateeId} onChange={e=>setDelegationForm({...delegationForm, delegateeId:e.target.value})} /></div>
-            <div><label className="block text-sm font-medium text-ink mb-1">Scope</label><input className="input" value={delegationForm.scope} onChange={e=>setDelegationForm({...delegationForm, scope:e.target.value})} /></div>
+            <div><label className="block text-sm font-medium text-ink mb-1">Scope</label><input className="input" value={delegationForm.scope} onChange={e=>setDelegationForm({...delegationForm, scope:e.target.value})} placeholder="e.g. leave:approve" /></div>
+            <div>
+              <label className="block text-sm font-medium text-ink mb-1">IMS access (optional)</label>
+              <select
+                className="input"
+                value={delegationForm.scope?.startsWith('ims:') ? delegationForm.scope : ''}
+                onChange={e=>setDelegationForm({...delegationForm, scope:e.target.value})}
+              >
+                <option value="">No IMS access</option>
+                <option value="ims:WAREHOUSE_STAFF">IMS · Warehouse Staff</option>
+                <option value="ims:PROPERTY_CUSTODIAN">IMS · Property Custodian</option>
+                <option value="ims:DEPARTMENT_HEAD">IMS · Department Head</option>
+                <option value="ims:AUDITOR">IMS · Auditor</option>
+                <option value="ims:ADMIN">IMS · Admin</option>
+              </select>
+              <p className="text-[11px] text-muted mt-1">Grants this person that IMS role while the delegation is active. Expiry/revocation removes it on their next IMS sign-in.</p>
+            </div>
             <div><label className="block text-sm font-medium text-ink mb-1">Reason</label><input className="input" value={delegationForm.reason} onChange={e=>setDelegationForm({...delegationForm, reason:e.target.value})} /></div>
             <div className="grid grid-cols-2 gap-2">
               <div><label className="block text-sm font-medium text-ink mb-1">Starts</label><input type="date" className="input" value={delegationForm.startsAt} onChange={e=>setDelegationForm({...delegationForm, startsAt:e.target.value})} /></div>
@@ -1155,6 +1345,7 @@ export default function Settings() {
           </form>
         </Modal>
         <ConfirmDialog open={showDeactivateConfirm} onClose={()=>setShowDeactivateConfirm(false)} title="Deactivate account" message="This will soft-delete your account. Continue?" confirmLabel="Deactivate" danger onConfirm={async()=>{ await accountApi.deactivateAccount(); toast('Account deactivated', 'success'); setShowDeactivateConfirm(false); }} />
+        <ConfirmDialog open={showRevokeAllConfirm} onClose={()=>setShowRevokeAllConfirm(false)} title="Revoke all sessions" message="This will sign you out everywhere except this device. Continue?" confirmLabel="Revoke all" danger onConfirm={async()=>{ try { await accountApi.revokeAllSessions(); toast('All sessions revoked', 'success'); setSessions([]); setShowRevokeAllConfirm(false); } catch { toast('Could not revoke sessions', 'error'); } }} />
         <ConfirmDialog open={!!showDeleteConfirm} onClose={()=>setShowDeleteConfirm(null)} title="Delete record" message={`Delete ${showDeleteConfirm?.table?.label} record #${showDeleteConfirm?.record?.id}? This cannot be undone.`} confirmLabel="Delete" danger onConfirm={async()=>{ if (showDeleteConfirm) { await handleDeleteRecord(showDeleteConfirm.table.name, showDeleteConfirm.record.id); setShowDeleteConfirm(null); } }} />
         <Modal open={!!dbDeps} onClose={() => setDbDeps(null)} title={`Delete ${dbDeps?.table?.label} #${dbDeps?.record?.id}`} size="sm" footer={
           <>
@@ -1244,10 +1435,270 @@ export default function Settings() {
             })()}
           </div>
         </Modal>
+        {createdApiKey ? (
+          <Modal open={!!createdApiKey} onClose={()=>{setCreatedApiKey(null); setShowApiKeyModal(false); setApiKeyName('');}} title="API Key Created" size="sm" footer={
+            <>
+              <button className="btn btn-ghost gap-2" onClick={()=>{setCreatedApiKey(null); setShowApiKeyModal(false); setApiKeyName('');}}><X size={16}/> Close</button>
+            </>
+          }>
+             <div className="space-y-3 text-sm">
+               <p className="text-xs text-muted">Save this key now — it won't be shown again.</p>
+               <div className="flex gap-2">
+                 <input
+                   className="input flex-1 font-mono text-xs"
+                   type={revealApiKey ? 'text' : 'password'}
+                   readOnly
+                   value={createdApiKey.key}
+                 />
+                 <button type="button" className="btn btn-ghost btn-sm" onClick={() => setRevealApiKey(!revealApiKey)} title={revealApiKey ? 'Hide' : 'Reveal'}>
+                   {revealApiKey ? '🙈' : '👁️'}
+                 </button>
+                 <button type="button" className="btn btn-ghost btn-sm" onClick={() => { navigator.clipboard.writeText(createdApiKey.key); setCopyApiKey(true); setTimeout(() => setCopyApiKey(false), 1500); }} title="Copy">
+                   {copyApiKey ? '✓' : '📋'}
+                 </button>
+               </div>
+               <p className="text-xs text-muted">
+                 Name: <span className="font-medium text-ink">{createdApiKey.name}</span><br/>
+                 Scopes: {createdApiKey.scopes?.join(', ')}
+               </p>
+               <p className="text-xs text-muted">
+                 Created: {createdApiKey.createdAt ? new Date(createdApiKey.createdAt).toLocaleString() : ''}
+               </p>
+             </div>
+          </Modal>
+        ) : (
+          <Modal open={showApiKeyModal} onClose={()=>{setShowApiKeyModal(false); setApiKeyName(''); setCreatedApiKey(null);}} title="Create API Key" size="sm" footer={
+            <>
+              <button className="btn btn-ghost gap-2" onClick={()=>{setShowApiKeyModal(false); setApiKeyName(''); setCreatedApiKey(null);}}><X size={16}/> Cancel</button>
+              <button className="btn btn-primary gap-2" disabled={!apiKeyName.trim()} onClick={async()=>{ 
+                try { 
+                  const result = await integrationsApi.createKey({name: apiKeyName});
+                  setCreatedApiKey(result);
+                  toast('API key created – save it now', 'success');
+                  integrationsApi.listKeys().then(setApiKeys).catch(() => {});
+                } catch { toast('Failed to create key','error'); } 
+              }}>Create</button>
+            </>
+          }>
+            <div className="space-y-3 text-sm">
+              <label className="block text-xs font-medium text-muted">Name</label>
+              <input className="input h-11" placeholder="External HR System" value={apiKeyName} onChange={e=>setApiKeyName(e.target.value)} />
+              <p className="text-[11px] text-muted">Scopes: employees:read. Key will be shown once.</p>
+            </div>
+          </Modal>
+        )}
+
+        <Modal open={showWebhookModal} onClose={() => setShowWebhookModal(false)} title="Add Webhook" size="md" footer={
+          <>
+            <button className="btn btn-ghost gap-2" onClick={() => setShowWebhookModal(false)}><X size={16}/> Cancel</button>
+             <button className="btn btn-primary gap-2" disabled={!webhookForm.name || !webhookForm.url || webhookForm.events.length === 0} onClick={async () => {
+                try {
+                  const result = await integrationsApi.createWebhook({
+                    name: webhookForm.name,
+                    url: webhookForm.url,
+                    events: webhookForm.events,
+                    secret: webhookForm.secret || undefined,
+                  });
+                  setCreatedWebhook(result);
+                  toast('Webhook created – save the secret now', 'success');
+                  setShowWebhookModal(false);
+                  setWebhookForm({ name: '', url: '', events: [], secret: '' });
+                  integrationsApi.listWebhooks().then(setWebhooks).catch(() => {});
+                } catch { toast('Failed to create webhook', 'error'); }
+              }}><Plus size={14}/> Add</button>
+          </>
+        }>
+          <div className="space-y-3 text-sm">
+            <div>
+              <label className="block text-xs font-medium text-ink mb-1">Name</label>
+              <input className="input w-full" placeholder="My Webhook" value={webhookForm.name} onChange={e => setWebhookForm({ ...webhookForm, name: e.target.value })} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-ink mb-1">URL</label>
+              <input className="input w-full font-mono" placeholder="https://example.com/webhook" value={webhookForm.url} onChange={e => setWebhookForm({ ...webhookForm, url: e.target.value })} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-ink mb-1">Events</label>
+              <div className="space-y-1">
+                {['employee.created', 'employee.updated', 'employee.deleted'].map(evt => (
+                  <label key={evt} className="flex items-center gap-2 text-xs">
+                    <input
+                      type="checkbox"
+                      checked={webhookForm.events.includes(evt)}
+                      onChange={e => {
+                        const events = e.target.checked
+                          ? [...webhookForm.events, evt]
+                          : webhookForm.events.filter(x => x !== evt);
+                        setWebhookForm({ ...webhookForm, events });
+                      }}
+                    />
+                    <span className="font-mono">{evt}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+             <div>
+               <label className="block text-xs font-medium text-ink mb-1">Secret</label>
+               <div className="flex gap-2">
+                 <input
+                   className="input w-full font-mono"
+                   type={webhookFormSecretVisible ? 'text' : 'password'}
+                   value={webhookForm.secret}
+                   onChange={e => setWebhookForm({ ...webhookForm, secret: e.target.value })}
+                 />
+                 <button type="button" className="btn btn-ghost btn-sm" onClick={() => setWebhookFormSecretVisible(!webhookFormSecretVisible)} title={webhookFormSecretVisible ? 'Hide' : 'Reveal'}>
+                   {webhookFormSecretVisible ? '🙈' : '👁️'}
+                 </button>
+                 <button type="button" className="btn btn-ghost btn-sm" onClick={() => setWebhookForm({ ...webhookForm, secret: generateSecret() })} title="Regenerate">↻</button>
+               </div>
+               <p className="text-[11px] text-muted mt-1">Auto-generated 24-character hex secret. You can edit or regenerate it.</p>
+             </div>
+          </div>
+        </Modal>
+
+        <Modal open={showExternalSystemModal} onClose={() => setShowExternalSystemModal(false)} title="Add External System" size="md" footer={
+          <>
+            <button className="btn btn-ghost gap-2" onClick={() => setShowExternalSystemModal(false)}><X size={16}/> Cancel</button>
+            <button className="btn btn-primary gap-2" disabled={!externalSystemForm.name || !externalSystemForm.type || !externalSystemForm.baseUrl} onClick={async () => {
+              try {
+                await integrationsApi.createExternalSystem({
+                  name: externalSystemForm.name,
+                  type: externalSystemForm.type,
+                  description: externalSystemForm.description || undefined,
+                  baseUrl: externalSystemForm.baseUrl,
+                  apiKey: externalSystemForm.apiKey || undefined,
+                  apiSecret: externalSystemForm.apiSecret || undefined,
+                  headers: externalSystemForm.headers || undefined,
+                  syncDirection: externalSystemForm.syncDirection,
+                });
+                toast('External system added', 'success');
+                setShowExternalSystemModal(false);
+                setExternalSystemForm({ name: '', type: 'HRIS', description: '', baseUrl: '', apiKey: '', apiSecret: '', headers: '', syncDirection: 'pull' });
+                integrationsApi.listExternalSystems().then(setExternalSystems).catch(() => {});
+              } catch { toast('Failed to add external system', 'error'); }
+            }}><Plus size={14}/> Add</button>
+          </>
+        }>
+          <div className="space-y-3 text-sm">
+            <div>
+              <label className="block text-xs font-medium text-ink mb-1">Name</label>
+              <input className="input w-full" placeholder="Prime HR" value={externalSystemForm.name} onChange={e => setExternalSystemForm({ ...externalSystemForm, name: e.target.value })} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-ink mb-1">Type</label>
+              <select className="select w-full" value={externalSystemForm.type} onChange={e => setExternalSystemForm({ ...externalSystemForm, type: e.target.value })}>
+                <option value="HRIS">HRIS</option>
+                <option value="PAYROLL">Payroll</option>
+                <option value="PORTAL">Portal</option>
+                <option value="OTHER">Other</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-ink mb-1">Base URL</label>
+              <input className="input w-full font-mono" placeholder="https://hr.example.com/api" value={externalSystemForm.baseUrl} onChange={e => setExternalSystemForm({ ...externalSystemForm, baseUrl: e.target.value })} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-ink mb-1">Description</label>
+              <input className="input w-full" placeholder="Optional description" value={externalSystemForm.description} onChange={e => setExternalSystemForm({ ...externalSystemForm, description: e.target.value })} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-ink mb-1">API Key</label>
+                <input className="input w-full font-mono" type="password" placeholder="Optional" value={externalSystemForm.apiKey} onChange={e => setExternalSystemForm({ ...externalSystemForm, apiKey: e.target.value })} />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-ink mb-1">API Secret</label>
+                <input className="input w-full font-mono" type="password" placeholder="Optional" value={externalSystemForm.apiSecret} onChange={e => setExternalSystemForm({ ...externalSystemForm, apiSecret: e.target.value })} />
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-ink mb-1">Headers (JSON, optional)</label>
+              <textarea className="input w-full font-mono" rows="3" placeholder='{"X-Custom-Header": "value"}' value={externalSystemForm.headers} onChange={e => setExternalSystemForm({ ...externalSystemForm, headers: e.target.value })} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-ink mb-1">Sync Direction</label>
+              <select className="select w-full" value={externalSystemForm.syncDirection} onChange={e => setExternalSystemForm({ ...externalSystemForm, syncDirection: e.target.value })}>
+                <option value="pull">Pull from external</option>
+                <option value="push">Push to external</option>
+                <option value="bidirectional">Bidirectional</option>
+              </select>
+            </div>
+          </div>
+        </Modal>
+
+        {createdWebhook && (
+          <Modal open={!!createdWebhook} onClose={() => setCreatedWebhook(null)} title="Webhook Created" size="sm" footer={
+            <button className="btn btn-primary gap-2" onClick={() => setCreatedWebhook(null)}>Save Secret</button>
+          }>
+             <div className="space-y-3 text-sm">
+               <p className="text-xs text-muted">Save this secret now. It will not be shown again.</p>
+               <div className="flex gap-2">
+                 <input
+                   className="input flex-1 font-mono text-xs"
+                   type={revealWebhookSecret ? 'text' : 'password'}
+                   readOnly
+                   value={createdWebhook.secret}
+                 />
+                 <button type="button" className="btn btn-ghost btn-sm" onClick={() => setRevealWebhookSecret(!revealWebhookSecret)} title={revealWebhookSecret ? 'Hide' : 'Reveal'}>
+                   {revealWebhookSecret ? '🙈' : '👁️'}
+                 </button>
+                 <button type="button" className="btn btn-ghost btn-sm" onClick={() => { navigator.clipboard.writeText(createdWebhook.secret); setCopyWebhookSecret(true); setTimeout(() => setCopyWebhookSecret(false), 1500); }} title="Copy">
+                   {copyWebhookSecret ? '✓' : '📋'}
+                 </button>
+               </div>
+               <p className="text-xs text-muted">Use this secret in IMS as <span className="font-mono">HRMS_WEBHOOK_SECRET</span>.</p>
+             </div>
+          </Modal>
+        )}
+
+         {rotateSecretTarget && (
+           <ConfirmDialog
+             open={!!rotateSecretTarget}
+             onClose={() => setRotateSecretTarget(null)}
+             onConfirm={async () => {
+               try {
+                 const res = await integrationsApi.rotateWebhookSecret(rotateSecretTarget.id);
+                 toast('Secret rotated. Save the new secret.', 'success');
+                 setRotateSecretTarget(null);
+                 integrationsApi.listWebhooks().then(setWebhooks).catch(() => {});
+               } catch (e) {
+                 toast(e?.response?.data?.error?.message || 'Failed to rotate secret', 'error');
+                 setRotateSecretTarget(null);
+               }
+             }}
+             title="Rotate webhook secret?"
+             message={`This will generate a new secret for "${rotateSecretTarget.name}". The old secret will stop working immediately.`}
+             confirmLabel="Rotate"
+             danger
+           />
+         )}
+
+         {disableWebhookTarget && (
+           <ConfirmDialog
+             open={!!disableWebhookTarget}
+             onClose={() => setDisableWebhookTarget(null)}
+             onConfirm={confirmDisableWebhook}
+             title={disableWebhookTarget.isActive ? 'Disable webhook?' : 'Activate webhook?'}
+             message={`${disableWebhookTarget.isActive ? 'Disable' : 'Activate'} "${disableWebhookTarget.name}"? ${disableWebhookTarget.isActive ? 'It will stop receiving events.' : 'It will resume receiving events.'}`}
+             confirmLabel={disableWebhookTarget.isActive ? 'Disable' : 'Activate'}
+             danger={disableWebhookTarget.isActive}
+           />
+         )}
+
+         {deleteWebhookTarget && (
+           <ConfirmDialog
+             open={!!deleteWebhookTarget}
+             onClose={() => setDeleteWebhookTarget(null)}
+             onConfirm={confirmDeleteWebhook}
+             title="Delete webhook?"
+             message={`Permanently delete "${deleteWebhookTarget.name}"? This cannot be undone.`}
+             confirmLabel="Delete"
+             danger
+           />
+         )}
+
+         <ConfirmDialog open={!!deleteKeyTarget} onClose={() => setDeleteKeyTarget(null)} onConfirm={confirmDeleteApiKey} title="Delete API key" message={`Permanently delete "${deleteKeyTarget?.name}"? This cannot be undone.`} confirmLabel="Delete" danger />
 
     </Layout>
   );
 }
-
-
-

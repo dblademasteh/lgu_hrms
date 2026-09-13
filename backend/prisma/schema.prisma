@@ -20,7 +20,9 @@ model Tenant {
   createdAt DateTime @default(now()) @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @db.Timestamptz(6)
   users       User[]
+  roles       Role[]
   departments Department[]
+  syncRequests SyncRequest[]
   positions   Position[]
   employees   Employee[]
   familyMembers FamilyMember[]
@@ -60,7 +62,12 @@ model Tenant {
   loans Loan[]
   loanAmortizations LoanAmortization[]
   attendanceRules AttendanceRule[]
+  biometricCredentials BiometricCredential[]
   vacancies   Vacancy[]
+  performanceCompetencies PerformanceCompetency[]
+  apiKeys ApiKey[]
+  webhooks WebhookSubscription[]
+  externalSystems ExternalSystem[]
 }
 
 model User {
@@ -69,9 +76,10 @@ model User {
   username         String    @unique
   passwordHash     String
   pinHash          String?
-  role             Role
+  role             String
   departmentId     String?
   externalId       String?
+  idpProvider      String?
   displayName      String?
   email            String?
   contactNumber    String?
@@ -166,6 +174,7 @@ model Employee {
   linkedUsers      User[] @relation("UserEmployeeLink")
   disqualifications Disqualification[]
   tenant      Tenant?   @relation(fields: [tenantId], references: [id])
+  biometricCredentials BiometricCredential[]
 }
 
 model FamilyMember {
@@ -438,6 +447,7 @@ model PerformanceReview {
   updatedAt   DateTime @updatedAt @db.Timestamptz(6)
   employee    Employee @relation(fields: [employeeId], references: [id])
   tenant      Tenant?   @relation(fields: [tenantId], references: [id])
+  competencies PerformanceCompetency[]
 }
 
 model PlantillaItem {
@@ -651,6 +661,7 @@ model Bonus {
 }
 
 enum ApplicantStatus {
+  NEW
   APPLIED
   SCREENED
   SHORTLISTED
@@ -685,13 +696,17 @@ enum ReviewStatus {
   REJECTED
 }
 
-enum Role {
-  SUPER_ADMIN
-  ADMIN
-  HR_MANAGER
-  PAYROLL_OFFICER
-  DEPARTMENT_HEAD
-  AUDITOR
+model Role {
+  id          String    @id @default(uuid())
+  name        String
+  description String?
+  isSystem    Boolean   @default(false)
+  tenantId    String?
+  createdAt   DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt   DateTime  @updatedAt @db.Timestamptz(6)
+  tenant      Tenant?   @relation(fields: [tenantId], references: [id])
+
+  @@unique([name, tenantId])
 }
 
 enum EmploymentStatus {
@@ -792,6 +807,20 @@ model AttendanceRule {
   tenant      Tenant?   @relation(fields: [tenantId], references: [id])
 }
 
+model BiometricCredential {
+  id            String   @id @default(uuid())
+  tenantId       String?
+  employeeId     String
+  credentialId   String   @unique
+  publicKey      String
+  counter        Int      @default(0)
+  deviceName     String?
+  enrolledAt     DateTime @default(now()) @db.Timestamptz(6)
+  lastUsedAt     DateTime? @db.Timestamptz(6)
+  employee       Employee @relation(fields: [employeeId], references: [id])
+  tenant         Tenant?  @relation(fields: [tenantId], references: [id])
+}
+
 model Competency {
   id          String @id @default(uuid())
   tenantId    String?
@@ -799,6 +828,24 @@ model Competency {
   name        String
   description String?
   tenant      Tenant?   @relation(fields: [tenantId], references: [id])
+  reviewItems PerformanceCompetency[]
+}
+
+model PerformanceCompetency {
+  id         String   @id @default(uuid())
+  tenantId   String?
+  reviewId   String
+  competencyId String
+  score      Float
+  maxScore   Float
+  comments   String?
+  createdAt  DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt  DateTime @updatedAt @db.Timestamptz(6)
+  review     PerformanceReview @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  competency Competency @relation(fields: [competencyId], references: [id])
+  tenant     Tenant?   @relation(fields: [tenantId], references: [id])
+
+  @@unique([reviewId, competencyId])
 }
 
 model IDP {
@@ -822,4 +869,69 @@ model Interview {
   applicant   Applicant @relation(fields: [applicantId], references: [id])
   tenant      Tenant?   @relation(fields: [tenantId], references: [id])
 }
+
+model ApiKey {
+  id        String   @id @default(uuid())
+  tenantId  String?
+  name      String
+  keyHash   String   @unique
+  scopes    String[]
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id])
+}
+
+model WebhookSubscription {
+  id        String   @id @default(uuid())
+  tenantId  String?
+  name      String
+  url       String
+  secret    String
+  events    String[]
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id])
+}
+
+model ExternalSystem {
+  id            String    @id @default(uuid())
+  tenantId      String?
+  name          String
+  type          String
+  description   String?
+  baseUrl       String
+  apiKey        String?
+  apiSecret     String?
+  headers       String?
+  syncDirection String    @default("pull")
+  isActive      Boolean   @default(true)
+  lastSyncedAt  DateTime?
+  createdAt     DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt     DateTime  @updatedAt @db.Timestamptz(6)
+  tenant        Tenant?   @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+}
+
+model SyncRequest {
+  id          String   @id @default(uuid())
+  tenantId    String
+  source      String   @default("IMS")
+  target      String   @default("HRMS")
+  imsApiKey   String?
+  datasets    String[]
+  status      String   @default("PENDING")
+  requestedBy String
+  approvedBy  String?
+  createdAt   DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @db.Timestamptz(6)
+  notes       String?
+  tenant      Tenant   @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+  @@index([status])
+}
+
 

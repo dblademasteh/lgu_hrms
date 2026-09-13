@@ -27,9 +27,13 @@ export default function Login() {
   const [capsLock, setCapsLock] = useState(false);
   const [errors, setErrors] = useState({});
   const [authError, setAuthError] = useState('');
+  const [ssoEnabled, setSsoEnabled] = useState(false);
+  const [ssoBusy, setSsoBusy] = useState(false);
+  const [ssoError, setSsoError] = useState('');
 
   useEffect(() => {
     api.get('/tenants').then(res => setTenants(res.data)).catch(() => {});
+    api.get('/auth/oidc/status').then(res => setSsoEnabled(!!res.data?.enabled)).catch(() => {});
   }, []);
   const navigate = useNavigate();
   const login = useAuthStore((s) => s.login);
@@ -79,6 +83,19 @@ export default function Login() {
     if (mode === 'password') setPassword('admin123');
     setErrors({});
     setAuthError('');
+  };
+
+  const handleSso = async () => {
+    setSsoBusy(true);
+    setSsoError('');
+    try {
+      const tenantId = tenant ? tenant.toUpperCase() : undefined;
+      const { url } = await import('../api/auth.js').then(m => m.oidcLoginUrl(tenantId));
+      window.location.assign(url);
+    } catch (e) {
+      setSsoError(e.response?.data?.error?.message || 'SSO is unavailable right now.');
+      setSsoBusy(false);
+    }
   };
 
   return (
@@ -324,6 +341,39 @@ export default function Login() {
             Demo access — <span className="text-ink">admin / admin123</span>
             <span className="float-right underline underline-offset-2">Autofill</span>
           </button>
+
+          <>
+            <div className="flex items-center gap-3 my-4" aria-hidden="true">
+              <span className="h-px flex-1 bg-line" />
+              <span className="mono-label">or</span>
+              <span className="h-px flex-1 bg-line" />
+            </div>
+            <button
+              type="button"
+              onClick={handleSso}
+              disabled={ssoBusy || !ssoEnabled}
+              title={ssoEnabled ? 'Sign in with your organization account' : 'SSO is not configured — ask your administrator to set OIDC_ISSUER / OIDC_CLIENT_ID / OIDC_CLIENT_SECRET'}
+              className="btn btn-outline w-full h-12 text-base disabled:opacity-70"
+            >
+              {ssoBusy ? (
+                <>
+                  <span className="w-4 h-4 rounded-full border-2 border-accent/40 border-t-accent animate-spin" aria-hidden="true" />
+                  Redirecting…
+                </>
+              ) : (
+                <>
+                  <ShieldCheck size={16} aria-hidden="true" />
+                  Sign in with SSO
+                </>
+              )}
+            </button>
+            {!ssoEnabled && (
+              <p className="mono-label text-center mt-2">SSO not configured</p>
+            )}
+            {ssoError && (
+              <p role="alert" className="text-sm text-error mt-2">{ssoError}</p>
+            )}
+          </>
 
           <p className="mono-label text-center mt-8">On-prem &middot; CSC compliant &middot; RBAC protected</p>
         </div>

@@ -30,18 +30,32 @@ async function issueSession(user, req) {
     update: { lastActive: new Date() },
     create: { id: `session-${user.id}-${deviceHash}`, userId: user.id, deviceHash, ip: req.ip, userAgent: req.get('user-agent') }
   });
-  const accessToken = jwt.sign({ id: user.id, role: user.role, tenantId: user.tenantId ?? null }, ACCESS_SECRET, { expiresIn: '15m' });
+  const accessToken = jwt.sign(
+    { id: user.id, role: user.role, tenantId: user.tenantId ?? null, departmentId: user.departmentId ?? null },
+    ACCESS_SECRET,
+    { expiresIn: '15m' }
+  );
   const refreshToken = jwt.sign({ id: user.id }, REFRESH_SECRET, { expiresIn: '7d' });
   const { ageDays, expired } = passwordAge(user);
   return {
     accessToken, refreshToken,
-    user: { id: user.id, username: user.username, role: user.role, tenantId: user.tenantId ?? null },
+    user: { id: user.id, username: user.username, role: user.role, tenantId: user.tenantId ?? null, departmentId: user.departmentId ?? null },
     passwordAgeDays: ageDays,
     passwordExpired: expired,
   };
 }
 
 export const authService = {
+  // Public session mint for SSO: issues the standard access/refresh pair
+  // for an already-verified user row (IdP did the authentication).
+  async issueSessionForUser(user, req) {
+    if (!user || user.status === 'INACTIVE') {
+      const err = new Error('Account is deactivated');
+      err.status = 401;
+      throw err;
+    }
+    return issueSession(user, req);
+  },
   async login(username, password, req) {
     const fail = (msg = 'Invalid credentials') => {
       const err = new Error(msg);

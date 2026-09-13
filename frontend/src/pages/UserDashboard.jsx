@@ -4,6 +4,7 @@ import Layout from '../components/Layout.jsx';
 import { useToast } from '../components/Toast.jsx';
 import { badgeTone } from '../data/mock.js';
 import { useAuthStore } from '../stores/authStore.js';
+import { can, hasPermission, usePermissions } from '../config/permissions.js';
 import { listEmployees } from '../api/employees.js';
 import { payrollApi } from '../api/payroll.js';
 import { leaveApi } from '../api/leave.js';
@@ -42,15 +43,17 @@ const peso = n => `₱ ${Number(n ?? 0).toLocaleString('en-PH', { minimumFractio
 export default function UserDashboard() {
   const toast = useToast();
   const role = useAuthStore(s => s.user?.role);
-  const can = (...allowed) => allowed.includes(role);
-  const canEmployees = can('ADMIN', 'HR_MANAGER', 'DEPARTMENT_HEAD');
-  const canPayroll = can('ADMIN', 'HR_MANAGER', 'PAYROLL_OFFICER');
-  const canReports = can('ADMIN', 'HR_MANAGER', 'PAYROLL_OFFICER', 'AUDITOR');
-  const canLeave = can('ADMIN', 'HR_MANAGER', 'DEPARTMENT_HEAD');
-  const canAudit = can('ADMIN', 'AUDITOR');
-  const canRsp = can('ADMIN', 'HR_MANAGER');
-  const canPerformance = can('ADMIN', 'HR_MANAGER', 'DEPARTMENT_HEAD');
-  const canAttendance = can('ADMIN', 'HR_MANAGER', 'DEPARTMENT_HEAD');
+  const permissions = usePermissions();
+  const canEmployees = can(role, 'ADMIN', 'HR_MANAGER', 'DEPARTMENT_HEAD');
+  const canPayroll = can(role, 'ADMIN', 'HR_MANAGER', 'PAYROLL_OFFICER');
+  const canReports = can(role, 'ADMIN', 'HR_MANAGER', 'PAYROLL_OFFICER', 'AUDITOR');
+  const canLeave = can(role, 'ADMIN', 'HR_MANAGER', 'DEPARTMENT_HEAD');
+  const canAudit = can(role, 'ADMIN', 'AUDITOR');
+  const canRsp = can(role, 'ADMIN', 'HR_MANAGER');
+  const canPerformance = can(role, 'ADMIN', 'HR_MANAGER', 'DEPARTMENT_HEAD');
+  const canAttendance = can(role, 'ADMIN', 'HR_MANAGER', 'DEPARTMENT_HEAD');
+  const canEss = !!permissions[role]?.ess;
+  const canAttendancePortal = !!permissions[role]?.attendancePortal;
 
   const [headcount, setHeadcount] = useState(0);
   const [deptBreakdown, setDeptBreakdown] = useState([]);

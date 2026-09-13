@@ -9,7 +9,7 @@ const app = express();
 app.use(helmet());
 // Same-origin in prod (nginx proxies /api); allow the configured web origin
 // plus localhost for developers. Never reflect arbitrary origins.
-const allowedOrigins = [process.env.WEB_ORIGIN, 'http://localhost:5173', 'http://localhost:5174', 'http://localhost:80'].filter(Boolean);
+const allowedOrigins = [process.env.WEB_ORIGIN, 'http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175', 'http://localhost:80'].filter(Boolean);
 app.use(cors({
   origin: (origin, cb) => {
     if (!origin || allowedOrigins.includes(origin)) return cb(null, true);

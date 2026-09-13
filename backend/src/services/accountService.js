@@ -1,9 +1,17 @@
 import bcrypt from 'bcrypt';
+import { prisma } from '../lib/prisma.js';
 import { userRepository } from '../repositories/userRepository.js';
 
 export const accountService = {
   async getProfile(userId) {
-    const user = await userRepository.findById(userId);
+    // Own row by JWT-verified id: no tenant scoping needed (the JWT itself
+    // is the authorization). NOTE: must NOT go through
+    // userRepository.findById(userId) — its (req, id) signature would treat
+    // the id string as req and filter tenantId: null.
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: { department: true },
+    });
     if (!user) throw new Error('User not found');
     const completeness = calculateCompleteness(user);
     // Never expose credential hashes to the client.
