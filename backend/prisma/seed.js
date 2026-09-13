@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcrypt';
+import { DEFAULT_PERMISSIONS } from '../src/shared/permissions.js';
 
 const prisma = new PrismaClient();
 
@@ -47,6 +48,20 @@ async function seedTenant(tenantId, tenantCode, hash) {
       await prisma.role.update({ where: { id: existing.id }, data: { description: `System role: ${roleName}`, isSystem: true, tenantId } });
     } else {
       await prisma.role.create({ data: { name: roleName, description: `System role: ${roleName}`, isSystem: true, tenantId } });
+    }
+  }
+
+  // Default capability matrix (mirrors historical role whitelist; editable later).
+  for (const roleName of roles) {
+    const role = await prisma.role.findFirst({ where: { name: roleName, tenantId } });
+    if (!role) continue;
+    const defaults = DEFAULT_PERMISSIONS[roleName] ?? {};
+    for (const [key, allowed] of Object.entries(defaults)) {
+      await prisma.rolePermission.upsert({
+        where: { roleId_key: { roleId: role.id, key } },
+        update: { allowed, tenantId },
+        create: { roleId: role.id, key, allowed, tenantId },
+      });
     }
   }
 
@@ -121,6 +136,7 @@ async function seedTenant(tenantId, tenantCode, hash) {
       departmentId: deptHR.id,
       positionId: posHR.id,
       hiredDate: new Date('2015-01-15'),
+      monthlySalary: 46000,
     },
     {
       employeeNumber: `EMP-${tenantCode}-0002`,
@@ -134,6 +150,7 @@ async function seedTenant(tenantId, tenantCode, hash) {
       departmentId: deptFIN.id,
       positionId: posPayroll.id,
       hiredDate: new Date('2018-06-01'),
+      monthlySalary: 35000,
     },
     {
       employeeNumber: `EMP-${tenantCode}-0003`,
@@ -147,6 +164,7 @@ async function seedTenant(tenantId, tenantCode, hash) {
       departmentId: deptPGO.id,
       positionId: posAdmin.id,
       hiredDate: new Date('2020-03-10'),
+      monthlySalary: 28000,
     },
     {
       employeeNumber: `EMP-${tenantCode}-0004`,
@@ -160,6 +178,7 @@ async function seedTenant(tenantId, tenantCode, hash) {
       departmentId: deptPGO.id,
       positionId: posAdmin.id,
       hiredDate: new Date('2012-07-01'),
+      monthlySalary: 60000,
     },
     {
       employeeNumber: `EMP-${tenantCode}-0005`,
@@ -173,6 +192,7 @@ async function seedTenant(tenantId, tenantCode, hash) {
       departmentId: deptFIN.id,
       positionId: posPayroll.id,
       hiredDate: new Date('2019-01-15'),
+      monthlySalary: 32000,
     },
     {
       employeeNumber: `EMP-${tenantCode}-0006`,
@@ -186,13 +206,14 @@ async function seedTenant(tenantId, tenantCode, hash) {
       departmentId: deptPGO.id,
       positionId: posAdmin.id,
       hiredDate: new Date('2021-05-10'),
+      monthlySalary: 26000,
     },
   ];
 
   for (const emp of employeesData) {
     const employee = await prisma.employee.upsert({
       where: { employeeNumber: emp.employeeNumber },
-      update: { tenantId },
+      update: { tenantId, monthlySalary: emp.monthlySalary },
       create: { ...emp, tenantId },
     });
 
@@ -265,6 +286,70 @@ async function seedTenant(tenantId, tenantCode, hash) {
       ],
     });
   }
+
+  await prisma.contributionRule.upsert({
+      where: { id: `contribution-sss-${tenantCode}` },
+      update: { tenantId },
+      create: { id: `contribution-sss-${tenantCode}`, type: 'SSS', employeeRate: 0.045, employerRate: 0.075, effectiveFrom: new Date('2026-01-01'), tenantId },
+    });
+    await prisma.contributionRule.upsert({
+      where: { id: `contribution-phic-${tenantCode}` },
+      update: { tenantId },
+      create: { id: `contribution-phic-${tenantCode}`, type: 'PHIC', employeeRate: 0.035, employerRate: 0.035, effectiveFrom: new Date('2026-01-01'), tenantId },
+    });
+    await prisma.contributionRule.upsert({
+      where: { id: `contribution-pagibig-${tenantCode}` },
+      update: { tenantId },
+      create: { id: `contribution-pagibig-${tenantCode}`, type: 'PAGIBIG', employeeRate: 0.02, employerRate: 0.02, effectiveFrom: new Date('2026-01-01'), tenantId },
+    });
+
+    const bracketRows = [
+      { id: `bracket-0-${tenantCode}`, minIncome: 0, maxIncome: 20833, rate: 0 },
+      { id: `bracket-20833-${tenantCode}`, minIncome: 20833, maxIncome: 33333, rate: 0.15 },
+      { id: `bracket-33333-${tenantCode}`, minIncome: 33333, maxIncome: 66666, rate: 0.2 },
+      { id: `bracket-66666-${tenantCode}`, minIncome: 66666, maxIncome: 166666, rate: 0.25 },
+      { id: `bracket-166666-${tenantCode}`, minIncome: 166666, maxIncome: 666666, rate: 0.3 },
+      { id: `bracket-666666-${tenantCode}`, minIncome: 666666, maxIncome: null, rate: 0.35 },
+    ];
+    for (const b of bracketRows) {
+      await prisma.taxBracket.upsert({
+        where: { id: b.id },
+        update: { tenantId },
+        create: { ...b, effectiveFrom: new Date('2026-01-01'), tenantId },
+      });
+    }
+
+    await prisma.attendanceRule.upsert({
+      where: { id: `attd-tardiness-${tenantCode}` },
+      update: { tenantId },
+      create: { id: `attd-tardiness-${tenantCode}`, name: 'Tardiness', tardinessMin: 20, deductionRate: 50, active: true, tenantId },
+    });
+
+    const emp2 = await prisma.employee.findFirst({ where: { employeeNumber: `EMP-${tenantCode}-0002`, tenantId } });
+    if (emp2) {
+      const loan = await prisma.loan.upsert({
+        where: { id: `loan-${tenantCode}-0002` },
+        update: { tenantId },
+        create: {
+          id: `loan-${tenantCode}-0002`,
+          employeeId: emp2.id,
+          type: 'CASH_LOAN',
+          amount: 6000,
+          termMonths: 3,
+          startDate: new Date('2026-09-01'),
+          status: 'DISBURSED',
+          tenantId,
+        },
+      });
+      const amortDates = [new Date('2026-09-15'), new Date('2026-10-15'), new Date('2026-11-15')];
+      for (let i = 0; i < amortDates.length; i++) {
+        await prisma.loanAmortization.upsert({
+          where: { id: `amort-${tenantCode}-0002-${i + 1}` },
+          update: { tenantId },
+          create: { id: `amort-${tenantCode}-0002-${i + 1}`, loanId: loan.id, dueDate: amortDates[i], amount: 2000, paid: false, tenantId },
+        });
+      }
+    }
 
   const payrollPeriod = await prisma.payrollPeriod.upsert({
     where: { id: `period-2026-09-${tenantCode}` },

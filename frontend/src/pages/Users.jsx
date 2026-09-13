@@ -11,13 +11,16 @@ import { databaseApi } from '../api/database.js';
 import { rolesApi } from '../api/roles.js';
 import { listEmployees } from '../api/employees.js';
 import { badgeTone } from '../data/mock.js';
-import { PERMISSIONS, ROLE_BADGE_TONES } from '../config/permissions.js';
+import { ROLE_BADGE_TONES, useUserCapabilities } from '../config/permissions.js';
 
 const emptyForm = { username: '', role: '', departmentId: '', externalId: '' };
 
 export default function Users() {
   const toast = useToast();
   const myRole = useAuthStore(s => s.user?.role);
+  const userCaps = useUserCapabilities();
+  const userCapsLoaded = Object.keys(userCaps).length > 0;
+  const canManage = myRole === 'SUPER_ADMIN' || (userCapsLoaded && !!userCaps.manageUsersAndRoles);
   const [list, setList] = useState([]);
   const [deptList, setDeptList] = useState([]);
   const [employees, setEmployees] = useState([]);
@@ -36,49 +39,63 @@ export default function Users() {
   const [editingRole, setEditingRole] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [userSearch, setUserSearch] = useState('');
+  // Permission matrix — authoritative in the backend (RolePermission table).
+  const [caps, setCaps] = useState([]);
+  const [matrixRoles, setMatrixRoles] = useState([]);
   const [editingPermissions, setEditingPermissions] = useState(false);
-  const [permissionDraft, setPermissionDraft] = useState(() => {
-    try {
-      const raw = localStorage.getItem('permissions-overrides');
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        const merged = {};
-        for (const key of Object.keys(PERMISSIONS)) {
-          merged[key] = { ...PERMISSIONS[key], ...(parsed[key] || {}) };
-        }
-        return merged;
-      }
-    } catch {}
-    return PERMISSIONS;
-  });
+  const [permissionDraft, setPermissionDraft] = useState({});
+  const [dirtyRoles, setDirtyRoles] = useState({});
+  const [permSaving, setPermSaving] = useState(false);
 
-  const persistPermissions = (draft) => {
-    const overrides = {};
-    for (const key of Object.keys(PERMISSIONS)) {
-      const original = PERMISSIONS[key];
-      const current = draft[key] || {};
-      const delta = {};
-      for (const cap of Object.keys(original)) {
-        if (current[cap] !== original[cap]) delta[cap] = current[cap];
-      }
-      if (Object.keys(delta).length > 0) overrides[key] = delta;
-    }
-    localStorage.setItem('permissions-overrides', JSON.stringify(overrides));
-    window.dispatchEvent(new CustomEvent('permissions-changed'));
+  const syncMatrix = (rolesData = matrixRoles) => {
+    const draft = {};
+    rolesData.forEach(r => { draft[r.name] = { ...r.permissions }; });
+    setPermissionDraft(draft);
+    setDirtyRoles({});
   };
 
-  const togglePermission = (roleKey, capKey) => {
+  const togglePermission = (roleName, capKey) => {
     setPermissionDraft(prev => {
       const next = {
         ...prev,
-        [roleKey]: {
-          ...prev[roleKey],
-          [capKey]: !prev[roleKey]?.[capKey],
+        [roleName]: {
+          ...(prev[roleName] || {}),
+          [capKey]: !prev[roleName]?.[capKey],
         },
       };
-      persistPermissions(next);
+      setDirtyRoles(d => ({ ...d, [roleName]: true }));
       return next;
     });
+  };
+
+  const savePermissions = async () => {
+    setPermSaving(true);
+    try {
+      const changed = Object.entries(dirtyRoles)
+        .filter(([, v]) => v)
+        .map(([roleName]) => roleName);
+      for (const roleName of changed) {
+        await rolesApi.updatePermissions(roleName, permissionDraft[roleName] || {});
+      }
+      toast(changed.length > 0 ? `Saved ${changed.length} role${changed.length > 1 ? 's' : ''} permission set.` : 'No changes to save.', 'success');
+      setEditingPermissions(false);
+      await loadMatrix();
+    } catch (e) {
+      toast(e?.response?.data?.error?.message || 'Failed to save permissions', 'error');
+    } finally {
+      setPermSaving(false);
+    }
+  };
+
+  const loadMatrix = async () => {
+    const { roles } = (await rolesApi.permissions()).data || [];
+    setMatrixRoles(roles);
+    syncMatrix(roles);
+  };
+
+  const loadCaps = async () => {
+    const { capabilities } = (await rolesApi.capabilities()).data || {};
+    setCaps(capabilities);
   };
 
   useEffect(() => {
@@ -87,6 +104,8 @@ export default function Users() {
     listEmployees({ page: 1, limit: 200 }).then(({ items = [] }) => setEmployees(items)).catch(()=>{});
     if (myRole === 'SUPER_ADMIN') databaseApi.tenants().then(setTenants).catch(()=>setTenants([]));
     rolesApi.list().then(r => setRoles(r.data?.roles || [])).catch(()=>{}).finally(() => setRolesLoading(false));
+    rolesApi.capabilities().then(r => setCaps(r.data?.capabilities || [])).catch(()=>{});
+    rolesApi.permissions().then(r => { const roles = r.data?.roles || []; setMatrixRoles(roles); syncMatrix(roles); }).catch(()=>{});
   }, [myRole]);
 
   const openAdd = () => { setEditing(null); setForm(emptyForm); setFormOpen(true); };
@@ -150,6 +169,7 @@ export default function Users() {
       setRoleForm({ name: '', description: '' });
       setEditingRole(null);
       setShowRoleModal(false);
+      loadMatrix().catch(()=>{});
     } catch (e) {
       toast(e?.response?.data?.error?.message || 'Failed to save role', 'error');
     } finally {
@@ -167,6 +187,7 @@ export default function Users() {
       await rolesApi.delete(r.name);
       setRoles(rs => rs.filter(x => x.name !== r.name));
       toast('Role deleted', 'success');
+      loadMatrix().catch(()=>{});
     } catch (e) {
       toast(e?.response?.data?.error?.message || 'Failed to delete role', 'error');
     }
@@ -209,7 +230,7 @@ export default function Users() {
             <p className="text-sm text-muted mt-0.5">RBAC administration and permission matrix</p>
           </div>
           <div className="flex items-center gap-2">
-            {myRole === 'ADMIN' && (
+            {canManage && (
               <button type="button" className="btn btn-ghost gap-2" onClick={() => { setEditingRole(null); setRoleForm({ name: '', description: '' }); setShowRoleModal(true); }}>
                 <Settings size={16} />
                 Manage Roles
@@ -319,15 +340,15 @@ export default function Users() {
           <div className="flex items-center gap-2">
             {editingPermissions ? (
               <>
-                <button type="button" className="btn btn-ghost text-xs" onClick={() => { setPermissionDraft(PERMISSIONS); persistPermissions(PERMISSIONS); }}>
+                <button type="button" className="btn btn-ghost text-xs" onClick={() => syncMatrix()} disabled={permSaving}>
                   Reset
                 </button>
-                <button type="button" className="btn btn-primary text-xs" onClick={() => setEditingPermissions(false)}>
-                  Done
+                <button type="button" className="btn btn-primary text-xs" onClick={savePermissions} disabled={permSaving}>
+                  {permSaving ? 'Saving...' : 'Save Permissions'}
                 </button>
               </>
             ) : (
-              myRole === 'ADMIN' && (
+              canManage && (
                 <button type="button" className="btn btn-ghost text-xs" onClick={() => setEditingPermissions(true)}>
                   Edit Permissions
                 </button>
@@ -335,26 +356,27 @@ export default function Users() {
             )}
           </div>
         </div>
+        <p className="text-xs text-muted mb-3">Capabilities are enforced server-side. Edits apply immediately — custom roles only gain access to a capability once granted here. Reset restores the loaded state, Save persists to all changed roles.</p>
         <div className="overflow-auto">
           <table className="data-table">
             <thead>
-              <tr><th>Capability</th>{(roles || []).map(r => <th key={r.id} className="text-center">{(r.name || '').replaceAll('_', ' ')}</th>)}</tr>
+              <tr><th>Capability</th>{(matrixRoles || []).map(r => <th key={r.id} className="text-center">{(r.name || '').replaceAll('_', ' ')}</th>)}</tr>
             </thead>
             <tbody>
-              {Object.entries(permissionDraft).map(([roleKey, perms]) => (
-                <tr key={roleKey}>
-                  <td className="font-medium">{perms.label || roleKey}</td>
-                  {(roles || []).map(r => {
-                    const allowed = permissionDraft[r.name]?.[roleKey];
-                    const canEdit = myRole === 'ADMIN' && editingPermissions;
+              {caps.map(({ key, label }) => (
+                <tr key={key}>
+                  <td className="font-medium">{label}</td>
+                  {(matrixRoles || []).map(r => {
+                    const allowed = !!permissionDraft[r.name]?.[key];
+                    const canEdit = canManage && editingPermissions;
                     return (
                       <td key={r.id} className="text-center">
                         {canEdit ? (
                           <button
                             type="button"
                             className={"btn btn-ghost px-2 py-1 text-xs " + (allowed ? 'text-success' : 'text-muted')}
-                            onClick={() => togglePermission(r.name, roleKey)}
-                            aria-label={allowed ? 'Allowed' : 'Denied'}
+                            onClick={() => togglePermission(r.name, key)}
+                            aria-label={allowed ? `${r.name} ${label}: allowed` : `${r.name} ${label}: denied`}
                           >
                             {allowed ? '✓' : '·'}
                           </button>
@@ -368,6 +390,9 @@ export default function Users() {
                   })}
                 </tr>
               ))}
+              {caps.length === 0 && (
+                <tr><td className="text-muted text-sm py-4">No capabilities loaded.</td></tr>
+              )}
             </tbody>
           </table>
         </div>

@@ -1,13 +1,13 @@
 import { Router } from 'express';
 import { auditController } from '../controllers/auditController.js';
 import { validate } from '../middleware/validate.js';
-import { requireRole } from '../middleware/rbac.js';
+import { requirePermission } from '../middleware/permission.js';
 import { z } from 'zod';
 
 const router = Router();
-// Audit trail is compliance-sensitive: ADMIN + AUDITOR only.
+// Audit trail is compliance-sensitive: auditTrail capability (defaults: ADMIN + AUDITOR).
 // NOTE: requireAuth is mounted globally in routes/index.js.
-router.use(requireRole('ADMIN', 'AUDITOR'));
+router.use(requirePermission('auditTrail'));
 router.get(
   '/',
   validate({

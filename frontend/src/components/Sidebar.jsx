@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore.js';
 import { useSidebarStyle } from '../sidebarStyle.js';
-import { ROLE_RANK, ROLE_BADGE_TONES } from '../config/permissions.js';
+import { ROLE_RANK, ROLE_BADGE_TONES, useUserCapabilities } from '../config/permissions.js';
 
 /**
  * Minimal role = least-privileged role that may see the item.
@@ -62,7 +62,7 @@ const groups = [
   {
     label: 'Administration',
     items: [
-      { name: 'Users & Roles', path: '/users', icon: UserCog, roles: ['ADMIN'] },
+      { name: 'Users & Roles', path: '/users', icon: UserCog, roles: ['ADMIN', 'SUPER_ADMIN'], capability: 'manageUsersAndRoles' },
       { name: 'Settings', path: '/settings', icon: SettingsIcon },
     ]
   },
@@ -74,12 +74,17 @@ const groups = [
   }
 ];
 
-export function canSee(role, item) {
-  if (!item.roles) return true;
-  const rank = ROLE_RANK[role] ?? -1;
-  // Visible when the user's rank meets ANY listed role's rank — higher roles
-  // inherit lower items (ADMIN sees everything; AUDITOR sees auditor items).
-  return item.roles.some(r => rank >= (ROLE_RANK[r] ?? 99));
+export function canSee(role, item, capabilities) {
+  if (item.roles) {
+    const rank = ROLE_RANK[role] ?? -1;
+    // Role-rank passes → visible.
+    if (item.roles.some(r => rank >= (ROLE_RANK[r] ?? 99))) return true;
+    // Custom roles fall outside ROLE_RANK — visible when the granted capability
+    // is loaded and enabled (capabilities = { map: {...}, loaded: bool }).
+    if (item.capability && capabilities?.loaded && capabilities.map[item.capability]) return true;
+    return false;
+  }
+  return true;
 }
 
 const GROUP_ICONS = {
@@ -438,8 +443,10 @@ function AccordionSidebar({ collapsed, visibleGroups, role }) {
 export default function Sidebar({ collapsed }) {
   const role = useAuthStore(s => s.user?.role);
   const style = useSidebarStyle();
+  const capabilities = useUserCapabilities();
+  const capsLoaded = Object.keys(capabilities).length > 0;
   const visibleGroups = groups
-    .map(g => ({ ...g, items: g.items.filter(i => canSee(role, i)) }))
+    .map(g => ({ ...g, items: g.items.filter(i => canSee(role, i, { map: capabilities, loaded: capsLoaded })) }))
     .filter(g => g.items.length > 0);
 
   if (style === 'dock') {

@@ -21,6 +21,7 @@ model Tenant {
   updatedAt DateTime @updatedAt @db.Timestamptz(6)
   users       User[]
   roles       Role[]
+  rolePermissions RolePermission[]
   departments Department[]
   syncRequests SyncRequest[]
   positions   Position[]
@@ -147,6 +148,7 @@ model Employee {
   contactNumber    String?
   email            String?
   status           EmploymentStatus @default(ACTIVE)
+  monthlySalary    Decimal   @default(0) @db.Decimal(12,2)
   departmentId     String
   positionId       String
   hiredDate        DateTime @db.Date
@@ -175,6 +177,9 @@ model Employee {
   disqualifications Disqualification[]
   tenant      Tenant?   @relation(fields: [tenantId], references: [id])
   biometricCredentials BiometricCredential[]
+
+  @@index([tenantId])
+  @@index([tenantId, status])
 }
 
 model FamilyMember {
@@ -244,9 +249,13 @@ model PayrollPeriod {
   startDate DateTime @db.Date
   endDate   DateTime @db.Date
   fiscalYear Int
+  status    PayrollPeriodStatus @default(OPEN)
   createdAt DateTime @default(now()) @db.Timestamptz(6)
   runs      PayrollRun[]
   tenant      Tenant?   @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
 }
 
 model PayrollRun {
@@ -256,11 +265,16 @@ model PayrollRun {
   runDate     DateTime @db.Date
   status      PayrollStatus @default(DRAFT)
   createdBy   String
+  generatedAt DateTime?
+  postedAt    DateTime?
   createdAt   DateTime @default(now()) @db.Timestamptz(6)
   period      PayrollPeriod @relation(fields: [periodId], references: [id])
   items       PayrollItem[]
   ledgerEntries LedgerEntry[]
   tenant      Tenant?   @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, periodId])
+  @@index([tenantId, createdAt])
 }
 
 model PayrollItem {
@@ -278,6 +292,8 @@ model PayrollItem {
   deductionLines PayrollDeductionLine[]
   payslip Payslip?
   tenant      Tenant?   @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, runId])
 }
 
 model PayrollDeductionLine {
@@ -290,6 +306,8 @@ model PayrollDeductionLine {
   employerShare Decimal @db.Decimal(12,2) @default(0)
   payrollItem PayrollItem @relation(fields: [payrollItemId], references: [id])
   tenant      Tenant?   @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, payrollItemId])
 }
 
 model Payslip {
@@ -300,6 +318,8 @@ model Payslip {
   pdfUrl      String?
   payrollItem PayrollItem @relation(fields: [payrollItemId], references: [id])
   tenant      Tenant?   @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, payrollItemId])
 }
 
 model LedgerEntry {
@@ -314,6 +334,8 @@ model LedgerEntry {
   createdAt DateTime @default(now()) @db.Timestamptz(6)
   run       PayrollRun @relation(fields: [runId], references: [id])
   tenant      Tenant?   @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, runId])
 }
 
 model AuditLog {
@@ -329,6 +351,8 @@ model AuditLog {
   timestamp DateTime @default(now()) @db.Timestamptz(6)
   user      User @relation(fields: [userId], references: [id])
   tenant      Tenant?   @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, timestamp])
 }
 
 model UserSession {
@@ -412,6 +436,8 @@ model Attendance {
   createdAt  DateTime @default(now()) @db.Timestamptz(6)
   employee   Employee @relation(fields: [employeeId], references: [id])
   tenant      Tenant?   @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, employeeId, date])
 }
 
 model Appointment {
@@ -614,6 +640,8 @@ model ContributionRule {
   effectiveTo DateTime? @db.Date
   createdAt   DateTime @default(now()) @db.Timestamptz(6)
   tenant      Tenant?   @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, effectiveFrom])
 }
 
 model TaxBracket {
@@ -626,6 +654,8 @@ model TaxBracket {
   effectiveTo DateTime? @db.Date
   createdAt   DateTime @default(now()) @db.Timestamptz(6)
   tenant      Tenant?   @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, minIncome])
 }
 
 model LeaveRuleConfig {
@@ -705,8 +735,23 @@ model Role {
   createdAt   DateTime  @default(now()) @db.Timestamptz(6)
   updatedAt   DateTime  @updatedAt @db.Timestamptz(6)
   tenant      Tenant?   @relation(fields: [tenantId], references: [id])
+  rolePermissions RolePermission[]
 
   @@unique([name, tenantId])
+}
+
+model RolePermission {
+  id        String   @id @default(uuid())
+  roleId    String
+  key       String
+  allowed   Boolean  @default(false)
+  tenantId  String?
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+  role      Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id])
+
+  @@unique([roleId, key])
 }
 
 enum EmploymentStatus {
@@ -720,6 +765,11 @@ enum PayrollStatus {
   DRAFT
   APPROVED
   POSTED
+}
+
+enum PayrollPeriodStatus {
+  OPEN
+  CLOSED
 }
 
 enum LedgerType {
@@ -784,6 +834,8 @@ model Loan {
   employee    Employee  @relation(fields: [employeeId], references: [id])
   amortizations LoanAmortization[]
   tenant      Tenant?   @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, status])
 }
 
 model LoanAmortization {
@@ -795,6 +847,8 @@ model LoanAmortization {
   paid      Boolean  @default(false)
   loan      Loan     @relation(fields: [loanId], references: [id])
   tenant      Tenant?   @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, paid, dueDate])
 }
 
 model AttendanceRule {
@@ -805,6 +859,8 @@ model AttendanceRule {
   deductionRate Decimal @db.Decimal(12,2)
   active        Boolean @default(true)
   tenant      Tenant?   @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, active])
 }
 
 model BiometricCredential {

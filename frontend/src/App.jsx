@@ -31,11 +31,12 @@ import CommandPalette from './components/CommandPalette.jsx';
 import { ToastProvider } from './components/Toast.jsx';
 
 import { useAuthStore } from './stores/authStore.js';
-import { visibleRoles } from './config/permissions.js';
+import { visibleRoles, useUserCapabilities } from './config/permissions.js';
 
-function Protected({ children, roles }) {
+function Protected({ children, roles, capability }) {
   const user = useAuthStore(s => s.user);
   const hydrate = useAuthStore(s => s.hydrate);
+  const caps = useUserCapabilities();
   const [ready, setReady] = React.useState(!!user);
   React.useEffect(() => {
     if (!user) hydrate();
@@ -45,6 +46,11 @@ function Protected({ children, roles }) {
   if (!useAuthStore.getState().user) return <Navigate to="/" replace />;
   const current = useAuthStore.getState().user;
   if (roles && !roles.includes(current.role)) return <Navigate to="/dashboard" replace />;
+  if (capability) {
+    // Wait for the capability map so admins are never flashed out during load.
+    if (Object.keys(caps).length === 0) return null;
+    if (!caps[capability]) return <Navigate to="/dashboard" replace />;
+  }
   return children;
 }
 
@@ -60,11 +66,11 @@ export default function App() {
              <Route path="/dashboard" element={<Protected><UserDashboard /></Protected>} />
              <Route path="/employees" element={<Protected roles={['ADMIN', 'HR_MANAGER', 'DEPARTMENT_HEAD']}><Employees /></Protected>} />
              <Route path="/organization" element={<Protected><Organization /></Protected>} />
-             <Route path="/payroll" element={<Protected roles={['ADMIN', 'HR_MANAGER', 'PAYROLL_OFFICER']}><Payroll /></Protected>} />
+             <Route path="/payroll" element={<Protected roles={['ADMIN', 'HR_MANAGER', 'PAYROLL_OFFICER']} capability="payrollRead"><Payroll /></Protected>} />
              <Route path="/leave" element={<Protected roles={['ADMIN', 'HR_MANAGER', 'DEPARTMENT_HEAD']}><Leave /></Protected>} />
              <Route path="/audit" element={<Protected roles={['ADMIN', 'AUDITOR']}><Audit /></Protected>} />
              <Route path="/reports" element={<Protected roles={['ADMIN', 'HR_MANAGER', 'PAYROLL_OFFICER', 'AUDITOR']}><Reports /></Protected>} />
-             <Route path="/users" element={<Protected roles={['ADMIN']}><Users /></Protected>} />
+             <Route path="/users" element={<Protected roles={['ADMIN', 'SUPER_ADMIN']} capability="manageUsersAndRoles"><Users /></Protected>} />
              <Route path="/attendance" element={<Protected roles={['ADMIN', 'HR_MANAGER', 'DEPARTMENT_HEAD']}><Attendance /></Protected>} />
              <Route path="/attendance-portal" element={<Protected roles={['EMPLOYEE', 'ADMIN', 'HR_MANAGER', 'PAYROLL_OFFICER', 'DEPARTMENT_HEAD']}><AttendancePortal /></Protected>} />
              <Route path="/appointments" element={<Protected roles={['ADMIN', 'HR_MANAGER']}><Appointments /></Protected>} />

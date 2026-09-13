@@ -1,13 +1,14 @@
 import { Router } from 'express';
 import { reportsController } from '../controllers/reportsController.js';
 import { validate } from '../middleware/validate.js';
-import { requireRole } from '../middleware/rbac.js';
+import { requirePermission } from '../middleware/permission.js';
 import { z } from 'zod';
 
 // NOTE: requireAuth is mounted globally in routes/index.js.
-// Payroll summaries are compliance-sensitive: ADMIN, HR_MANAGER, PAYROLL_OFFICER, AUDITOR.
+// Payroll summaries are compliance-sensitive: reports capability
+// (defaults: ADMIN, HR_MANAGER, PAYROLL_OFFICER, AUDITOR).
 const router = Router();
-router.use(requireRole('ADMIN', 'HR_MANAGER', 'PAYROLL_OFFICER', 'AUDITOR'));
+router.use(requirePermission('reports'));
 
 const summarySchema = {
   query: z.object({

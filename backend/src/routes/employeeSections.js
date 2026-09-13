@@ -6,9 +6,13 @@ import {
   deleteSectionHandler,
 } from '../controllers/employeeSectionController.js';
 import { validate } from '../middleware/validate.js';
+import { requirePermission } from '../middleware/permission.js';
 import { z } from 'zod';
 
 const router = Router({ mergeParams: true });
+
+// Employee PII blocks share the employeeRecordsCRUD matrix capability.
+router.use(requirePermission('employeeRecordsCRUD'));
 
 const sectionParamSchema = {
   params: z.object({

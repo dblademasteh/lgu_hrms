@@ -19,6 +19,16 @@
 
 Two themes switch on `<html data-theme>` (`light` default, persisted in `localStorage['lgu-theme']`, applied pre-paint by an inline script in `index.html` to avoid FOUC). Tailwind consumes them via `@theme inline` so utilities resolve at runtime — theme switching needs no rebuild.
 
+### 2.1 Personalization (Settings → Appearance)
+Beyond the two themes, users can override tokens at runtime (persisted in `localStorage`, applied via inline style on `document.documentElement`):
+- `lgu-accent` → rewrites `--accent` in place (accent presets reuse the theme tokens).
+- `lgu-font-family` → rewrites `--font-sans` (falls back to `--font-sans-fallback` for Inter).
+- `lgu-ui-scale` → rewrites `--ui-scale`/`--font-scale` (global sizing).
+- `lgu-toast-style` → `html[data-toast-style='pill'|'banner'|'minimal']` restyle the toast stack (CSS in `index.css`, styles in `frontend/src/toastStyle.js`).
+- `lgu-sidebar-style` → sidebar presentation variants (`frontend/src/sidebarStyle.js`).
+
+All overrides must still render through the token/class system — a personalization is a token value swap, never a new hardcoded style.
+
 | Token | Light | Dark | Usage |
 |---|---|---|---|
 | `--bg` | `#f4f6fb` | `#0b1120` | App background (`bg-bg`) |
@@ -32,6 +42,9 @@ Two themes switch on `<html data-theme>` (`light` default, persisted in `localSt
 | `--ink` | `#0f172a` | `#e2e8f0` | Primary text (`text-ink`) |
 | `--muted` | `#475569` | `#94a3b8` | Secondary text, mono labels (`text-muted`) |
 | `--line` | `#e2e8f0` | `#1e293b` | Hairline borders, tracks (`border-line`, `bg-line`) |
+| `--accent-secondary` | `#0f766e` | `#2dd4bf` | Secondary accent (teal); used in Settings accent presets — avoid in new UI without a token-backed reason |
+
+Infrastructure vars (not semantic colors, do not consume directly in components): `--grid` (bg grid line), `--shadow-sm`/`--shadow-lg` (card/dropdown shadows). Defaults can be overridden at runtime per-user (see §2.1 Personalization).
 
 Tinted fills always come from `color-mix()` against these tokens (e.g. `bg-accent/10`, badge fills at 10%, hovers at 5–8%) — never new colors. `color-scheme` is set per theme so native controls/scrollbars follow.
 
@@ -42,6 +55,8 @@ Tinted fills always come from `color-mix()` against these tokens (e.g. `bg-accen
 ## 3. Typography
 
 Self-hosted variable fonts via `@fontsource-variable/*` (no CDN — on-prem requirement), imported in `main.jsx`.
+
+> **Known cleanup:** `frontend/src/index.css` still carries a Google Fonts `@import` (DM Sans/Roboto/Lato/… — 10 families not used by the system). It violates the on-prem no-CDN rule and should be removed. TODOs.md tracks it.
 
 | Family | Utility | Role |
 |---|---|---|
@@ -68,9 +83,13 @@ Inline-flex, gap 0.5rem, Inter 600 @ 0.875rem, radius **10px**, hairline border,
 - `.btn-primary` — blue gradient (`color-mix` accent 88% white → accent), `--accent-ink` text; hover brightens 8%. **One per view.**
 - `.btn-ghost` — transparent, muted; hover ink 6% tint. Toolbars, table row actions (pair with `px-3 text-xs`).
 - `.btn-danger` — error gradient + `--error-ink`; confirm-dialog destructive action only.
+- `.btn-outline` — transparent, `--line` border, `--ink` text; hover 4% ink tint. Secondary toolbar action.
 
 ### Inputs — `.input`
-Full-width, surface fill, 1px `--line`, radius **10px**, 0.875rem. Hover: border tints 35% toward accent. Focus-visible: accent border + 2px accent-30% ring (outline suppressed). `[aria-invalid='true']`: error border + error ring. Always pair with a `<label htmlFor>`.
+Full-width, surface fill, 1px `--line`, radius **8px**, 0.875rem. Hover: border tints 35% toward accent. Focus-visible: accent border + 2px accent-30% ring (outline suppressed). `[aria-invalid='true']`: error border + error ring. Always pair with a `<label htmlFor>`.
+
+### Selects — `.select`
+Native `<select>` restyled to the input system (appearance-none, inline SVG chevron, radius **8px**, same hover/focus/invalid states as `.input`). Prefer it over hand-rolled chevron wrappers; if inline Lucide `ChevronDown` is used, keep it decorative (`aria-hidden`, `pointer-events-none`).
 
 ### Cards & stats — `.card`, `.stat`, `.stat-value`
 `.card`: surface, hairline, radius **12px**, soft two-layer shadow. `.stat`: card padding 1rem, column flex. `.stat-value`: mono 1.5rem/600 tabular-nums.
@@ -88,7 +107,7 @@ Flex, radius 8px, muted → ink on hover (ink 8% tint), 200ms ease. Active state
 Behavior (docs: *persists until explicit close*): overlay click does **not** close; Escape and the ✕/footer buttons do. Body scroll locks while open. Head = display-font title + X close button (size 16-18px); foot = right-aligned footer with gap-2 buttons, using X icon for cancel/clear, Save/Check for primary actions. Footer buttons always have icons for visual clarity on mutation actions. Forms submit via footer button with `onClick` handler (form uses `id` attribute referenced by `form` prop).
 
 ### Toasts — `.toast-stack`, `.toast` + `.toast-success/-error/-info`, `.toast-x`
-Fixed bottom-right stack, 18–24rem cards with 3px semantic left border, `toast-in` 200ms entrance, `role="status"` + `aria-live="polite"`, 4s auto-dismiss. Toast notification for all user-initiated actions: create/update/delete, API errors, validation failures, and success confirmations. Never rely on modal alone for feedback.
+Fixed **top-right** stack, 18–24rem cards with 3px semantic left border, `toast-in` 200ms entrance, `role="status"` + `aria-live="polite"`, 4s auto-dismiss. (Position/style can be restyled per user via `data-toast-style` — see §2.1.) Toast notification for all user-initiated actions: create/update/delete, API errors, validation failures, and success confirmations. Never rely on modal alone for feedback.
 
 ### Tabs — `.tabbar`, `.tab`, `.tab-active`
 Underline tab strip (2px accent when active); `role="tablist"/"tab"/"tabpanel"` from the `Tabs` component.
