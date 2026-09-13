@@ -11,11 +11,12 @@ import { listEmployees, createEmployee, updateEmployee, deleteEmployee } from '.
 import { departmentsApi } from '../api/departments.js';
 import { useToast } from '../components/Toast.jsx';
 
-const blankEmployee = { employeeNumber: '', firstName: '', lastName: '', middleName: '', birthDate: '', gender: '', civilStatus: '', address: '', contactNumber: '', email: '', status: 'ACTIVE', departmentId: '', positionId: '', hiredDate: '' };
+const blankEmployee = { employeeNumber: '', firstName: '', lastName: '', middleName: '', birthDate: '', gender: '', civilStatus: '', address: '', contactNumber: '', email: '', status: 'ACTIVE', departmentId: '', positionId: '', hiredDate: '', monthlySalary: '' };
 
 function mapEmployee(e) {
   const fullName = `${e.lastName}, ${e.firstName}${e.middleName ? ' ' + e.middleName : ''}`;
   const toDateInput = v => (v ? String(v).slice(0, 10) : '');
+  const peso = n => (n === null || n === undefined || n === '' ? '' : `₱ ${Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`);
   return {
     id: e.id,
     employeeNumber: e.employeeNumber,
@@ -47,6 +48,8 @@ function mapEmployee(e) {
     civilStatus: (e.civilStatus ?? '').toUpperCase(),
     address: e.address ?? '',
     contactNumber: e.contactNumber ?? '',
+    monthlySalary: e.monthlySalary ?? '',
+    monthly: peso(e.monthlySalary),
     raw: e
   };
 }
@@ -163,9 +166,9 @@ export default function Employees() {
 
   // The edit form writes back raw fields (birthDate/hiredDate as YYYY-MM-DD,
   // departmentId/positionId). Strip the mapped display fields so Zod doesn't choke.
-  const EDITABLE_FIELDS = ['employeeNumber', 'firstName', 'lastName', 'middleName', 'birthDate', 'gender', 'civilStatus', 'address', 'contactNumber', 'email', 'status', 'departmentId', 'positionId', 'hiredDate'];
+  const EDITABLE_FIELDS = ['employeeNumber', 'firstName', 'lastName', 'middleName', 'birthDate', 'gender', 'civilStatus', 'address', 'contactNumber', 'email', 'status', 'departmentId', 'positionId', 'hiredDate', 'monthlySalary'];
   const toPayload = emp => Object.fromEntries(
-    EDITABLE_FIELDS.filter(k => emp[k] !== undefined).map(k => [k, emp[k] === '' && !['employeeNumber', 'firstName', 'lastName', 'birthDate', 'gender', 'civilStatus', 'address', 'departmentId', 'positionId', 'hiredDate'].includes(k) ? null : emp[k]])
+    EDITABLE_FIELDS.filter(k => emp[k] !== undefined && !(k === 'monthlySalary' && emp[k] === '')).map(k => [k, emp[k] === '' && !['employeeNumber', 'firstName', 'lastName', 'birthDate', 'gender', 'civilStatus', 'address', 'departmentId', 'positionId', 'hiredDate'].includes(k) ? null : emp[k]])
   );
 
   const submit = async emp => {
@@ -293,6 +296,7 @@ export default function Employees() {
                     <th className="text-left hidden xl:table-cell w-[90px]">SG/Step</th>
                     <th className="text-left hidden xl:table-cell w-[120px]">Appt Type</th>
                     <th className="text-left w-[80px]">Status</th>
+                    <th className="text-right hidden md:table-cell w-[110px]">Monthly</th>
                     <th className="text-right w-20"></th>
                   </tr>
                 </thead>
@@ -312,6 +316,7 @@ export default function Employees() {
                       <td className="hidden xl:table-cell font-mono text-xs">{e.sg}{e.step ? `/${e.step}` : ''}</td>
                       <td className="hidden xl:table-cell text-xs text-muted">{e.appointmentType || '—'}</td>
                       <td><span className={`badge text-[10px] ${badgeTone(e.status)}`}>{e.status}</span></td>
+                      <td className="hidden md:table-cell font-mono text-xs text-right">{e.monthly || '—'}</td>
                        <td className="text-right">
                          <span className="inline-flex gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition">
                            <button type="button" className="btn btn-ghost px-3 h-9 text-xs min-w-[64px]" onClick={e2 => { e2.stopPropagation(); openEdit(e); }} aria-label="Edit employee">Edit</button>

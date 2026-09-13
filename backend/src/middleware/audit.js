@@ -62,6 +62,20 @@ export function auditLog(req, res, next) {
   next();
 }
 
+const MAX_AUDIT_BODY_BYTES = 65536;
+
+/** Compact large payloads to a shape summary so bulk endpoints (payroll generation/posting) don't bloat AuditLog. */
+function summarizeObject(value) {
+  if (Array.isArray(value)) return { count: value.length };
+  if (value === null || typeof value !== 'object') return value;
+  const out = {};
+  for (const key of Object.keys(value).slice(0, 40)) {
+    const v = value[key];
+    out[key] = Array.isArray(v) ? { count: v.length } : v && typeof v === 'object' ? summarizeObject(v) : v;
+  }
+  return out;
+}
+
 function safeBody(body) {
   try {
     if (!body) return undefined;
@@ -70,7 +84,9 @@ function safeBody(body) {
       const { password, ...rest } = parsed;
       return rest;
     }
-    return parsed;
+    const serialized = typeof parsed === 'object' ? JSON.stringify(parsed) : String(parsed);
+    if (serialized.length <= MAX_AUDIT_BODY_BYTES) return parsed;
+    return summarizeObject(parsed);
   } catch {
     return undefined;
   }

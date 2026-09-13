@@ -64,7 +64,7 @@ export function useNotifications() {
       try {
         const [leaveRes, runsRes, apptRes, vacancyRes, applicantRes, bonusRes, loanRes] = await Promise.allSettled([
           leaveApi.listRequests(),
-          payrollApi.listRuns(),
+          payrollApi.listRuns({ limit: 5, summary: true }),
           appointmentsApi.list(),
           vacancyApi.list({ status: 'OPEN' }),
           listApplicants({ status: 'NEW' }),
@@ -90,12 +90,13 @@ export function useNotifications() {
           }
         }
         if (runsRes.status === 'fulfilled') {
-          const runs = Array.isArray(runsRes.value?.data) ? runsRes.value.data : [];
+          const payload = runsRes.value?.data ?? {};
+          const runs = Array.isArray(payload) ? payload : payload.items ?? [];
           for (const run of runs.filter(x => x?.status === 'DRAFT').slice(0, 5)) {
             built.push({
               id: `payroll-${run.id}`,
               title: 'Payroll run ready for review',
-              body: `${run.period?.name ?? 'A run'} · ${(run.items ?? []).length} item(s) awaiting approval.`,
+              body: `${run.period?.name ?? 'A run'} · ${run._count?.items ?? run.items?.length ?? 0} item(s) awaiting approval.`,
               time: timeAgo(run.createdAt),
               path: '/payroll',
             });

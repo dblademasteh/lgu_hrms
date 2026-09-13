@@ -18,6 +18,7 @@ export const createEmployeeSchema = {
     departmentId: z.string().min(1),
     positionId: z.string().min(1),
     hiredDate: dateField,
+    monthlySalary: z.coerce.number().min(0).max(99999999.99).optional(),
   }),
 };
 

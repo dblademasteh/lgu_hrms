@@ -415,7 +415,7 @@ export default function EmployeeForm({ formId, initial, submitLabel = 'Save', on
               </select>
             </div>
           </div>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 gap-3">
             <div>
               <label htmlFor="e-hired" className="block text-sm font-medium text-ink mb-1">Date Hired *</label>
               <input id="e-hired" required type="date" className="input" value={form.hiredDate ?? ''} onChange={e => set('hiredDate', e.target.value)} />
@@ -423,6 +423,13 @@ export default function EmployeeForm({ formId, initial, submitLabel = 'Save', on
             <div>
               <label htmlFor="e-sg" className="block text-sm font-medium text-ink mb-1">Salary Grade</label>
               <input id="e-sg" className="input font-mono" value={salaryGrade} readOnly tabIndex={-1} placeholder="Auto from position" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label htmlFor="e-monthly" className="block text-sm font-medium text-ink mb-1">Monthly Salary (₱) *</label>
+              <input id="e-monthly" type="number" min="0" step="0.01" required className="input font-mono" value={form.monthlySalary ?? ''} onChange={e => set('monthlySalary', e.target.value === '' ? '' : Number(e.target.value))} placeholder="0.00" />
+              <p className="text-xs text-muted mt-1">Basis for payroll run generation. Whole numbers only for year-graduated fields.</p>
             </div>
             <div>
               <label htmlFor="e-email" className="block text-sm font-medium text-ink mb-1">Email</label>
