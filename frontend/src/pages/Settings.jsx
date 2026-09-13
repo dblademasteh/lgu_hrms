@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState } from 'react';
+﻿import React, { useEffect, useState, useMemo } from 'react';
 import { Moon, Sun, LayoutGrid, Bell, User, ShieldCheck, Info, Settings as SettingsIcon, Database, Table, X, Save, Check, Plus, Download, Key, LogOut, UserX, Pencil, Trash2, Type, Palette, RefreshCw, Edit3, Server, Activity, Clock, HardDrive, Hash, AlertTriangle, Link2, Power, PowerOff, Globe, Webhook } from 'lucide-react';
 import Layout from '../components/Layout.jsx';
 import { useTheme, toggleTheme } from '../theme.js';
@@ -6,6 +6,7 @@ import { useSidebarStyle, setSidebarStyle, SIDEBAR_STYLES, SIDEBAR_STYLE_META } 
 import { useToastStyle, setToastStyle, TOAST_STYLES, TOAST_STYLE_META } from '../toastStyle.js';
 import { useToast } from '../components/Toast.jsx';
 import { useAuthStore } from '../stores/authStore.js';
+import { ROLE_RANK } from '../config/permissions.js';
 import { accountApi } from '../api/account.js';
 import { setupPin, removePin } from '../api/auth.js';
 import { databaseApi } from '../api/database.js';
@@ -30,6 +31,7 @@ export default function Settings() {
   const theme = useTheme();
   const sidebarStyle = useSidebarStyle();
   const toastStyle = useToastStyle();
+  const currentRole = useAuthStore(s => s.user?.role);
   const [active, setActive] = useState('appearance');
   const [notificationsEnabled, setNotificationsEnabled] = useState(() => localStorage.getItem('lgu-notif-inapp') !== 'false');
   const [emailNotifications, setEmailNotifications] = useState(() => localStorage.getItem('lgu-notif-email') !== 'false');
@@ -63,6 +65,23 @@ export default function Settings() {
   const [showWebhookModal, setShowWebhookModal] = useState(false);
   const [webhookFormSecretVisible, setWebhookFormSecretVisible] = useState(false);
   const [externalSystems, setExternalSystems] = useState([]);
+
+  const ADMIN_ROLES = ['ADMIN', 'SUPER_ADMIN'];
+  const isAdmin = ADMIN_ROLES.includes(currentRole);
+
+  const visibleTabs = useMemo(() => tabs.filter(tab => {
+    if (['integrations', 'database', 'compliance', 'system'].includes(tab.id)) {
+      return isAdmin;
+    }
+    return true;
+  }), [isAdmin]);
+
+  useEffect(() => {
+    if (!visibleTabs.some(t => t.id === active)) {
+      setActive(visibleTabs[0]?.id || 'appearance');
+    }
+  }, [active, visibleTabs]);
+
   const generateSecret = () => {
     const bytes = new Uint8Array(24);
     crypto.getRandomValues(bytes);
@@ -387,7 +406,7 @@ export default function Settings() {
   };
 
   return (
-    <Layout>
+    <Layout maxWidth="max-w-7xl">
         <div className="mb-6">
           <h1 className="font-display text-2xl font-bold text-ink flex items-center gap-2">
             <SettingsIcon size={24} className="text-accent" /> Settings
@@ -398,7 +417,7 @@ export default function Settings() {
         <div className="card overflow-hidden">
           <div className="border-b border-line bg-bg/50">
             <div className="flex gap-1 px-2 py-2 overflow-x-auto">
-              {tabs.map(t => {
+              {visibleTabs.map(t => {
                 const Icon = t.icon;
                 const selected = active === t.id;
                 return (

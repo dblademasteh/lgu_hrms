@@ -65,7 +65,7 @@ export default function App() {
              <Route path="/tenant-register" element={<TenantRegister />} />
              <Route path="/dashboard" element={<Protected><UserDashboard /></Protected>} />
              <Route path="/employees" element={<Protected roles={['ADMIN', 'HR_MANAGER', 'DEPARTMENT_HEAD']}><Employees /></Protected>} />
-             <Route path="/organization" element={<Protected><Organization /></Protected>} />
+              <Route path="/organization" element={<Protected roles={['ADMIN', 'HR_MANAGER', 'DEPARTMENT_HEAD']}><Organization /></Protected>} />
              <Route path="/payroll" element={<Protected roles={['ADMIN', 'HR_MANAGER', 'PAYROLL_OFFICER']} capability="payrollRead"><Payroll /></Protected>} />
              <Route path="/leave" element={<Protected roles={['ADMIN', 'HR_MANAGER', 'DEPARTMENT_HEAD']} capability="leaveApproval"><Leave /></Protected>} />
              <Route path="/audit" element={<Protected roles={['ADMIN', 'AUDITOR']}><Audit /></Protected>} />

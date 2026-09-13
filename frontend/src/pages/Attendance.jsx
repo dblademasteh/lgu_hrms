@@ -144,7 +144,7 @@ export default function Attendance() {
   };
 
   return (
-    <Layout>
+    <Layout maxWidth="max-w-7xl">
       <div className="flex items-end justify-between gap-4 mb-6">
         <div>
           <h1 className="font-display text-xl font-bold text-ink">Attendance (DTR)</h1>

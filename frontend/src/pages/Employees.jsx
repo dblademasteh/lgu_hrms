@@ -213,7 +213,7 @@ export default function Employees() {
   };
 
   return (
-    <Layout>
+    <Layout maxWidth="max-w-7xl">
       <div className="flex flex-col gap-3 mb-4">
         <div className="flex items-end justify-between gap-4">
           <div className="min-w-0">

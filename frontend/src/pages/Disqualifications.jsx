@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import Layout from '../components/Layout.jsx';
 import { disqualificationApi } from '../api/disqualifications.js';
+import { listEmployees } from '../api/employees.js';
 import { useToast } from '../components/Toast.jsx';
-import { ShieldAlert, Filter, Download, FileText, X, Save } from 'lucide-react';
+import ConfirmDialog from '../components/ConfirmDialog.jsx';
+import { ShieldAlert, Filter, Download, FileText, X, Save, Pencil, Trash2 } from 'lucide-react';
 
 const DISQUALIFICATION_TYPES = [
   'VIOLATION_OF_CSC_RULES',
@@ -23,6 +25,16 @@ const DISQUALIFICATION_REASONS = [
   'OTHER_GROUNDS'
 ];
 
+const emptyForm = {
+  employeeId: '',
+  type: '',
+  reason: '',
+  date: '',
+  validity: '',
+  remarks: '',
+  isBarred: false,
+};
+
 export default function Disqualifications() {
   const toast = useToast();
   const [records, setRecords] = useState([]);
@@ -34,34 +46,28 @@ export default function Disqualifications() {
   const [page, setPage] = useState(1);
   const [showForm, setShowForm] = useState(false);
   const [editingRecord, setEditingRecord] = useState(null);
-
-  const [formData, setFormData] = useState({
-    employeeId: '',
-    employeeNumber: '',
-    firstName: '',
-    lastName: '',
-    type: '',
-    reason: '',
-    date: '',
-    validity: '',
-    remarks: '',
-    isBarred: false
-  });
+  const [deleting, setDeleting] = useState(null);
+  const [formData, setFormData] = useState(emptyForm);
+  const [employeeOptions, setEmployeeOptions] = useState([]);
 
   useEffect(() => {
     fetchRecords();
   }, [page]);
 
+  useEffect(() => {
+    listEmployees({ limit: 200 }).then(r => setEmployeeOptions(r.items ?? [])).catch(() => {});
+  }, []);
+
   const fetchRecords = async () => {
     setLoading(true);
     try {
-      const params = { 
-        page, 
+      const params = {
+        page,
         limit: 50,
         status: statusFilter || undefined,
         type: typeFilter || undefined,
         reason: reasonFilter || undefined,
-        search: search || undefined
+        search: search || undefined,
       };
       const response = await disqualificationApi.list(params);
       setRecords(response.data.records || []);
@@ -82,10 +88,10 @@ export default function Disqualifications() {
       const params = {
         type: typeFilter || undefined,
         reason: reasonFilter || undefined,
-        isBarred: statusFilter ? statusFilter === 'active' : undefined
+        isBarred: statusFilter ? statusFilter === 'active' : undefined,
       };
       const response = await disqualificationApi.getReport(params);
-      const csv = response.data.records.map(r => 
+      const csv = response.data.records.map(r =>
         `${r.employee.employeeNumber},${r.employee.firstName} ${r.employee.lastName},${r.type},${r.reason},${r.date},${r.isBarred ? 'Active' : 'Expired'}`
       ).join('\n');
       const blob = new Blob([csv], { type: 'text/csv' });
@@ -102,27 +108,17 @@ export default function Disqualifications() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
+      const payload = { ...formData };
       if (editingRecord) {
-        await disqualificationApi.update(editingRecord.id, formData);
+        await disqualificationApi.update(editingRecord.id, payload);
         toast('Disqualification record updated', 'success');
       } else {
-        await disqualificationApi.create(formData);
+        await disqualificationApi.create(payload);
         toast('Disqualification record created', 'success');
       }
       setShowForm(false);
       setEditingRecord(null);
-      setFormData({
-        employeeId: '',
-        employeeNumber: '',
-        firstName: '',
-        lastName: '',
-        type: '',
-        reason: '',
-        date: '',
-        validity: '',
-        remarks: '',
-        isBarred: false
-      });
+      setFormData(emptyForm);
       fetchRecords();
     } catch (err) {
       const msg = err.response?.data?.error?.message || 'Failed to save record';
@@ -130,23 +126,37 @@ export default function Disqualifications() {
     }
   };
 
-  const handleDelete = async (id) => {
-    if (window.confirm('Are you sure you want to delete this record?')) {
-      try {
-        await disqualificationApi.delete(id);
-        toast('Record deleted', 'success');
-        fetchRecords();
-      } catch (err) {
-        toast('Failed to delete record', 'error');
-      }
+  const handleDelete = async () => {
+    if (!deleting) return;
+    try {
+      await disqualificationApi.delete(deleting.id);
+      toast('Record deleted', 'success');
+      setRecords(list => list.filter(r => r.id !== deleting.id));
+      setDeleting(null);
+    } catch (err) {
+      toast('Failed to delete record', 'error');
     }
+  };
+
+  const openEdit = (record) => {
+    setEditingRecord(record);
+    setFormData({
+      employeeId: record.employeeId || '',
+      type: record.type || '',
+      reason: record.reason || '',
+      date: record.date || '',
+      validity: record.validity || '',
+      remarks: record.remarks || '',
+      isBarred: record.isBarred || false,
+    });
+    setShowForm(true);
   };
 
   const formatType = (type) => type.replace(/_/g, ' ');
   const formatReason = (reason) => reason.replace(/_/g, ' ');
 
   return (
-    <Layout>
+    <Layout maxWidth="max-w-7xl">
       <div className="flex items-end justify-between gap-4 mb-6">
         <div>
           <h1 className="font-display text-xl font-bold text-ink flex items-center gap-2">
@@ -159,7 +169,7 @@ export default function Disqualifications() {
           <button className="btn btn-outline gap-2" onClick={handleExport}>
             <Download size={16} /> Export CSV
           </button>
-          <button className="btn btn-primary gap-2" onClick={() => setShowForm(true)}>
+          <button className="btn btn-primary gap-2" onClick={() => { setEditingRecord(null); setFormData(emptyForm); setShowForm(true); }}>
             <FileText size={16} /> Add Record
           </button>
         </div>
@@ -179,8 +189,8 @@ export default function Disqualifications() {
               onKeyDown={e => e.key === 'Enter' && handleFilterChange()}
             />
           </div>
-          
-          <select 
+
+          <select
             className="select w-auto"
             value={statusFilter}
             onChange={e => { setStatusFilter(e.target.value); handleFilterChange(); }}
@@ -234,14 +244,15 @@ export default function Disqualifications() {
                     <th>Valid Until</th>
                     <th>Barred</th>
                     <th>Status</th>
+                    <th className="text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {records.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="text-center py-8 text-muted">No DIBAR records found</td>
+                      <td colSpan={9} className="text-center py-8 text-muted">No DIBAR records found</td>
                     </tr>
-                  ) : (
+                    ) : (
                     records.map(r => (
                       <tr key={r.id}>
                         <td className="font-medium">
@@ -253,11 +264,33 @@ export default function Disqualifications() {
                         <td className="font-mono">{r.date || '—'}</td>
                         <td className="font-mono">{r.validity || 'None'}</td>
                         <td>{r.isBarred ? 'Yes' : 'No'}</td>
-                         <td>
-                           <span className={`badge ${r.isBarred ? 'badge-error' : 'badge-success'}`}>
-                             {r.isBarred ? 'Barred' : 'Inactive'}
-                           </span>
-                         </td>
+                        <td>
+                          <span className={`badge ${r.isBarred ? 'badge-error' : 'badge-success'}`}>
+                            {r.isBarred ? 'Barred' : 'Inactive'}
+                          </span>
+                        </td>
+                        <td className="text-right">
+                          <span className="inline-flex gap-1">
+                            <button
+                              type="button"
+                              className="btn btn-ghost px-2.5 h-8 text-xs min-w-[32px]"
+                              onClick={(e) => { e.stopPropagation(); openEdit(r); }}
+                              aria-label="Edit DIBAR record"
+                              title="Edit"
+                            >
+                              <Pencil size={14} />
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-ghost px-2.5 h-8 text-xs text-error min-w-[32px]"
+                              onClick={(e) => { e.stopPropagation(); setDeleting(r); }}
+                              aria-label="Delete DIBAR record"
+                              title="Delete"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </span>
+                        </td>
                       </tr>
                     ))
                   )}
@@ -271,49 +304,34 @@ export default function Disqualifications() {
       {/* Add/Edit Form Modal */}
       {showForm && (
         <div className="modal-overlay" role="presentation" onClick={() => setShowForm(false)}>
-          <div className="modal-box" role="dialog" aria-modal="true" aria-label="Add Disqualification Record" onClick={e => e.stopPropagation()}>
+          <div className="modal-box modal-lg" role="dialog" aria-modal="true" aria-label="Add Disqualification Record" onClick={e => e.stopPropagation()}>
             <div className="modal-head border-b border-line px-4 py-3">
               <h3 className="font-display font-semibold text-ink">
                 {editingRecord ? 'Edit DIBAR Record' : 'Add New DIBAR Record'}
               </h3>
             </div>
             <form onSubmit={handleSubmit} className="p-4 space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm text-muted mb-1">Employee Number</label>
-                  <input
-                    type="text"
-                    className="input w-full"
-                    value={formData.employeeNumber}
-                    onChange={e => setFormData({ ...formData, employeeNumber: e.target.value })}
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm text-muted mb-1">Last Name</label>
-                  <input
-                    type="text"
-                    className="input w-full"
-                    value={formData.lastName}
-                    onChange={e => setFormData({ ...formData, lastName: e.target.value })}
-                    required
-                  />
-                </div>
+              <div>
+                <label htmlFor="d-emp" className="block text-sm text-muted mb-1">Employee</label>
+                <select
+                  id="d-emp"
+                  className="select w-full"
+                  value={formData.employeeId}
+                  onChange={e => setFormData({ ...formData, employeeId: e.target.value })}
+                  required
+                >
+                  <option value="">— select employee —</option>
+                  {employeeOptions.map(emp => (
+                    <option key={emp.id} value={emp.id}>{emp.employeeNumber} · {emp.firstName} {emp.lastName}</option>
+                  ))}
+                </select>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm text-muted mb-1">First Name</label>
-                  <input
-                    type="text"
-                    className="input w-full"
-                    value={formData.firstName}
-                    onChange={e => setFormData({ ...formData, firstName: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm text-muted mb-1">Type</label>
+                  <label htmlFor="d-type" className="block text-sm text-muted mb-1">Type</label>
                   <select
+                    id="d-type"
                     className="select w-full"
                     value={formData.type}
                     onChange={e => setFormData({ ...formData, type: e.target.value })}
@@ -325,27 +343,28 @@ export default function Disqualifications() {
                     ))}
                   </select>
                 </div>
-              </div>
-
-              <div>
-                <label className="block text-sm text-muted mb-1">Reason</label>
-                <select
-                  className="select w-full"
-                  value={formData.reason}
-                  onChange={e => setFormData({ ...formData, reason: e.target.value })}
-                  required
-                >
-                  <option value="">Select reason</option>
-                  {DISQUALIFICATION_REASONS.map(r => (
-                    <option key={r} value={r}>{formatReason(r)}</option>
-                  ))}
-                </select>
+                <div>
+                  <label htmlFor="d-reason" className="block text-sm text-muted mb-1">Reason</label>
+                  <select
+                    id="d-reason"
+                    className="select w-full"
+                    value={formData.reason}
+                    onChange={e => setFormData({ ...formData, reason: e.target.value })}
+                    required
+                  >
+                    <option value="">Select reason</option>
+                    {DISQUALIFICATION_REASONS.map(r => (
+                      <option key={r} value={r}>{formatReason(r)}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm text-muted mb-1">Date</label>
+                  <label htmlFor="d-date" className="block text-sm text-muted mb-1">Date</label>
                   <input
+                    id="d-date"
                     type="date"
                     className="input w-full"
                     value={formData.date}
@@ -354,8 +373,9 @@ export default function Disqualifications() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm text-muted mb-1">Valid Until</label>
+                  <label htmlFor="d-validity" className="block text-sm text-muted mb-1">Valid Until</label>
                   <input
+                    id="d-validity"
                     type="date"
                     className="input w-full"
                     value={formData.validity}
@@ -365,8 +385,9 @@ export default function Disqualifications() {
               </div>
 
               <div>
-                <label className="block text-sm text-muted mb-1">Remarks</label>
+                <label htmlFor="d-remarks" className="block text-sm text-muted mb-1">Remarks</label>
                 <textarea
+                  id="d-remarks"
                   className="input w-full"
                   rows={2}
                   value={formData.remarks}
@@ -397,6 +418,15 @@ export default function Disqualifications() {
           </div>
         </div>
       )}
+      <ConfirmDialog
+        open={!!deleting}
+        onClose={() => setDeleting(null)}
+        onConfirm={handleDelete}
+        title="Delete DIBAR record?"
+        message={`${deleting?.employee?.firstName} ${deleting?.employee?.lastName} (${deleting?.employee?.employeeNumber}) will be removed from DIBAR records. This cannot be undone.`}
+        confirmLabel="Delete"
+        danger
+      />
     </Layout>
   );
 }

@@ -9,9 +9,9 @@ export const disqualificationController = {
         reason: req.query.reason,
         page: parseInt(req.query.page) || 1,
         limit: parseInt(req.query.limit) || 50,
-        search: req.query.search
+        search: req.query.search,
       };
-      const result = await disqualificationService.getAll(options);
+      const result = await disqualificationService.getAll(req, options);
       res.json(result);
     } catch (e) {
       next(e);
@@ -25,9 +25,9 @@ export const disqualificationController = {
         dateTo: req.query.dateTo,
         type: req.query.type,
         reason: req.query.reason,
-        isBarred: req.query.isBarred ? req.query.isBarred === 'true' : undefined
+        isBarred: req.query.isBarred ? req.query.isBarred === 'true' : undefined,
       };
-      const records = await disqualificationService.getDibarReport(options);
+      const records = await disqualificationService.getDibarReport(req, options);
       res.json({ records });
     } catch (e) {
       next(e);
@@ -36,9 +36,9 @@ export const disqualificationController = {
 
   async getById(req, res, next) {
     try {
-      const record = await disqualificationService.getById(req.params.id);
+      const record = await disqualificationService.getById(req, req.params.id);
       if (!record) {
-        return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Disqualification not found' }});
+        return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Disqualification not found' } });
       }
       res.json(record);
     } catch (e) {
@@ -48,7 +48,7 @@ export const disqualificationController = {
 
   async create(req, res, next) {
     try {
-      const record = await disqualificationService.create(req.body, req.user.id);
+      const record = await disqualificationService.create(req, req.body, req.user.id);
       res.status(201).json(record);
     } catch (e) {
       next(e);
@@ -57,7 +57,7 @@ export const disqualificationController = {
 
   async update(req, res, next) {
     try {
-      const record = await disqualificationService.update(req.params.id, req.body);
+      const record = await disqualificationService.update(req, req.params.id, req.body);
       res.json(record);
     } catch (e) {
       next(e);
@@ -66,7 +66,7 @@ export const disqualificationController = {
 
   async delete(req, res, next) {
     try {
-      await disqualificationService.delete(req.params.id);
+      await disqualificationService.delete(req, req.params.id);
       res.status(204).send();
     } catch (e) {
       next(e);
@@ -75,10 +75,10 @@ export const disqualificationController = {
 
   async getActive(req, res, next) {
     try {
-      const records = await disqualificationService.getActiveDisqualifications();
+      const records = await disqualificationService.getActiveDisqualifications(req);
       res.json({ records });
     } catch (e) {
       next(e);
     }
-  }
+  },
 };

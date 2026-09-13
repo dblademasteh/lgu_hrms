@@ -16,6 +16,7 @@
 - Create summary of the output and update into corresponding md in src/docs
 - Create TODO's when analysis, search for gaps and bugs, when task is finish update todo's
 - Always use DESIGN.MD and skill when polishing, designing and refactoring layout.
+- Run the app: re seed the database.
 - Update Agents.md when user introduce new techniques, workflow etc.
 - After analysis, create a interaction with user for possible changes, update and upgrade.
 - For a workflow, create a detailed description, implementation and chart. Update into our MD.

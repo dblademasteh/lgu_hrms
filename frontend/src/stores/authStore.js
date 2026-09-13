@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { login as apiLogin, loginPin as apiLoginPin } from '../api/auth.js';
+import { switchRole as apiSwitchRole } from '../api/dev.js';
 
 const persist = (data) => {
   localStorage.setItem('auth', JSON.stringify({
@@ -61,6 +62,18 @@ export const useAuthStore = create((set) => ({
     if (raw) {
       const auth = JSON.parse(raw);
       set({ user: auth.user, accessToken: auth.accessToken, refreshToken: auth.refreshToken, passwordAgeDays: auth.passwordAgeDays, passwordExpired: auth.passwordExpired });
+    }
+  },
+
+  switchRole: async (role) => {
+    set({ loading: true, error: null });
+    try {
+      const data = await apiSwitchRole(role);
+      set({ ...persist(data), loading: false });
+      return true;
+    } catch (e) {
+      set({ error: e.response?.data?.error?.message || 'Role switch failed', loading: false });
+      return false;
     }
   },
 }));

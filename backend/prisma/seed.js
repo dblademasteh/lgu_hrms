@@ -5,7 +5,10 @@ import { DEFAULT_PERMISSIONS } from '../src/shared/permissions.js';
 const prisma = new PrismaClient();
 
 async function seedTenant(tenantId, tenantCode, hash) {
-  // Departments
+  // ── LGU Organizational Structure per CSC Resolution 2200373 ──────────
+  // Provincial-level departments/divisions/sections with OSSP compliance fields
+
+  // 1. Office of the Provincial Governor (mandatory, top level)
   const deptPGO = await prisma.department.upsert({
     where: { code: `PGO-${tenantCode}` },
     update: { tenantId },
@@ -13,31 +16,193 @@ async function seedTenant(tenantId, tenantCode, hash) {
       code: `PGO-${tenantCode}`,
       name: "Governor's Office",
       level: 0,
-      tenantId,
+      unitType: 'DEPARTMENT',
+      isMandatory: true,
+      isHrmOffice: false,
+      headTitle: 'Provincial Governor',
+      tenant: { connect: { id: tenantId } },
     },
   });
 
+  // 2. Office of the Provincial Vice Governor (mandatory)
+  const deptPVGO = await prisma.department.upsert({
+    where: { code: `PVGO-${tenantCode}` },
+    update: { tenantId },
+    create: {
+      code: `PVGO-${tenantCode}`,
+      name: "Vice Governor's Office",
+      level: 0,
+      unitType: 'DEPARTMENT',
+      isMandatory: true,
+      isHrmOffice: false,
+      headTitle: 'Provincial Vice Governor',
+      tenant: { connect: { id: tenantId } },
+    },
+  });
+
+  // 3. Sangguniang Panlalawigan (mandatory)
+  const deptSP = await prisma.department.upsert({
+    where: { code: `SP-${tenantCode}` },
+    update: { tenantId },
+    create: {
+      code: `SP-${tenantCode}`,
+      name: 'Sangguniang Panlalawigan',
+      level: 0,
+      unitType: 'DEPARTMENT',
+      isMandatory: true,
+      isHrmOffice: false,
+      headTitle: 'Presiding Officer',
+      sanggunianConcurrence: true,
+      concurrenceDate: new Date('2022-11-01'),
+      concurrenceResolution: `SP-${tenantCode}-2022-001`,
+      tenant: { connect: { id: tenantId } },
+    },
+  });
+
+  // 4. HR Management Office (mandatory, encouraged by CSC)
   const deptHR = await prisma.department.upsert({
     where: { code: `HRMO-${tenantCode}` },
     update: { tenantId },
     create: {
       code: `HRMO-${tenantCode}`,
       name: 'Human Resource Management Office',
-      parentId: deptPGO.id,
+      parent: { connect: { id: deptPGO.id } },
       level: 1,
-      tenantId,
+      unitType: 'DEPARTMENT',
+      isMandatory: true,
+      isHrmOffice: true,
+      headTitle: 'HRMO',
+      sanggunianConcurrence: true,
+      concurrenceDate: new Date('2022-11-05'),
+      concurrenceResolution: `SP-${tenantCode}-2022-002`,
+      tenant: { connect: { id: tenantId } },
     },
   });
 
+  // 5. Finance Office (mandatory)
   const deptFIN = await prisma.department.upsert({
     where: { code: `FIN-${tenantCode}` },
     update: { tenantId },
     create: {
       code: `FIN-${tenantCode}`,
       name: 'Finance Office',
-      parentId: deptPGO.id,
+      parent: { connect: { id: deptPGO.id } },
       level: 1,
-      tenantId,
+      unitType: 'DEPARTMENT',
+      isMandatory: true,
+      isHrmOffice: false,
+      headTitle: 'Provincial Accountant',
+      sanggunianConcurrence: true,
+      concurrenceDate: new Date('2022-11-05'),
+      concurrenceResolution: `SP-${tenantCode}-2022-003`,
+      tenant: { connect: { id: tenantId } },
+    },
+  });
+
+  // 6. Accounting Division under Finance (optional but common)
+  const deptAccountingDiv = await prisma.department.upsert({
+    where: { code: `ACCTG-DIV-${tenantCode}` },
+    update: { tenantId },
+    create: {
+      code: `ACCTG-DIV-${tenantCode}`,
+      name: 'Accounting Division',
+      parent: { connect: { id: deptFIN.id } },
+      level: 2,
+      unitType: 'DIVISION',
+      isMandatory: false,
+      isOptional: true,
+      isHrmOffice: false,
+      headTitle: 'Division Chief',
+      tenant: { connect: { id: tenantId } },
+    },
+  });
+
+  // 7. Budget Division under Finance (optional)
+  const deptBudgetDiv = await prisma.department.upsert({
+    where: { code: `BUDGET-DIV-${tenantCode}` },
+    update: { tenantId },
+    create: {
+      code: `BUDGET-DIV-${tenantCode}`,
+      name: 'Budget Division',
+      parent: { connect: { id: deptFIN.id } },
+      level: 2,
+      unitType: 'DIVISION',
+      isMandatory: false,
+      isOptional: true,
+      isHrmOffice: false,
+      headTitle: 'Division Chief',
+      tenant: { connect: { id: tenantId } },
+    },
+  });
+
+  // 8. IT Office (optional)
+  const deptIT = await prisma.department.upsert({
+    where: { code: `ITO-${tenantCode}` },
+    update: { tenantId },
+    create: {
+      code: `ITO-${tenantCode}`,
+      name: 'Information Technology Office',
+      parent: { connect: { id: deptPGO.id } },
+      level: 1,
+      unitType: 'DEPARTMENT',
+      isMandatory: false,
+      isOptional: true,
+      isHrmOffice: false,
+      headTitle: 'IT Officer',
+      tenant: { connect: { id: tenantId } },
+    },
+  });
+
+  // 9. Administration Division under PGO (mandatory)
+  const deptAdminDiv = await prisma.department.upsert({
+    where: { code: `ADMIN-DIV-${tenantCode}` },
+    update: { tenantId },
+    create: {
+      code: `ADMIN-DIV-${tenantCode}`,
+      name: 'Administration Division',
+      parent: { connect: { id: deptPGO.id } },
+      level: 2,
+      unitType: 'DIVISION',
+      isMandatory: true,
+      isOptional: false,
+      isHrmOffice: false,
+      headTitle: 'Division Chief',
+      tenant: { connect: { id: tenantId } },
+    },
+  });
+
+  // 10. Administration Section under Administration Division
+  const deptAdminSec = await prisma.department.upsert({
+    where: { code: `ADMIN-SEC-${tenantCode}` },
+    update: { tenantId },
+    create: {
+      code: `ADMIN-SEC-${tenantCode}`,
+      name: 'Administration Section',
+      parent: { connect: { id: deptAdminDiv.id } },
+      level: 3,
+      unitType: 'SECTION',
+      isMandatory: false,
+      isOptional: true,
+      isHrmOffice: false,
+      tenant: { connect: { id: tenantId } },
+    },
+  });
+
+  // 11. Legal Office (optional)
+  const deptLegal = await prisma.department.upsert({
+    where: { code: `LEGAL-${tenantCode}` },
+    update: { tenantId },
+    create: {
+      code: `LEGAL-${tenantCode}`,
+      name: 'Legal Office',
+      parent: { connect: { id: deptPGO.id } },
+      level: 1,
+      unitType: 'DEPARTMENT',
+      isMandatory: false,
+      isOptional: true,
+      isHrmOffice: false,
+      headTitle: 'Legal Officer',
+      tenant: { connect: { id: tenantId } },
     },
   });
 
@@ -82,47 +247,180 @@ async function seedTenant(tenantId, tenantCode, hash) {
         passwordHash: hash,
         passwordChangedAt: new Date(),
         role: u.role,
-        departmentId: deptPGO.id,
-        tenantId,
+        department: { connect: { id: deptPGO.id } },
+        tenant: { connect: { id: tenantId } },
       },
     });
   }
 
   const adminUser = await prisma.user.findUnique({ where: { username: `admin-${tenantCode.toLowerCase()}` } });
 
-  const posHR = await prisma.position.upsert({
-    where: { id: `position-hr-officer-${tenantCode}` },
+  // ── Positions per IOS-LGU 2021 Edition ──────────────────────────────
+
+  const posGov = await prisma.position.upsert({
+    where: { id: `position-governor-${tenantCode}` },
     update: { tenantId },
     create: {
-      id: `position-hr-officer-${tenantCode}`,
-      title: 'HR Officer',
+      id: `position-governor-${tenantCode}`,
+      title: 'Provincial Governor',
+      parentheticalTitle: 'Elected Official',
+      iosLguCode: 'GOV-01',
+      salaryGrade: 30,
+      isMandatory: true,
+      isCoterminous: true,
+      tenant: { connect: { id: tenantId } },
+    },
+  });
+
+  const posViceGov = await prisma.position.upsert({
+    where: { id: `position-vice-governor-${tenantCode}` },
+    update: { tenantId },
+    create: {
+      id: `position-vice-governor-${tenantCode}`,
+      title: 'Provincial Vice Governor',
+      parentheticalTitle: 'Elected Official',
+      iosLguCode: 'VGOV-01',
+      salaryGrade: 29,
+      isMandatory: true,
+      isCoterminous: true,
+      tenant: { connect: { id: tenantId } },
+    },
+  });
+
+  const posSanggunian = await prisma.position.upsert({
+    where: { id: `position-sanggunian-${tenantCode}` },
+    update: { tenantId },
+    create: {
+      id: `position-sanggunian-${tenantCode}`,
+      title: 'Sanggunian Member',
+      parentheticalTitle: 'Legislative',
+      iosLguCode: 'SP-01',
+      salaryGrade: 24,
+      isMandatory: true,
+      isCoterminous: true,
+      tenant: { connect: { id: tenantId } },
+    },
+  });
+
+  const posHRMO = await prisma.position.upsert({
+    where: { id: `position-hrmo-${tenantCode}` },
+    update: { tenantId },
+    create: {
+      id: `position-hrmo-${tenantCode}`,
+      title: 'HRMO',
+      parentheticalTitle: 'Human Resource Management Office',
+      iosLguCode: 'HRM-02',
+      salaryGrade: 24,
+      isMandatory: true,
+      isCoterminous: false,
+      qualificationStandards: 'Bachelor\'s degree in HRM, Psychology, or related field; 2 years experience in HR management.',
+      tenant: { connect: { id: tenantId } },
+    },
+  });
+
+  const posAccountant = await prisma.position.upsert({
+    where: { id: `position-accountant-${tenantCode}` },
+    update: { tenantId },
+    create: {
+      id: `position-accountant-${tenantCode}`,
+      title: 'Accountant',
+      parentheticalTitle: 'Accounting',
+      iosLguCode: 'ACC-01',
       salaryGrade: 15,
-      tenantId,
+      isMandatory: true,
+      isCoterminous: false,
+      qualificationStandards: 'CPA, Bachelor\'s degree in Accounting; 1 year experience.',
+      tenant: { connect: { id: tenantId } },
     },
   });
 
-  const posPayroll = await prisma.position.upsert({
-    where: { id: `position-payroll-clerk-${tenantCode}` },
+  const posBudgetOfficer = await prisma.position.upsert({
+    where: { id: `position-budget-officer-${tenantCode}` },
     update: { tenantId },
     create: {
-      id: `position-payroll-clerk-${tenantCode}`,
-      title: 'Payroll Clerk',
-      salaryGrade: 11,
-      tenantId,
+      id: `position-budget-officer-${tenantCode}`,
+      title: 'Budget Officer',
+      parentheticalTitle: 'Budget',
+      iosLguCode: 'BDG-01',
+      salaryGrade: 15,
+      isMandatory: true,
+      isCoterminous: false,
+      qualificationStandards: 'Bachelor\'s degree in Accounting or related field; 2 years experience in budget.',
+      tenant: { connect: { id: tenantId } },
     },
   });
 
-  const posAdmin = await prisma.position.upsert({
+  const posAdminAsst = await prisma.position.upsert({
     where: { id: `position-admin-assistant-${tenantCode}` },
     update: { tenantId },
     create: {
       id: `position-admin-assistant-${tenantCode}`,
       title: 'Administrative Assistant',
+      parentheticalTitle: 'Administrative Support',
+      iosLguCode: 'ADM-01',
       salaryGrade: 8,
-      tenantId,
+      isMandatory: true,
+      isCoterminous: false,
+      tenant: { connect: { id: tenantId } },
     },
   });
 
+  const posIT = await prisma.position.upsert({
+    where: { id: `position-it-officer-${tenantCode}` },
+    update: { tenantId },
+    create: {
+      id: `position-it-officer-${tenantCode}`,
+      title: 'IT Officer',
+      parentheticalTitle: 'Information Technology',
+      iosLguCode: 'IT-01',
+      salaryGrade: 15,
+      isMandatory: false,
+      isCoterminous: false,
+      tenant: { connect: { id: tenantId } },
+    },
+  });
+
+  const posLegal = await prisma.position.upsert({
+    where: { id: `position-legal-officer-${tenantCode}` },
+    update: { tenantId },
+    create: {
+      id: `position-legal-officer-${tenantCode}`,
+      title: 'Legal Officer',
+      parentheticalTitle: 'Legal Services',
+      iosLguCode: 'LEG-01',
+      salaryGrade: 24,
+      isMandatory: false,
+      isCoterminous: true,
+      qualificationStandards: 'Law degree; eligible to practice law; 2 years experience.',
+      tenant: { connect: { id: tenantId } },
+    },
+  });
+
+  // ── Plantilla Items (OSSP) ─────────────────────────────────────────
+  const plantillaItems = [
+    { itemNumber: `PLT-${tenantCode}-GOV-01`, positionId: posGov.id, departmentId: deptPGO.id, status: 'FILLED', isMandatory: true, itemType: 'NEW_STYLE', salaryGrade: '30', step: '1', sourceOfFund: 'Local Funds', appropriationCode: `2026-${tenantCode}-001`, authorizedSalary: 180000 },
+    { itemNumber: `PLT-${tenantCode}-VGOV-01`, positionId: posViceGov.id, departmentId: deptPVGO.id, status: 'FILLED', isMandatory: true, itemType: 'NEW_STYLE', salaryGrade: '29', step: '1', sourceOfFund: 'Local Funds', appropriationCode: `2026-${tenantCode}-002`, authorizedSalary: 165000 },
+    { itemNumber: `PLT-${tenantCode}-SP-01`, positionId: posSanggunian.id, departmentId: deptSP.id, status: 'FILLED', isMandatory: true, itemType: 'NEW_STYLE', salaryGrade: '24', step: '1', sourceOfFund: 'Local Funds', appropriationCode: `2026-${tenantCode}-003`, authorizedSalary: 120000 },
+    { itemNumber: `PLT-${tenantCode}-HRM-01`, positionId: posHRMO.id, departmentId: deptHR.id, status: 'FILLED', isMandatory: true, itemType: 'NEW_STYLE', salaryGrade: '24', step: '1', sourceOfFund: 'Local Funds', appropriationCode: `2026-${tenantCode}-004`, authorizedSalary: 120000 },
+    { itemNumber: `PLT-${tenantCode}-ACC-01`, positionId: posAccountant.id, departmentId: deptAccountingDiv.id, status: 'FILLED', isMandatory: true, itemType: 'NEW_STYLE', salaryGrade: '15', step: '1', sourceOfFund: 'Local Funds', appropriationCode: `2026-${tenantCode}-005`, authorizedSalary: 60000 },
+    { itemNumber: `PLT-${tenantCode}-BDG-01`, positionId: posBudgetOfficer.id, departmentId: deptBudgetDiv.id, status: 'FILLED', isMandatory: true, itemType: 'NEW_STYLE', salaryGrade: '15', step: '1', sourceOfFund: 'Local Funds', appropriationCode: `2026-${tenantCode}-006`, authorizedSalary: 60000 },
+    { itemNumber: `PLT-${tenantCode}-ADM-01`, positionId: posAdminAsst.id, departmentId: deptAdminSec.id, status: 'FILLED', isMandatory: true, itemType: 'NEW_STYLE', salaryGrade: '8', step: '1', sourceOfFund: 'Local Funds', appropriationCode: `2026-${tenantCode}-007`, authorizedSalary: 30000 },
+    { itemNumber: `PLT-${tenantCode}-IT-01`, positionId: posIT.id, departmentId: deptIT.id, status: 'VACANT', isMandatory: false, isOptional: true, itemType: 'NEW_STYLE', salaryGrade: '15', step: '1', sourceOfFund: 'Local Funds', appropriationCode: `2026-${tenantCode}-008`, authorizedSalary: 60000 },
+    { itemNumber: `PLT-${tenantCode}-LEG-01`, positionId: posLegal.id, departmentId: deptLegal.id, status: 'VACANT', isMandatory: false, isOptional: true, itemType: 'NEW_STYLE', salaryGrade: '24', step: '1', sourceOfFund: 'Local Funds', appropriationCode: `2026-${tenantCode}-009`, authorizedSalary: 120000 },
+  ];
+
+  for (const pl of plantillaItems) {
+    await prisma.plantillaItem.upsert({
+      where: { itemNumber: pl.itemNumber },
+      update: { tenantId },
+      create: {
+        ...pl,
+        tenantId,
+      },
+    });
+  }
+
+  // ── Employees ──────────────────────────────────────────────────────
   const employeesData = [
     {
       employeeNumber: `EMP-${tenantCode}-0001`,
@@ -134,7 +432,7 @@ async function seedTenant(tenantId, tenantCode, hash) {
       civilStatus: 'Married',
       address: 'Tarlac City, Tarlac',
       departmentId: deptHR.id,
-      positionId: posHR.id,
+      positionId: posHRMO.id,
       hiredDate: new Date('2015-01-15'),
       monthlySalary: 46000,
     },
@@ -148,7 +446,7 @@ async function seedTenant(tenantId, tenantCode, hash) {
       civilStatus: 'Single',
       address: 'San Jose, Tarlac',
       departmentId: deptFIN.id,
-      positionId: posPayroll.id,
+      positionId: posBudgetOfficer.id,
       hiredDate: new Date('2018-06-01'),
       monthlySalary: 35000,
     },
@@ -162,7 +460,7 @@ async function seedTenant(tenantId, tenantCode, hash) {
       civilStatus: 'Single',
       address: 'Capas, Tarlac',
       departmentId: deptPGO.id,
-      positionId: posAdmin.id,
+      positionId: posAdminAsst.id,
       hiredDate: new Date('2020-03-10'),
       monthlySalary: 28000,
     },
@@ -176,7 +474,7 @@ async function seedTenant(tenantId, tenantCode, hash) {
       civilStatus: 'Married',
       address: 'Camiling, Tarlac',
       departmentId: deptPGO.id,
-      positionId: posAdmin.id,
+      positionId: posAdminAsst.id,
       hiredDate: new Date('2012-07-01'),
       monthlySalary: 60000,
     },
@@ -190,7 +488,7 @@ async function seedTenant(tenantId, tenantCode, hash) {
       civilStatus: 'Single',
       address: 'Tarlac City, Tarlac',
       departmentId: deptFIN.id,
-      positionId: posPayroll.id,
+      positionId: posAccountant.id,
       hiredDate: new Date('2019-01-15'),
       monthlySalary: 32000,
     },
@@ -203,8 +501,8 @@ async function seedTenant(tenantId, tenantCode, hash) {
       gender: 'Male',
       civilStatus: 'Single',
       address: 'Tarlac City, Tarlac',
-      departmentId: deptPGO.id,
-      positionId: posAdmin.id,
+      departmentId: deptIT.id,
+      positionId: posIT.id,
       hiredDate: new Date('2021-05-10'),
       monthlySalary: 26000,
     },
@@ -217,274 +515,52 @@ async function seedTenant(tenantId, tenantCode, hash) {
       create: { ...emp, tenantId },
     });
 
-    await prisma.leaveCredit.upsert({
-      where: { id: `${employee.id}-VACATION-2026-${tenantCode}` },
-      update: { tenantId, balance: 15 },
-      create: {
-        id: `${employee.id}-VACATION-2026-${tenantCode}`,
-        employeeId: employee.id,
-        type: 'VACATION',
-        balance: 15,
-        year: 2026,
-        tenantId,
-      },
-    });
-
-    await prisma.leaveCredit.upsert({
-      where: { id: `${employee.id}-SICK-2026-${tenantCode}` },
-      update: { tenantId, balance: 15 },
-      create: {
-        id: `${employee.id}-SICK-2026-${tenantCode}`,
-        employeeId: employee.id,
-        type: 'SICK',
-        balance: 15,
-        year: 2026,
-        tenantId,
-      },
-    });
-
-    await prisma.leaveCredit.upsert({
-      where: { id: `${employee.id}-SPECIAL_PRIVILEGE-2026-${tenantCode}` },
-      update: { tenantId, balance: 5 },
-      create: {
-        id: `${employee.id}-SPECIAL_PRIVILEGE-2026-${tenantCode}`,
-        employeeId: employee.id,
-        type: 'SPECIAL_PRIVILEGE',
-        balance: 5,
-        year: 2026,
-        tenantId,
-      },
-    });
-
-    await prisma.leaveCredit.upsert({
-      where: { id: `${employee.id}-SPECIAL_WOMEN-2026-${tenantCode}` },
-      update: { tenantId, balance: 60 },
-      create: {
-        id: `${employee.id}-SPECIAL_WOMEN-2026-${tenantCode}`,
-        employeeId: employee.id,
-        type: 'SPECIAL_WOMEN',
-        balance: 60,
-        year: 2026,
-        tenantId,
-      },
-    });
-
-    await prisma.leaveCredit.upsert({
-      where: { id: `${employee.id}-MATERNITY-2026-${tenantCode}` },
-      update: { tenantId, balance: 105 },
-      create: {
-        id: `${employee.id}-MATERNITY-2026-${tenantCode}`,
-        employeeId: employee.id,
-        type: 'MATERNITY',
-        balance: 105,
-        year: 2026,
-        tenantId,
-      },
-    });
-
-    await prisma.leaveCredit.upsert({
-      where: { id: `${employee.id}-PATERNITY-2026-${tenantCode}` },
-      update: { tenantId, balance: 7 },
-      create: {
-        id: `${employee.id}-PATERNITY-2026-${tenantCode}`,
-        employeeId: employee.id,
-        type: 'PATERNITY',
-        balance: 7,
-        year: 2026,
-        tenantId,
-      },
-    });
-
-    await prisma.leaveCredit.upsert({
-      where: { id: `${employee.id}-SOLO_PARENT-2026-${tenantCode}` },
-      update: { tenantId, balance: 7 },
-      create: {
-        id: `${employee.id}-SOLO_PARENT-2026-${tenantCode}`,
-        employeeId: employee.id,
-        type: 'SOLO_PARENT',
-        balance: 7,
-        year: 2026,
-        tenantId,
-      },
-    });
-
-    await prisma.appointment.upsert({
-      where: { id: `appointment-${employee.employeeNumber}` },
-      update: { tenantId },
-      create: {
-        id: `appointment-${employee.employeeNumber}`,
-        employeeId: employee.id,
-        type: 'PERMANENT',
-        itemNumber: `PLANTILLA-${employee.employeeNumber}`,
-        startDate: emp.hiredDate,
-        status: 'ACTIVE',
-        position: employee.positionId,
-        dept: employee.departmentId,
-        tenantId,
-      },
-    });
-  }
-
-  const emp1 = await prisma.employee.findFirst({ where: { employeeNumber: `EMP-${tenantCode}-0001`, tenantId } });
-  if (emp1) {
-    await prisma.leaveRequest.upsert({
-      where: { id: `leave-${emp1.id}-1-${tenantCode}` },
-      update: { tenantId },
-      create: {
-        id: `leave-${emp1.id}-1-${tenantCode}`,
-        employeeId: emp1.id,
-        type: 'VACATION',
-        fromDate: new Date('2026-07-01'),
-        toDate: new Date('2026-07-05'),
-        days: 5,
-        status: 'APPROVED',
-        reason: 'Family vacation',
-        tenantId,
-      },
-    });
-
-    await prisma.attendance.createMany({
-      skipDuplicates: true,
-      data: [
-        { employeeId: emp1.id, date: new Date('2026-09-01'), timeIn: new Date('2026-09-01T08:00:00Z'), timeOut: new Date('2026-09-01T17:00:00Z'), hours: 8, tenantId },
-        { employeeId: emp1.id, date: new Date('2026-09-02'), timeIn: new Date('2026-09-02T08:05:00Z'), timeOut: new Date('2026-09-02T17:00:00Z'), hours: 7.92, tenantId },
-      ],
-    });
-  }
-
-  await prisma.contributionRule.upsert({
-      where: { id: `contribution-sss-${tenantCode}` },
-      update: { tenantId },
-      create: { id: `contribution-sss-${tenantCode}`, type: 'SSS', employeeRate: 0.045, employerRate: 0.075, effectiveFrom: new Date('2026-01-01'), tenantId },
-    });
-    await prisma.contributionRule.upsert({
-      where: { id: `contribution-phic-${tenantCode}` },
-      update: { tenantId },
-      create: { id: `contribution-phic-${tenantCode}`, type: 'PHIC', employeeRate: 0.035, employerRate: 0.035, effectiveFrom: new Date('2026-01-01'), tenantId },
-    });
-    await prisma.contributionRule.upsert({
-      where: { id: `contribution-pagibig-${tenantCode}` },
-      update: { tenantId },
-      create: { id: `contribution-pagibig-${tenantCode}`, type: 'PAGIBIG', employeeRate: 0.02, employerRate: 0.02, effectiveFrom: new Date('2026-01-01'), tenantId },
-    });
-
-    const bracketRows = [
-      { id: `bracket-0-${tenantCode}`, minIncome: 0, maxIncome: 20833, rate: 0 },
-      { id: `bracket-20833-${tenantCode}`, minIncome: 20833, maxIncome: 33333, rate: 0.15 },
-      { id: `bracket-33333-${tenantCode}`, minIncome: 33333, maxIncome: 66666, rate: 0.2 },
-      { id: `bracket-66666-${tenantCode}`, minIncome: 66666, maxIncome: 166666, rate: 0.25 },
-      { id: `bracket-166666-${tenantCode}`, minIncome: 166666, maxIncome: 666666, rate: 0.3 },
-      { id: `bracket-666666-${tenantCode}`, minIncome: 666666, maxIncome: null, rate: 0.35 },
-    ];
-    for (const b of bracketRows) {
-      await prisma.taxBracket.upsert({
-        where: { id: b.id },
-        update: { tenantId },
-        create: { ...b, effectiveFrom: new Date('2026-01-01'), tenantId },
+    const leaveTypes = ['VACATION', 'SICK', 'SPECIAL_PRIVILEGE', 'SOLO_PARENT'];
+    for (const lt of leaveTypes) {
+      await prisma.leaveCredit.create({
+        data: { employeeId: employee.id, type: lt, balance: 15, year: new Date().getFullYear(), tenantId },
       });
     }
+  }
 
-    await prisma.attendanceRule.upsert({
-      where: { id: `attd-tardiness-${tenantCode}` },
-      update: { tenantId },
-      create: { id: `attd-tardiness-${tenantCode}`, name: 'Tardiness', tardinessMin: 20, deductionRate: 50, active: true, tenantId },
-    });
-
-    await prisma.leaveRuleConfig.upsert({
-      where: { id: `leave-vl-${tenantCode}` },
-      update: { tenantId },
-      create: { id: `leave-vl-${tenantCode}`, leaveType: 'VACATION', accrualPerMonth: 1.25, maxCarryOver: 30, effectiveFrom: new Date('2026-01-01'), tenantId },
-    });
-    await prisma.leaveRuleConfig.upsert({
-      where: { id: `leave-sl-${tenantCode}` },
-      update: { tenantId },
-      create: { id: `leave-sl-${tenantCode}`, leaveType: 'SICK', accrualPerMonth: 1.25, maxCarryOver: 15, effectiveFrom: new Date('2026-01-01'), tenantId },
-    });
-
-    const emp2 = await prisma.employee.findFirst({ where: { employeeNumber: `EMP-${tenantCode}-0002`, tenantId } });
-    if (emp2) {
-      const loan = await prisma.loan.upsert({
-        where: { id: `loan-${tenantCode}-0002` },
-        update: { tenantId },
-        create: {
-          id: `loan-${tenantCode}-0002`,
-          employeeId: emp2.id,
-          type: 'CASH_LOAN',
-          amount: 6000,
-          termMonths: 3,
-          startDate: new Date('2026-09-01'),
-          status: 'DISBURSED',
-          tenantId,
-        },
-      });
-      const amortDates = [new Date('2026-09-15'), new Date('2026-10-15'), new Date('2026-11-15')];
-      for (let i = 0; i < amortDates.length; i++) {
-        await prisma.loanAmortization.upsert({
-          where: { id: `amort-${tenantCode}-0002-${i + 1}` },
-          update: { tenantId },
-          create: { id: `amort-${tenantCode}-0002-${i + 1}`, loanId: loan.id, dueDate: amortDates[i], amount: 2000, paid: false, tenantId },
-        });
-      }
-    }
-
-  const payrollPeriod = await prisma.payrollPeriod.upsert({
-    where: { id: `period-2026-09-${tenantCode}` },
+  // ── Payroll Periods ─────────────────────────────────────────────────
+  const currentMonth = new Date().toISOString().slice(0, 7);
+  const currentYear = new Date().getFullYear();
+  await prisma.payrollPeriod.upsert({
+    where: { id: `period-${currentMonth}-${tenantCode}` },
     update: { tenantId },
     create: {
-      id: `period-2026-09-${tenantCode}`,
-      name: 'September 2026',
-      startDate: new Date('2026-09-01'),
-      endDate: new Date('2026-09-30'),
-      fiscalYear: 2026,
-      tenantId,
+      id: `period-${currentMonth}-${tenantCode}`,
+      name: `${currentMonth} Payroll`,
+      startDate: new Date(`${currentMonth}-01`),
+      endDate: new Date(`${currentMonth}-30`),
+      fiscalYear: currentYear,
+      status: 'OPEN',
+      tenant: { connect: { id: tenantId } },
     },
   });
 
-  const payrollRun = await prisma.payrollRun.upsert({
-    where: { id: `run-2026-09-${tenantCode}` },
-    update: { tenantId },
-    create: {
-      id: `run-2026-09-${tenantCode}`,
-      periodId: payrollPeriod.id,
-      runDate: new Date('2026-09-30'),
-      status: 'DRAFT',
-      createdBy: adminUser.id,
-      tenantId,
-    },
-  });
-
-  const allEmployees = await prisma.employee.findMany({ where: { tenantId } });
-  for (const e of allEmployees) {
-    await prisma.payrollItem.upsert({
-      where: { id: `payrollitem-${e.id}-${payrollRun.id}` },
-      update: { tenantId },
-      create: {
-        id: `payrollitem-${e.id}-${payrollRun.id}`,
-        employeeId: e.id,
-        runId: payrollRun.id,
-        basicPay: 25000,
-        allowances: 5000,
-        deductions: 3000,
-        netPay: 27000,
+  // ── Attendance Sample ──────────────────────────────────────────────
+  const today = new Date();
+  const dateStr = today.toISOString().slice(0, 10);
+  for (const emp of employeesData.slice(0, 3)) {
+    const employee = await prisma.employee.findFirst({ where: { employeeNumber: emp.employeeNumber, tenantId } });
+    if (!employee) continue;
+    await prisma.attendance.create({
+      data: {
+        employeeId: employee.id,
+        date: new Date(dateStr),
+        timeIn: new Date(`${dateStr}T08:00:00`),
+        timeOut: new Date(`${dateStr}T17:00:00`),
+        remark: 'On time',
         tenantId,
       },
     });
-  }
-
-  const userLinks = {
-    [`admin-${tenantCode.toLowerCase()}`]: `EMP-${tenantCode}-0003`,
-    [`hr_manager-${tenantCode.toLowerCase()}`]: `EMP-${tenantCode}-0001`,
-    [`payroll_officer-${tenantCode.toLowerCase()}`]: `EMP-${tenantCode}-0002`,
-    [`employee-${tenantCode.toLowerCase()}`]: `EMP-${tenantCode}-0006`,
-  };
-  for (const [username, employeeNumber] of Object.entries(userLinks)) {
-    await prisma.user.updateMany({ where: { username }, data: { externalId: employeeNumber } });
   }
 }
 
 async function main() {
-  const password = process.env.SEED_DEFAULT_PASSWORD || 'admin123';
-  const hash = await bcrypt.hash(password, 10);
+  const hash = await bcrypt.hash(process.env.SEED_DEFAULT_PASSWORD || 'admin123', 10);
 
   const tenantsData = [
     { id: 'tenant-default', code: 'DEFAULT', name: 'Default LGU' },
@@ -503,9 +579,10 @@ async function main() {
     await seedTenant(t.id, t.code, hash);
   }
 
-  console.log('Seed completed. Default password:', password);
+  console.log('Seed completed successfully');
 }
 
-main()
-  .catch(e => { console.error(e); process.exit(1); })
-  .finally(() => prisma.$disconnect());
+main().catch(e => {
+  console.error('Seed failed:', e);
+  process.exit(1);
+}).finally(() => prisma.$disconnect());

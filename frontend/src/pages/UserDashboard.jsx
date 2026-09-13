@@ -181,7 +181,7 @@ export default function UserDashboard() {
   if (canAttendance) kpis.push({ title: 'Present Today', value: String(attendanceToday), sub: 'DTR records', Icon: kpiIcons.payroll });
   if (canPayroll) kpis.push({ title: 'Active Loans', value: String(loansTotal), sub: `${bonuses.length} recent bonuses`, Icon: kpiIcons.audit });
   return (
-    <Layout>
+    <Layout maxWidth="max-w-7xl">
       <div className="flex items-end justify-between gap-4 mb-6">
         <div>
           <h1 className="font-display text-xl font-bold text-ink">Overview</h1>

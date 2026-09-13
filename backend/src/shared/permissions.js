@@ -21,6 +21,7 @@ export const CAPABILITIES = [
   { key: 'attendancePortal', label: 'Attendance portal (biometric)' },
   { key: 'appointmentsRead', label: 'View appointments' },
   { key: 'appointmentsCRUD', label: 'Manage appointments' },
+  { key: 'disqualificationCRUD', label: 'Manage DIBAR records' },
 ];
 
 /** route mapping (documentation only) */
@@ -36,6 +37,7 @@ export const CAPABILITY_ROUTES = {
   attendancePortal: ['/attendance-portal (frontend-gated, self-service)'],
   appointmentsRead: ['/appointments GET'],
   appointmentsCRUD: ['/appointments POST|PATCH|DELETE'],
+  disqualificationCRUD: ['/disqualifications'],
 };
 
 /**
@@ -56,6 +58,7 @@ export const DEFAULT_PERMISSIONS = {
     attendancePortal: true,
     appointmentsRead: true,
     appointmentsCRUD: true,
+    disqualificationCRUD: true,
   },
   HR_MANAGER: {
     manageUsersAndRoles: false,
@@ -69,6 +72,7 @@ export const DEFAULT_PERMISSIONS = {
     attendancePortal: true,
     appointmentsRead: true,
     appointmentsCRUD: true,
+    disqualificationCRUD: true,
   },
   PAYROLL_OFFICER: {
     manageUsersAndRoles: false,
@@ -82,6 +86,7 @@ export const DEFAULT_PERMISSIONS = {
     attendancePortal: true,
     appointmentsRead: false,
     appointmentsCRUD: false,
+    disqualificationCRUD: false,
   },
   DEPARTMENT_HEAD: {
     manageUsersAndRoles: false,
@@ -95,6 +100,7 @@ export const DEFAULT_PERMISSIONS = {
     attendancePortal: true,
     appointmentsRead: false,
     appointmentsCRUD: false,
+    disqualificationCRUD: false,
   },
   AUDITOR: {
     manageUsersAndRoles: false,
@@ -108,6 +114,7 @@ export const DEFAULT_PERMISSIONS = {
     attendancePortal: false,
     appointmentsRead: false,
     appointmentsCRUD: false,
+    disqualificationCRUD: false,
   },
   EMPLOYEE: {
     manageUsersAndRoles: false,
@@ -121,5 +128,6 @@ export const DEFAULT_PERMISSIONS = {
     attendancePortal: true,
     appointmentsRead: false,
     appointmentsCRUD: false,
+    disqualificationCRUD: false,
   },
 };

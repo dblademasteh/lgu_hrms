@@ -47,7 +47,7 @@ export default function Reports() {
   };
 
   return (
-    <Layout>
+    <Layout maxWidth="max-w-7xl">
       <div className="flex items-start justify-between gap-4 mb-6">
         <div>
           <h1 className="font-display text-2xl font-bold text-ink">Reports & Exports</h1>

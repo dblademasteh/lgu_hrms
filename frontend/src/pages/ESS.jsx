@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { Calendar, FileText, Clock, User, Check, CalendarDays, FileDown, TrendingUp, CreditCard, X } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Calendar, FileText, Clock, User, Check, CalendarDays, FileDown, TrendingUp, CreditCard, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import Layout from '../components/Layout.jsx';
 import Modal from '../components/Modal.jsx';
 import { useToast } from '../components/Toast.jsx';
@@ -19,42 +19,63 @@ const LEAVE_TYPES = [
 ];
 
 const LEAVE_CREDITS_MAP = {
-  vacation: 'VACATION',
-  sick: 'SICK',
-  special: 'SPECIAL_PRIVILEGE',
-  special_privilege: 'SPECIAL_PRIVILEGE',
-  special_women: 'SPECIAL_WOMEN',
-  compensatory: 'COMPENSATORY',
+  VACATION: 'Vacation Leave',
+  SICK: 'Sick Leave',
+  SPECIAL_PRIVILEGE: 'Special Privilege',
+  SPECIAL_WOMEN: 'Special Women',
+  COMPENSATORY: 'Compensatory',
+  MATERNITY: 'Maternity',
+  PATERNITY: 'Paternity',
+  SOLO_PARENT: 'Solo Parent',
 };
 
-export default function ESS(){
+function currentMonthKey() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function formatCurrency(n) {
+  return '₱' + Number(n || 0).toLocaleString();
+}
+
+function statusBadge(status) {
+  const tone = badgeTone(status);
+  return <span className={`badge ${tone}`}>{status.replace(/_/g, ' ')}</span>;
+}
+
+export default function ESS() {
   const toast = useToast();
   const [profile, setProfile] = useState(null);
   const [payslips, setPayslips] = useState([]);
   const [leaves, setLeaves] = useState([]);
   const [attendance, setAttendance] = useState([]);
-  const [failed, setFailed] = useState(false);
+  const [attendanceMonth, setAttendanceMonth] = useState(currentMonthKey());
+  const [loading, setLoading] = useState(true);
   const [leaveOpen, setLeaveOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [leaveForm, setLeaveForm] = useState({ type: 'VACATION', fromDate: '', toDate: '', reason: '', isHalfDay: false, isLwop: false, isTerminal: false, advanceNoticed: false, documentUrl: '' });
   const { items: notifications } = useNotifications();
 
-  useEffect(()=>{
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
     Promise.allSettled([
       getEssProfile(),
       getEssPayslips(),
       getEssLeaveRequests(),
-      getEssAttendance('2026-09'),
+      getEssAttendance(attendanceMonth),
     ]).then(([p, ps, lr, at]) => {
+      if (cancelled) return;
       if (p.status === 'fulfilled') setProfile(p.value);
       if (ps.status === 'fulfilled') setPayslips(ps.value ?? []);
       if (lr.status === 'fulfilled') setLeaves(lr.value ?? []);
       if (at.status === 'fulfilled') setAttendance(at.value ?? []);
-      if ([p, ps, lr, at].some(r => r.status === 'rejected')) {
-        setFailed(true);
-        toast('Some ESS sections failed to load (link your account to an employee record).', 'error');
-      }
+      const failed = [p, ps, lr, at].some(r => r.status === 'rejected');
+      if (failed) toast('Some sections failed to load. Ask HR to link your account.', 'error');
+      setLoading(false);
     });
-  },[]);
+    return () => { cancelled = true; };
+  }, [attendanceMonth]);
 
   const fileLeave = async e => {
     e.preventDefault();
@@ -68,6 +89,7 @@ export default function ESS(){
     }
     const days = Math.round((new Date(leaveForm.toDate) - new Date(leaveForm.fromDate)) / 86400000) + 1;
     try {
+      setSubmitting(true);
       const created = await createEssLeaveRequest({ ...leaveForm, days });
       setLeaves(l => [created, ...l]);
       setLeaveOpen(false);
@@ -76,25 +98,49 @@ export default function ESS(){
     } catch (err) {
       const msg = err?.response?.data?.error?.message;
       toast(msg || 'Failed to file leave', 'error');
+    } finally {
+      setSubmitting(false);
     }
   };
 
-  // Calculate leave balance
-  const getLeaveBalance = (type) => {
+  const creditMap = useMemo(() => {
+    const map = {};
+    (profile?.leaveCredits || []).forEach(c => { map[c.type] = c; });
+    return map;
+  }, [profile]);
+
+  const leaveBalance = (type) => {
+    const row = creditMap[type];
+    const total = row?.balance ?? 0;
     const used = leaves.filter(l => l.type === type && l.status !== 'DENIED').length;
-    const key = LEAVE_CREDITS_MAP[type.toLowerCase()] || type;
-    const credits = Array.isArray(profile?.leaveCredits) ? profile.leaveCredits : [];
-    const row = credits.find(c => c.type === key);
-    const total = row?.balance ?? 15;
-    return total - used;
+    return Math.max(total - used, 0);
   };
 
-  const totalPayslip = payslips.reduce((sum, p) => sum + Number(p.netPay || 0), 0);
-  const totalHours = attendance.reduce((sum, a) => sum + (a.hours || 0), 0);
+  const totalPayslip = useMemo(() => payslips.reduce((sum, p) => sum + Number(p.netPay || 0), 0), [payslips]);
+  const totalHours = useMemo(() => attendance.reduce((sum, a) => sum + (a.hours || 0), 0), [attendance]);
+  const pendingLeaves = useMemo(() => leaves.filter(l => l.status === 'PENDING').length, [leaves]);
+  const unreadNotifications = useMemo(() => notifications.filter(n => n.unread).length, [notifications]);
+
+  const monthLabel = useMemo(() => {
+    const [y, m] = attendanceMonth.split('-').map(Number);
+    return new Date(y, m - 1).toLocaleString('default', { month: 'long', year: 'numeric' });
+  }, [attendanceMonth]);
+
+  const changeMonth = (delta) => {
+    const [y, m] = attendanceMonth.split('-').map(Number);
+    const d = new Date(y, m - 1 + delta, 1);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    setAttendanceMonth(key);
+  };
+
+  const initials = useMemo(() => {
+    if (!profile) return '';
+    return `${profile.firstName?.[0] || ''}${profile.lastName?.[0] || ''}`.toUpperCase();
+  }, [profile]);
 
   return (
-    <Layout title="Employee Self-Service">
-      <div className="flex items-end justify-between gap-4 mb-4">
+    <Layout title="Employee Self-Service" maxWidth="max-w-7xl">
+      <div className="flex items-end justify-between gap-4 mb-6">
         <div>
           <h1 className="font-display text-xl font-bold text-ink flex items-center gap-2">
             <User size={20} className="text-accent" />
@@ -108,183 +154,208 @@ export default function ESS(){
         </button>
       </div>
 
-      {failed && !profile && (
-        <div className="card p-4 mb-4 border border-error/20 bg-error/5">
-          <p className="text-sm text-error-ink font-medium">Your account is not linked to an employee record — ask HR to link it on the Users &amp; Roles page.</p>
+      {loading && (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="card p-4"><div className="skeleton h-16 w-full" /></div>
+          ))}
         </div>
       )}
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-4">
-        <div className="card p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <CreditCard className="text-accent" size={16} />
-            <span className="text-xs mono-label uppercase text-muted">Net Pay</span>
+      {!loading && (
+        <>
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-4">
+            <div className="card p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <CreditCard className="text-accent" size={16} />
+                <span className="text-xs mono-label uppercase text-muted">Net Pay</span>
+              </div>
+              <p className="font-display text-2xl font-bold text-ink">{formatCurrency(totalPayslip)}</p>
+              <p className="text-xs text-muted">{payslips.length} payslip(s)</p>
+            </div>
+            <div className="card p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <TrendingUp className="text-accent" size={16} />
+                <span className="text-xs mono-label uppercase text-muted">Hours Worked</span>
+              </div>
+              <p className="font-display text-2xl font-bold text-ink">{totalHours.toFixed(1)}h</p>
+              <p className="text-xs text-muted">{monthLabel}</p>
+            </div>
+            <div className="card p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <CalendarDays className="text-accent" size={16} />
+                <span className="text-xs mono-label uppercase text-muted">Leave Balance</span>
+              </div>
+              <p className="font-display text-2xl font-bold text-ink">
+                {Object.values(LEAVE_CREDITS_MAP).reduce((sum, label) => sum + leaveBalance(label.split(' ')[0].toUpperCase()), 0)}
+              </p>
+              <p className="text-xs text-muted">{pendingLeaves} pending request(s)</p>
+            </div>
+            <div className="card p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <Check className="text-accent" size={16} />
+                <span className="text-xs mono-label uppercase text-muted">Notifications</span>
+              </div>
+              <p className="font-display text-2xl font-bold text-ink">{unreadNotifications}</p>
+              <p className="text-xs text-muted">Unread alerts</p>
+            </div>
           </div>
-          <p className="font-display text-2xl font-bold text-ink">₱{totalPayslip.toLocaleString()}</p>
-          <p className="text-xs text-muted">Total payslips</p>
-        </div>
-        <div className="card p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <TrendingUp className="text-accent" size={16} />
-            <span className="text-xs mono-label uppercase text-muted">Hours Worked</span>
-          </div>
-          <p className="font-display text-2xl font-bold text-ink">{totalHours.toFixed(1)}h</p>
-          <p className="text-xs text-muted">This month</p>
-        </div>
-        <div className="card p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <Calendar className="text-accent" size={16} />
-            <span className="text-xs mono-label uppercase text-muted">Leave Balance</span>
-          </div>
-          <p className="font-display text-2xl font-bold text-ink">{leaves.filter(l => l.status === 'PENDING').length}</p>
-          <p className="text-xs text-muted">Pending requests</p>
-        </div>
-        <div className="card p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <Check className="text-accent" size={16} />
-            <span className="text-xs mono-label uppercase text-muted">Notifications</span>
-          </div>
-          <p className="font-display text-2xl font-bold text-ink">{notifications.filter(n => n.unread).length}</p>
-          <p className="text-xs text-muted">Unread alerts</p>
-        </div>
-      </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        {/* Profile Section */}
-        {profile && (
-        <div className="card p-4">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-16 h-16 rounded-full bg-accent/15 flex items-center justify-center text-accent font-display text-xl font-bold">
-              {profile.firstName?.[0]}{profile.lastName?.[0]}
-            </div>
-            <div>
-              <h2 className="font-display font-semibold text-ink text-lg mb-1">
-                {profile.firstName} {profile.middleName ? profile.middleName[0] + '.' : ''} {profile.lastName}
-              </h2>
-              <p className="text-sm text-muted">{profile.employeeNumber}</p>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            <div>
-              <span className="text-muted block mb-1">Department</span>
-              {profile.department?.name || '—'}
-            </div>
-            <div>
-              <span className="text-muted block mb-1">Position</span>
-              {profile.position?.title || '—'}
-            </div>
-            <div>
-              <span className="text-muted block mb-1">HR Status</span>
-              <span className={`badge ${badgeTone(profile.status)}`}>{profile.status}</span>
-            </div>
-            <div>
-              <span className="text-muted block mb-1">SG Grade</span>
-              {profile.position?.salaryGrade ? `SG-${profile.position.salaryGrade}` : '—'}
-            </div>
-          </div>
-        </div>
-        )}
-
-        {/* Leave Credits Section */}
-        <div className="card p-4">
-          <h2 className="font-display text-lg font-semibold text-ink mb-3 flex items-center gap-2">
-            <CalendarDays size={18} className="text-accent" />
-            Leave Credits
-          </h2>
-          <div className="grid gap-2">
-            {Object.entries(LEAVE_CREDITS_MAP).map(([key, type]) => {
-              const balance = getLeaveBalance(key.toUpperCase());
-              const credits = profile?.leaveCredits?.[LEAVE_CREDITS_MAP[key.toUpperCase()]] || 15;
-              const used = leaves.filter(l => l.type === key.toUpperCase() && l.status !== 'DENIED').length;
-              return (
-                <div key={key} className="flex items-center justify-between p-2 rounded bg-bg/50">
-                  <span className="text-sm font-medium text-ink">{type.replace('_', ' ')}</span>
-                  <div className="text-right">
-                    <span className="font-mono font-semibold text-ink">{balance} left</span>
-                    <span className="text-xs text-muted"> ({credits} total, {used} used)</span>
+          <div className="grid gap-4 md:grid-cols-2">
+            {profile && (
+              <div className="card p-5">
+                <div className="flex items-center gap-4 mb-4">
+                  <div className="w-14 h-14 rounded-full bg-accent/15 flex items-center justify-center text-accent font-display text-xl font-bold">
+                    {initials}
+                  </div>
+                  <div className="min-w-0">
+                    <h2 className="font-display font-semibold text-ink text-lg truncate">
+                      {profile.firstName} {profile.middleName ? profile.middleName[0] + '.' : ''} {profile.lastName}
+                    </h2>
+                    <p className="text-sm text-muted font-mono">{profile.employeeNumber}</p>
                   </div>
                 </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Payslips Section */}
-        <div className="card p-4">
-          <h2 className="font-display text-lg font-semibold text-ink mb-3 flex items-center gap-2">
-            <FileDown className="text-accent" size={18} />
-            Payslips
-          </h2>
-          <div className="text-xs text-muted mb-2">Showing {payslips.length} payslip(s)</div>
-          <div className="overflow-x-auto">
-            <table className="data-table w-full">
-              <thead><tr><th>Period</th><th>Net Pay</th></tr></thead>
-              <tbody>
-                {payslips.map(p=>(
-                  <tr key={p.id}>
-                    <td>{p.run?.period?.name}</td>
-                    <td className="font-mono">₱{Number(p.netPay).toLocaleString()}</td>
-                  </tr>
-                ))}
-                {payslips.length === 0 && (
-                  <tr><td colSpan={2} className="text-muted text-sm">No payslips available</td></tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* Leave Requests Section */}
-        <div className="card p-4">
-          <h2 className="font-display text-lg font-semibold text-ink mb-3 flex items-center gap-2">
-            <Calendar className="text-accent" size={18} />
-            Leave Requests
-          </h2>
-          {leaves.length ? (
-            <ul className="space-y-2">
-              {leaves.map(l=>(
-                <li key={l.id} className="card p-3 flex items-center justify-between">
+                <div className="grid grid-cols-2 gap-3 text-sm">
                   <div>
-                    <span className="font-medium text-ink">{l.type.replace('_', ' ')}</span>
-                    <span className="text-xs text-muted"> · {new Date(l.fromDate).toLocaleDateString()} – {new Date(l.toDate).toLocaleDateString()}</span>
+                    <span className="text-muted block mb-0.5">Department</span>
+                    <span className="text-ink font-medium">{profile.department?.name || '—'}</span>
                   </div>
-                  <span className={`badge ${badgeTone(l.status)}`}>{l.status}</span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="text-muted text-sm mt-2">No leave requests on file.</p>
-          )}
-        </div>
+                  <div>
+                    <span className="text-muted block mb-0.5">Position</span>
+                    <span className="text-ink font-medium">{profile.position?.title || '—'}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted block mb-0.5">Status</span>
+                    <span className={`badge ${badgeTone(profile.status)}`}>{profile.status}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted block mb-0.5">Salary Grade</span>
+                    <span className="text-ink font-medium">{profile.position?.salaryGrade ? `SG-${profile.position.salaryGrade}` : '—'}</span>
+                  </div>
+                  <div className="col-span-2">
+                    <span className="text-muted block mb-0.5">Address</span>
+                    <span className="text-ink font-medium">{profile.address || '—'}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted block mb-0.5">Contact</span>
+                    <span className="text-ink font-medium">{profile.contactNumber || '—'}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted block mb-0.5">Email</span>
+                    <span className="text-ink font-medium">{profile.email || '—'}</span>
+                  </div>
+                </div>
+              </div>
+            )}
 
-        {/* Attendance Section */}
-        <div className="card p-4 md:col-span-2">
-          <h2 className="font-display text-lg font-semibold text-ink mb-3 flex items-center gap-2">
-            <Clock className="text-accent" size={18} />
-            Attendance (September 2026)
-          </h2>
-          <div className="overflow-x-auto">
-            <table className="data-table w-full">
-              <thead><tr><th>Date</th><th>Time In</th><th>Time Out</th><th>Hours</th></tr></thead>
-              <tbody>
-                {attendance.map(a=>(
-                  <tr key={a.id}>
-                    <td>{new Date(a.date).toLocaleDateString()}</td>
-                    <td>{a.timeIn ? new Date(a.timeIn).toLocaleTimeString() : '—'}</td>
-                    <td>{a.timeOut ? new Date(a.timeOut).toLocaleTimeString() : '—'}</td>
-                    <td className="font-mono">{a.hours?.toFixed(1) || '0.0'}h</td>
-                  </tr>
-                ))}
-                {attendance.length === 0 && (
-                  <tr><td colSpan={4} className="text-muted text-sm">No attendance records this month.</td></tr>
-                )}
-              </tbody>
-            </table>
+            <div className="card p-5">
+              <h2 className="font-display text-lg font-semibold text-ink mb-4 flex items-center gap-2">
+                <CalendarDays size={18} className="text-accent" />
+                Leave Credits
+              </h2>
+              <div className="grid gap-2">
+                {Object.entries(LEAVE_CREDITS_MAP).map(([type, label]) => {
+                  const row = creditMap[type];
+                  const total = row?.balance ?? 0;
+                  const used = leaves.filter(l => l.type === type && l.status !== 'DENIED').length;
+                  const balance = Math.max(total - used, 0);
+                  return (
+                    <div key={type} className="flex items-center justify-between p-2.5 rounded bg-bg/50">
+                      <span className="text-sm font-medium text-ink">{label}</span>
+                      <div className="text-right">
+                        <span className="font-mono font-semibold text-ink">{balance}</span>
+                        <span className="text-xs text-muted"> / {total} days</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="card p-5">
+              <h2 className="font-display text-lg font-semibold text-ink mb-3 flex items-center gap-2">
+                <FileDown className="text-accent" size={18} />
+                Payslips
+              </h2>
+              {payslips.length === 0 ? (
+                <p className="text-muted text-sm">No payslips available.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="data-table w-full">
+                    <thead><tr><th>Period</th><th>Net Pay</th></tr></thead>
+                    <tbody>
+                      {payslips.map(p => (
+                        <tr key={p.id}>
+                          <td>{p.run?.period?.name || '—'}</td>
+                          <td className="font-mono">{formatCurrency(p.netPay)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            <div className="card p-5">
+              <h2 className="font-display text-lg font-semibold text-ink mb-3 flex items-center gap-2">
+                <Calendar className="text-accent" size={18} />
+                Leave Requests
+              </h2>
+              {leaves.length === 0 ? (
+                <p className="text-muted text-sm">No leave requests on file.</p>
+              ) : (
+                <div className="space-y-2">
+                  {leaves.slice(0, 10).map(l => (
+                    <div key={l.id} className="flex items-center justify-between p-3 rounded bg-bg/50">
+                      <div>
+                        <span className="text-sm font-medium text-ink">{l.type.replace(/_/g, ' ')}</span>
+                        <span className="text-xs text-muted ml-2">
+                          {new Date(l.fromDate).toLocaleDateString()} – {new Date(l.toDate).toLocaleDateString()}
+                        </span>
+                      </div>
+                      {statusBadge(l.status)}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="card p-5 md:col-span-2">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="font-display text-lg font-semibold text-ink flex items-center gap-2">
+                  <Clock className="text-accent" size={18} />
+                  Attendance
+                </h2>
+                <div className="flex items-center gap-2">
+                  <button type="button" className="btn btn-ghost btn-sm" onClick={() => changeMonth(-1)} aria-label="Previous month"><ChevronLeft size={14} /></button>
+                  <span className="mono-label text-sm">{monthLabel}</span>
+                  <button type="button" className="btn btn-ghost btn-sm" onClick={() => changeMonth(1)} aria-label="Next month"><ChevronRight size={14} /></button>
+                </div>
+              </div>
+              {attendance.length === 0 ? (
+                <p className="text-muted text-sm">No attendance records for this month.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="data-table w-full">
+                    <thead><tr><th>Date</th><th>Time In</th><th>Time Out</th><th>Hours</th></tr></thead>
+                    <tbody>
+                      {attendance.map(a => (
+                        <tr key={a.id}>
+                          <td className="font-mono">{new Date(a.date).toLocaleDateString()}</td>
+                          <td>{a.timeIn ? new Date(a.timeIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}</td>
+                          <td>{a.timeOut ? new Date(a.timeOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}</td>
+                          <td className="font-mono">{a.hours?.toFixed(1) || '0.0'}h</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-      </div>
+        </>
+      )}
 
-      {/* File Leave Modal */}
       <Modal
         open={leaveOpen}
         onClose={() => setLeaveOpen(false)}
@@ -292,13 +363,13 @@ export default function ESS(){
         size="md"
         footer={
           <>
-            <button type="button" className="btn btn-ghost gap-2" onClick={() => setLeaveOpen(false)}>
+            <button type="button" className="btn btn-ghost gap-2" onClick={() => setLeaveOpen(false)} disabled={submitting}>
               <X size={16} />
               Cancel
             </button>
-            <button type="submit" form="ess-leave-form" className="btn btn-primary gap-2">
+            <button type="submit" form="ess-leave-form" className="btn btn-primary gap-2" disabled={submitting}>
               <Check size={16} />
-              File Request
+              {submitting ? 'Filing...' : 'File Request'}
             </button>
           </>
         }

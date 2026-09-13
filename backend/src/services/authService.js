@@ -111,12 +111,47 @@ export const authService = {
     return { message: 'PIN removed' };
   },
   async refresh(refreshToken) {
-    const payload = jwt.verify(refreshToken, REFRESH_SECRET);
-    // Re-read the user so the new access token carries the live role
-    // (refresh tokens only carry the id). Revoked/missing users fail closed.
+    if (!refreshToken || typeof refreshToken !== 'string') {
+      const err = new Error('Invalid refresh token');
+      err.status = 401;
+      throw err;
+    }
+    let payload;
+    try {
+      payload = jwt.verify(refreshToken, REFRESH_SECRET);
+    } catch (e) {
+      const err = new Error('Invalid refresh token');
+      err.status = 401;
+      throw err;
+    }
     const user = await prisma.user.findUnique({ where: { id: payload.id } });
-    if (!user || user.status === 'INACTIVE') throw new Error('Invalid refresh token');
+    if (!user || user.status === 'INACTIVE') {
+      const err = new Error('Invalid refresh token');
+      err.status = 401;
+      throw err;
+    }
     const accessToken = jwt.sign({ id: user.id, role: user.role, tenantId: user.tenantId ?? null }, ACCESS_SECRET, { expiresIn: '15m' });
     return { accessToken };
+  },
+  async switchRole(userId, newRole) {
+    if (process.env.NODE_ENV === 'production') {
+      const err = new Error('Role switching is disabled in production');
+      err.status = 403;
+      throw err;
+    }
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user || user.status === 'INACTIVE') {
+      const err = new Error('User not found');
+      err.status = 404;
+      throw err;
+    }
+    const role = await prisma.role.findFirst({ where: { name: newRole, tenantId: user.tenantId } });
+    if (!role) {
+      const err = new Error('Invalid role');
+      err.status = 400;
+      throw err;
+    }
+    const patched = await prisma.user.update({ where: { id: userId }, data: { role: newRole } });
+    return issueSession(patched, { ip: '127.0.0.1', get: () => 'dev' });
   }
 };

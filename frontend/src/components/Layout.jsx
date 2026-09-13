@@ -14,7 +14,7 @@ function TenantBanner() {
   );
 }
 
-export default function Layout({ children }) {
+export default function Layout({ children, maxWidth = 'max-w-6xl' }) {
   const [collapsed, setCollapsed] = useState(() => {
     try { return localStorage.getItem('lgu-sidebar-collapsed') === 'true'; } catch { return false; }
   });
@@ -26,7 +26,7 @@ export default function Layout({ children }) {
         <Header onToggleSidebar={() => setCollapsed(c => !c)} sidebarCollapsed={collapsed} />
         <TenantBanner />
         <main className="flex-1 overflow-auto p-6 flex items-start justify-center">
-          <div className="w-full max-w-6xl">{children}</div>
+          <div className={`w-full ${maxWidth}`}>{children}</div>
         </main>
       </div>
     </div>

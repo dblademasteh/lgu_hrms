@@ -4,6 +4,7 @@ import { toggleTheme, useTheme } from '../theme.js';
 import { useAuthStore } from '../stores/authStore.js';
 import { useNotifications, useInAppEnabled } from '../hooks/useNotifications.js';
 import { Search, Bell, Sun, Moon, LogOut, User, Menu, ChevronDown, Home, CheckCheck, Trash2, Inbox, HelpCircle } from 'lucide-react';
+import { switchRole } from '../api/dev.js';
 
 const titles = {
   '/dashboard': 'Dashboard',
@@ -23,14 +24,18 @@ export default function Header({ onToggleSidebar }) {
   const location = useLocation();
   const theme = useTheme();
   const user = useAuthStore(s => s.user);
+  const switchUserRole = useAuthStore(s => s.switchRole);
   const logout = useAuthStore(s => s.logout);
   const { items, loading, live, markRead, markAllRead, dismissAll } = useNotifications();
   const inAppEnabled = useInAppEnabled();
   const [bellOpen, setBellOpen] = useState(false);
   const [userOpen, setUserOpen] = useState(false);
+  const [devRole, setDevRole] = useState(user?.role || '');
+  const [switchingRole, setSwitchingRole] = useState(false);
   const bellRef = useRef(null);
   const userRef = useRef(null);
   const unread = inAppEnabled ? items.filter(n => n.unread).length : 0;
+  const isDev = import.meta.env.NODE_ENV !== 'production';
 
   useEffect(() => {
     if (!bellOpen) return undefined;
@@ -256,7 +261,41 @@ export default function Header({ onToggleSidebar }) {
                     <HelpCircle size={16} /> Help Center
                   </button>
                 </div>
-                <div className="border-t border-line py-1">
+                 <div className="border-t border-line py-1">
+                  {isDev && (
+                    <div className="px-4 py-2">
+                      <label htmlFor="dev-role-switch" className="block text-[10px] mono-label uppercase text-muted mb-1">Dev Role Switcher</label>
+                      <div className="flex gap-2">
+                        <select
+                          id="dev-role-switch"
+                          className="select w-full"
+                          value={devRole}
+                          onChange={async (e) => {
+                            const next = e.target.value;
+                            setDevRole(next);
+                            try {
+                              setSwitchingRole(true);
+                              await switchUserRole(next);
+                              window.location.reload();
+                            } catch (err) {
+                              // handled in store
+                            } finally {
+                              setSwitchingRole(false);
+                            }
+                          }}
+                          disabled={switchingRole}
+                        >
+                          <option value="ADMIN">ADMIN</option>
+                          <option value="HR_MANAGER">HR_MANAGER</option>
+                          <option value="PAYROLL_OFFICER">PAYROLL_OFFICER</option>
+                          <option value="DEPARTMENT_HEAD">DEPARTMENT_HEAD</option>
+                          <option value="AUDITOR">AUDITOR</option>
+                          <option value="EMPLOYEE">EMPLOYEE</option>
+                        </select>
+                      </div>
+                      <p className="text-[10px] text-muted mt-1">Issues a new session token for the selected role.</p>
+                    </div>
+                  )}
                   <button
                     className="w-full text-left px-4 py-2.5 text-sm hover:bg-bg/60 flex items-center gap-2 text-error"
                     onClick={() => { logout(); setUserOpen(false); navigate('/'); }}

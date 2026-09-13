@@ -3,6 +3,7 @@ import { requireAuth } from '../middleware/auth.js';
 import { tenantContext } from '../middleware/tenant.js';
 import { auditLog } from '../middleware/audit.js';
 import { validate } from '../middleware/validate.js';
+import { tenantRepository } from '../middleware/tenant.js';
 import accountRouter from './account.js';
 import authRouter from './auth.js';
 import rulesRouter from './rules.js';
@@ -35,6 +36,7 @@ import tenantsRouter from './tenants.js';
 import disqualificationsRouter from './disqualifications.js';
 import integrationsRouter from './integrations.js';
 import integrationRequestsRouter from './integrationRequests.js';
+import devRouter from './dev.js';
 
 const router = Router();
 
@@ -43,9 +45,23 @@ router.use('/integrations', integrationsRouter);
 router.use('/integrations/requests', integrationRequestsRouter);
 // Public biometric punch - no JWT required
 router.use('/attendance/public-punch', publicPunchRouter);
+// Public tenant list for login picker
+router.use('/tenants', async (req, res, next) => {
+  if (req.method === 'GET') {
+    try {
+      const tenants = await tenantRepository.list();
+      return res.json(tenants);
+    } catch (e) {
+      return next(e);
+    }
+  }
+  next();
+});
 router.use('/', requireAuth);
 router.use('/', tenantContext);
 router.use('/', auditLog);
+// Dev-only role switcher
+router.use('/dev', devRouter);
 router.use('/rules', rulesRouter);
 router.use('/roles', rolesRouter);
 router.use('/bonus', bonusRouter);
