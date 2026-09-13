@@ -10,18 +10,21 @@ import { useNotifications } from '../hooks/useNotifications.js';
 const LEAVE_TYPES = [
   { value: 'VACATION', label: 'Vacation Leave' },
   { value: 'SICK', label: 'Sick Leave' },
+  { value: 'SPECIAL_PRIVILEGE', label: 'Special Privilege Leave' },
   { value: 'MATERNITY', label: 'Maternity Leave' },
   { value: 'PATERNITY', label: 'Paternity Leave' },
   { value: 'SOLO_PARENT', label: 'Solo Parent Leave' },
-  { value: 'STUDY', label: 'Service Study Leave' },
-  { value: 'EMERGENCY', label: 'Emergency Leave' },
-  { value: 'SPECIAL', label: 'Special Leave' },
+  { value: 'SPECIAL_WOMEN', label: 'Special Leave for Women' },
+  { value: 'COMPENSATORY', label: 'Compensatory Leave' },
 ];
 
 const LEAVE_CREDITS_MAP = {
   vacation: 'VACATION',
   sick: 'SICK',
-  special: 'SPECIAL',
+  special: 'SPECIAL_PRIVILEGE',
+  special_privilege: 'SPECIAL_PRIVILEGE',
+  special_women: 'SPECIAL_WOMEN',
+  compensatory: 'COMPENSATORY',
 };
 
 export default function ESS(){
@@ -32,7 +35,7 @@ export default function ESS(){
   const [attendance, setAttendance] = useState([]);
   const [failed, setFailed] = useState(false);
   const [leaveOpen, setLeaveOpen] = useState(false);
-  const [leaveForm, setLeaveForm] = useState({ type: 'VACATION', fromDate: '', toDate: '', reason: '' });
+  const [leaveForm, setLeaveForm] = useState({ type: 'VACATION', fromDate: '', toDate: '', reason: '', isHalfDay: false, isLwop: false, isTerminal: false, advanceNoticed: false, documentUrl: '' });
   const { items: notifications } = useNotifications();
 
   useEffect(()=>{
@@ -68,7 +71,7 @@ export default function ESS(){
       const created = await createEssLeaveRequest({ ...leaveForm, days });
       setLeaves(l => [created, ...l]);
       setLeaveOpen(false);
-      setLeaveForm({ type: 'VACATION', fromDate: '', toDate: '', reason: '' });
+      setLeaveForm({ type: 'VACATION', fromDate: '', toDate: '', reason: '', isHalfDay: false, isLwop: false, isTerminal: false, advanceNoticed: false, documentUrl: '' });
       toast('Leave request filed.', 'success');
     } catch (err) {
       const msg = err?.response?.data?.error?.message;
@@ -78,9 +81,11 @@ export default function ESS(){
 
   // Calculate leave balance
   const getLeaveBalance = (type) => {
-    const credits = profile?.leaveCredits || {};
     const used = leaves.filter(l => l.type === type && l.status !== 'DENIED').length;
-    const total = credits[LEAVE_CREDITS_MAP[type.toLowerCase()]] || 15;
+    const key = LEAVE_CREDITS_MAP[type.toLowerCase()] || type;
+    const credits = Array.isArray(profile?.leaveCredits) ? profile.leaveCredits : [];
+    const row = credits.find(c => c.type === key);
+    const total = row?.balance ?? 15;
     return total - used;
   };
 
@@ -320,6 +325,28 @@ export default function ESS(){
           <div>
             <label htmlFor="ess-reason" className="block text-sm font-medium text-ink mb-1">Reason</label>
             <textarea id="ess-reason" className="input" value={leaveForm.reason} onChange={e => setLeaveForm(f => ({ ...f, reason: e.target.value }))} placeholder="Brief reason for the leave" rows={3} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" className="checkbox" checked={leaveForm.isHalfDay} onChange={e => setLeaveForm(f => ({ ...f, isHalfDay: e.target.checked }))} />
+              Half-day
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" className="checkbox" checked={leaveForm.isLwop} onChange={e => setLeaveForm(f => ({ ...f, isLwop: e.target.checked }))} />
+              LWOP
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" className="checkbox" checked={leaveForm.isTerminal} onChange={e => setLeaveForm(f => ({ ...f, isTerminal: e.target.checked }))} />
+              Terminal
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" className="checkbox" checked={leaveForm.advanceNoticed} onChange={e => setLeaveForm(f => ({ ...f, advanceNoticed: e.target.checked }))} />
+              5-day notice (VL)
+            </label>
+          </div>
+          <div>
+            <label htmlFor="ess-doc" className="block text-sm font-medium text-ink mb-1">Document URL (MC / cert)</label>
+            <input id="ess-doc" className="input" value={leaveForm.documentUrl || ''} onChange={e => setLeaveForm(f => ({ ...f, documentUrl: e.target.value }))} placeholder="https://..." />
           </div>
         </form>
       </Modal>

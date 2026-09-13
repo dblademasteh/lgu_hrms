@@ -17,6 +17,18 @@
 - [ ] **Low** — `pdfUrl` still null (print HTML only); `upsertPayslip`/`addLines` API unused by UI (engine owns lines)
 - [ ] **Low** — `run-2026-09-*` seed runs + `Test October 2026` posted runs are dev data; consider a dedicated reset script
 
+## Leave & Appointments (dive findings — all confirmed live)
+- [ ] **Critical — RBAC gap:** `/appointments` has NO permission gating at all — any authenticated user (EMPLOYEE) can list/delete any appointment; needs `requirePermission` + frontend gate
+- [ ] **Critical — leave read leaks (verified):** EMPLOYEE token returned tenant-wide leave requests (PII) + arbitrary employees' credit balances via `GET /leave/requests` + `GET /leave/credits?employeeId=`; needs role gate or self-scoping
+- [ ] **Critical — leave authz:** `POST /leave/requests` accepts arbitrary `employeeId` — verified EMPLOYEE filed a PENDING leave for a co-worker; self-lock to linked employee (ESS pattern) or gate on-behalf creation
+- [ ] **High — leave type enum mismatch:** Zod contract allows `STUDY/EMERGENCY/SPECIAL` (NOT in DB `LeaveType` → verified HTTP 500 w/ Prisma leak) while DB has `SPECIAL_PRIVILEGE/SPECIAL_WOMEN/COMPENSATORY`; frontend credits panel queries `SPECIAL` (always 0). Align schema + contracts + seed + UI
+- [ ] **High — 500 handler leaks DB internals:** `server.js` error middleware returns `err.message` for 500s → clients get raw Prisma invocation traces (verified); return generic message for unexpected errors
+- [ ] **High — appointments create is broken end-to-end:** form posts free-text `name` as `employeeId` (FK failure) + raw `YYYY-MM-DD` startDate (Prisma ISO error) → verified HTTP 500; needs employee lookup, server date coercion, and a real contracts file
+- [ ] **Medium — leave workflow integrity:** `days` trusted from client (not recomputed from range), no balance/overlap checks, APPROVED doesn't decrement `LeaveCredit`, no approver/decision fields, status re-flippable (no lifecycle guard)
+- [ ] **Medium — static credits:** `LeaveRuleConfig.accrualPerMonth/maxCarryOver` never applied; seed hardcodes 15/15; no accrual job or annual reset
+- [ ] **Medium — appointments:** hard delete (AGENTS wants soft) + no endDate/expiry/status update in UI (notifications track expiring temporaries); position/dept stored as hybrid free-text/id
+- [ ] **Low — no pagination on `/leave/requests` and `/appointments` lists** (both return full tenant dump to approvers)
+
 ## High Priority
 - [ ] Remove Google Fonts CDN `@import` in `frontend/src/index.css` (on-prem violation; 10 unused families — self-hosted fontsource is the only font source)
 - [ ] Print styles: `@media print` with `.print-area`/`.no-print` for COA payslips, Service Records, CSC forms (contract per DESIGN.md §10)

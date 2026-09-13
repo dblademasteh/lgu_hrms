@@ -67,13 +67,13 @@ export default function App() {
              <Route path="/employees" element={<Protected roles={['ADMIN', 'HR_MANAGER', 'DEPARTMENT_HEAD']}><Employees /></Protected>} />
              <Route path="/organization" element={<Protected><Organization /></Protected>} />
              <Route path="/payroll" element={<Protected roles={['ADMIN', 'HR_MANAGER', 'PAYROLL_OFFICER']} capability="payrollRead"><Payroll /></Protected>} />
-             <Route path="/leave" element={<Protected roles={['ADMIN', 'HR_MANAGER', 'DEPARTMENT_HEAD']}><Leave /></Protected>} />
+             <Route path="/leave" element={<Protected roles={['ADMIN', 'HR_MANAGER', 'DEPARTMENT_HEAD']} capability="leaveApproval"><Leave /></Protected>} />
              <Route path="/audit" element={<Protected roles={['ADMIN', 'AUDITOR']}><Audit /></Protected>} />
              <Route path="/reports" element={<Protected roles={['ADMIN', 'HR_MANAGER', 'PAYROLL_OFFICER', 'AUDITOR']}><Reports /></Protected>} />
              <Route path="/users" element={<Protected roles={['ADMIN', 'SUPER_ADMIN']} capability="manageUsersAndRoles"><Users /></Protected>} />
              <Route path="/attendance" element={<Protected roles={['ADMIN', 'HR_MANAGER', 'DEPARTMENT_HEAD']}><Attendance /></Protected>} />
              <Route path="/attendance-portal" element={<Protected roles={['EMPLOYEE', 'ADMIN', 'HR_MANAGER', 'PAYROLL_OFFICER', 'DEPARTMENT_HEAD']}><AttendancePortal /></Protected>} />
-             <Route path="/appointments" element={<Protected roles={['ADMIN', 'HR_MANAGER']}><Appointments /></Protected>} />
+             <Route path="/appointments" element={<Protected roles={['ADMIN', 'HR_MANAGER']} capability="appointmentsCRUD"><Appointments /></Protected>} />
              <Route path="/performance" element={<Protected roles={['ADMIN', 'HR_MANAGER', 'DEPARTMENT_HEAD']}><Performance /></Protected>} />
              <Route path="/plantilla" element={<Protected roles={['ADMIN', 'HR_MANAGER']}><Plantilla /></Protected>} />
              <Route path="/vacancy" element={<Protected roles={['ADMIN', 'HR_MANAGER']}><Vacancy /></Protected>} />

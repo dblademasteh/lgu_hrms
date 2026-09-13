@@ -178,6 +178,7 @@
   .input[aria-invalid='true']:focus-visible {
     box-shadow: 0 0 0 2px color-mix(in oklab, var(--error) 30%, transparent);
   }
+  .input-error { border-color: var(--error) !important; }
 
   /* card / stat — theme-aware surfaces */
   .card {
@@ -403,6 +404,18 @@
   @keyframes toast-in {
     from { opacity: 0; transform: translateY(0.5rem); }
     to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* skeleton — loading placeholder */
+  .skeleton {
+    background: linear-gradient(90deg, var(--line) 25%, color-mix(in oklab, var(--line) 80%, var(--muted)) 50%, var(--line) 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+    border-radius: 4px;
+  }
+  @keyframes shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
   }
 
   /* tabs — multi-tab detail panes */

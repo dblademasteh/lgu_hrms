@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Plus, Save, X, ChevronDown } from 'lucide-react';
+import { Plus, Save, X, Trash2, Edit } from 'lucide-react';
 import Layout from '../components/Layout.jsx';
 import { badgeTone } from '../data/mock.js';
 import EmployeeForm from '../components/EmployeeForm.jsx';
@@ -10,6 +10,8 @@ import EmployeeProfileModal from '../components/EmployeeProfileModal.jsx';
 import { listEmployees, createEmployee, updateEmployee, deleteEmployee } from '../api/employees.js';
 import { departmentsApi } from '../api/departments.js';
 import { useToast } from '../components/Toast.jsx';
+
+const initialsOf = name => (name ?? '').split(' ').filter(Boolean).map(p => p[0]).slice(0, 2).join('') || '—';
 
 const blankEmployee = { employeeNumber: '', firstName: '', lastName: '', middleName: '', birthDate: '', gender: '', civilStatus: '', address: '', contactNumber: '', email: '', status: 'ACTIVE', departmentId: '', positionId: '', hiredDate: '', monthlySalary: '' };
 
@@ -81,12 +83,16 @@ export default function Employees() {
   const [total, setTotal] = useState(0);
   const pageSize = 50;
   
+  // Error state
+  const [error, setError] = useState(null);
+  
   // Bumped whenever a CSC section entry is added/removed in the edit modal,
   // so the detail pane refetches its relation tabs.
   const [sectionsVersion, setSectionsVersion] = useState(0);
 
   const load = async (params) => {
     setLoading(true);
+    setError(null);
     try {
       const data = await listEmployees({ 
         page: params.page || 1, 
@@ -103,6 +109,7 @@ export default function Employees() {
       setRows(mapped);
       setTotal(totalRecords);
     } catch (e) {
+      setError(e?.response?.data?.error?.message || e.message || 'Failed to load employees');
       toast('Failed to load employees: ' + (e?.response?.data?.error?.message || e.message), 'error');
     } finally {
       setLoading(false);
@@ -226,64 +233,55 @@ export default function Employees() {
             className="input h-9 flex-1 min-w-[220px]"
             aria-label="Search employees"
           />
-          <div className="relative">
-            <select
-              value={filterDept}
-              onChange={e => { setFilterDept(e.target.value); setPage(1); }}
-              className="input h-9 w-[170px] appearance-none pr-8"
-              aria-label="Filter by department"
-            >
-              <option value="">All depts</option>
-              {departments.map(d => <option key={d.id} value={d.id}>{d.code}</option>)}
-            </select>
-            <ChevronDown size={14} className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-muted"/>
-          </div>
-          <div className="relative">
-            <select
-              value={filterSg}
-              onChange={e => { setFilterSg(e.target.value); setPage(1); }}
-              className="input h-9 w-[110px] appearance-none pr-8"
-              aria-label="Filter by SG"
-            >
-              <option value="">All SG</option>
-              {Array.from({length:33},(_,i)=>i+1).map(n=><option key={n} value={n}>SG {n}</option>)}
-            </select>
-            <ChevronDown size={14} className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-muted"/>
-          </div>
-          <div className="relative">
-            <select
-              value={filterAppt}
-              onChange={e => { setFilterAppt(e.target.value); setPage(1); }}
-              className="input h-9 w-[150px] appearance-none pr-8"
-              aria-label="Filter by appointment"
-            >
-              <option value="">All appt</option>
-              <option value="REGULAR">Regular</option>
-              <option value="COT">Contractual</option>
-              <option value="CASUAL">Casual</option>
-              <option value="PROVISIONAL">Provisional</option>
-            </select>
-            <ChevronDown size={14} className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-muted"/>
-          </div>
-          <div className="relative">
-            <select
-              value={filterStatus}
-              onChange={e => { setFilterStatus(e.target.value); setPage(1); }}
-              className="input h-9 w-[120px] appearance-none pr-8"
-              aria-label="Filter by status"
-            >
-              <option value="">All status</option>
-              <option value="ACTIVE">Active</option>
-              <option value="INACTIVE">Inactive</option>
-            </select>
-            <ChevronDown size={14} className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-muted"/>
-          </div>
+          <select
+            value={filterDept}
+            onChange={e => { setFilterDept(e.target.value); setPage(1); }}
+            className="select h-9 w-[170px]"
+            aria-label="Filter by department"
+          >
+            <option value="">All depts</option>
+            {departments.map(d => <option key={d.id} value={d.id}>{d.code}</option>)}
+          </select>
+          <select
+            value={filterSg}
+            onChange={e => { setFilterSg(e.target.value); setPage(1); }}
+            className="select h-9 w-[110px]"
+            aria-label="Filter by SG"
+          >
+            <option value="">All SG</option>
+            {Array.from({length:33},(_,i)=>i+1).map(n=><option key={n} value={n}>SG {n}</option>)}
+          </select>
+          <select
+            value={filterAppt}
+            onChange={e => { setFilterAppt(e.target.value); setPage(1); }}
+            className="select h-9 w-[150px]"
+            aria-label="Filter by appointment type"
+          >
+            <option value="">All appointments</option>
+            <option value="REGULAR">Regular</option>
+            <option value="COT">Contractual</option>
+            <option value="CASUAL">Casual</option>
+            <option value="PROVISIONAL">Provisional</option>
+          </select>
+          <select
+            value={filterStatus}
+            onChange={e => { setFilterStatus(e.target.value); setPage(1); }}
+            className="select h-9 w-[120px]"
+            aria-label="Filter by status"
+          >
+            <option value="">All status</option>
+            <option value="ACTIVE">Active</option>
+            <option value="INACTIVE">Inactive</option>
+          </select>
         </div>
       </div>
       
       <div className="grid grid-cols-1 gap-4">
         <div className="min-w-0">
           <div className="card p-3 h-full flex flex-col min-h-0">
+            {error && (
+              <div className="text-xs text-error px-3 py-2 border-b border-line">{error}</div>
+            )}
             <div className="overflow-auto flex-1 min-h-0">
               <table className="data-table text-sm">
                 <thead className="sticky top-0 bg-bg/95 backdrop-blur">
@@ -294,38 +292,64 @@ export default function Employees() {
                     <th className="text-left hidden md:table-cell">Position</th>
                     <th className="text-left hidden sm:table-cell w-[80px]">Dept</th>
                     <th className="text-left hidden xl:table-cell w-[90px]">SG/Step</th>
-                    <th className="text-left hidden xl:table-cell w-[120px]">Appt Type</th>
+                    <th className="text-left hidden xl:table-cell w-[120px]">Appointment Type</th>
                     <th className="text-left w-[80px]">Status</th>
                     <th className="text-right hidden md:table-cell w-[110px]">Monthly</th>
-                    <th className="text-right w-20"></th>
+                    <th className="text-right w-20">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map(e => (
-                    <tr
-                      key={e.id}
-                      data-selectable="true"
-                      onClick={() => openProfile(e)}
-                      className="group cursor-pointer hover:bg-accent/5 transition-colors"
-                    >
-                      <td className="font-mono text-xs">{e.no}</td>
-                      <td className="font-medium truncate max-w-[220px]">{e.fullName}</td>
-                      <td className="hidden lg:table-cell font-mono text-xs text-muted">{e.itemNo || '—'}</td>
-                      <td className="hidden md:table-cell truncate max-w-[200px]">{e.position}</td>
-                      <td className="hidden sm:table-cell font-mono text-xs text-muted">{e.dept || '—'}</td>
-                      <td className="hidden xl:table-cell font-mono text-xs">{e.sg}{e.step ? `/${e.step}` : ''}</td>
-                      <td className="hidden xl:table-cell text-xs text-muted">{e.appointmentType || '—'}</td>
-                      <td><span className={`badge text-[10px] ${badgeTone(e.status)}`}>{e.status}</span></td>
-                      <td className="hidden md:table-cell font-mono text-xs text-right">{e.monthly || '—'}</td>
-                       <td className="text-right">
-                         <span className="inline-flex gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition">
-                           <button type="button" className="btn btn-ghost px-3 h-9 text-xs min-w-[64px]" onClick={e2 => { e2.stopPropagation(); openEdit(e); }} aria-label="Edit employee">Edit</button>
-                           <button type="button" className="btn btn-ghost px-3 h-9 text-xs text-error min-w-[64px]" onClick={e2 => { e2.stopPropagation(); setConfirmDel(e); }} aria-label="Delete employee">Delete</button>
-                         </span>
-                       </td>
-                    </tr>
-                  ))}
-                  {rows.length === 0 && (
+                  {loading
+                    ? Array.from({ length: 8 }).map((_, i) => (
+                        <tr key={i}>
+                          <td><div className="skeleton h-3 w-12" /></td>
+                          <td><div className="skeleton h-3 w-32" /></td>
+                          <td className="hidden lg:table-cell"><div className="skeleton h-3 w-16" /></td>
+                          <td className="hidden md:table-cell"><div className="skeleton h-3 w-24" /></td>
+                          <td className="hidden sm:table-cell"><div className="skeleton h-3 w-10" /></td>
+                          <td className="hidden xl:table-cell"><div className="skeleton h-3 w-12" /></td>
+                          <td className="hidden xl:table-cell"><div className="skeleton h-3 w-16" /></td>
+                          <td><div className="skeleton h-4 w-14 rounded-full" /></td>
+                          <td className="hidden md:table-cell"><div className="skeleton h-3 w-16 ml-auto" /></td>
+                          <td><div className="skeleton h-8 w-20 ml-auto" /></td>
+                        </tr>
+                      ))
+                    : rows.map(e => (
+                        <tr
+                          key={e.id}
+                          data-selectable="true"
+                          onClick={() => openProfile(e)}
+                          className="group cursor-pointer hover:bg-accent/5 transition-colors"
+                        >
+                          <td className="font-mono text-xs">{e.no}</td>
+                          <td>
+                            <div className="flex items-center gap-2">
+                              <div className="w-7 h-7 rounded-md bg-accent/10 text-accent font-display font-bold flex items-center justify-center shrink-0 text-xs" aria-hidden="true">
+                                {initialsOf(e.fullName)}
+                              </div>
+                              <span className="font-medium truncate max-w-[180px]">{e.fullName}</span>
+                            </div>
+                          </td>
+                          <td className="hidden lg:table-cell font-mono text-xs text-muted">{e.itemNo || '—'}</td>
+                          <td className="hidden md:table-cell truncate max-w-[200px]">{e.position}</td>
+                          <td className="hidden sm:table-cell font-mono text-xs text-muted">{e.dept || '—'}</td>
+                          <td className="hidden xl:table-cell font-mono text-xs">{e.sg}{e.step ? `/${e.step}` : ''}</td>
+                          <td className="hidden xl:table-cell text-xs text-muted">{e.appointmentType || '—'}</td>
+                          <td><span className={`badge text-[10px] ${badgeTone(e.status)}`}>{e.status}</span></td>
+                          <td className="hidden md:table-cell font-mono text-xs text-right">{e.monthly || '—'}</td>
+                           <td className="text-right">
+                             <span className="inline-flex gap-1">
+                               <button type="button" className="btn btn-ghost px-2.5 h-8 text-xs min-w-[32px]" onClick={e2 => { e2.stopPropagation(); openEdit(e); }} aria-label="Edit employee" title="Edit">
+                                 <Edit size={14} />
+                               </button>
+                               <button type="button" className="btn btn-ghost px-2.5 h-8 text-xs text-error min-w-[32px]" onClick={e2 => { e2.stopPropagation(); setConfirmDel(e); }} aria-label="Delete employee" title="Delete">
+                                 <Trash2 size={14} />
+                               </button>
+                             </span>
+                           </td>
+                        </tr>
+                      ))}
+                  {!loading && rows.length === 0 && (
                     <tr><td colSpan={9} className="text-muted text-xs py-10 text-center">No employees match your filters.</td></tr>
                   )}
                 </tbody>
@@ -347,7 +371,7 @@ export default function Employees() {
         open={profileModalOpen}
         onClose={closeProfile}
         title={profileEmployee ? `Employee Profile · ${profileEmployee.name}` : 'Employee Profile'}
-        size="xl"
+        size="lg"
       >
         <EmployeeProfileModal
           employee={profileEmployee}

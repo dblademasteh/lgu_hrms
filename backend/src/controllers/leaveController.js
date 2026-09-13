@@ -32,5 +32,21 @@ export const leaveController = {
     } catch (e) {
       next(e);
     }
-  }
+  },
+  async reconcile(req, res, next) {
+    try {
+      const credits = await leaveService.reconcile(req, req.body.employeeId);
+      res.json(credits);
+    } catch (e) {
+      next(e);
+    }
+  },
+  async monetize(req, res, next) {
+    try {
+      const result = await leaveService.monetize(req, req.params.id, req.body);
+      res.json(result);
+    } catch (e) {
+      next(e);
+    }
+  },
 };

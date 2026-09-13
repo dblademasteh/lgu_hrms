@@ -240,7 +240,6 @@ export default function EmployeeForm({ formId, initial, submitLabel = 'Save', on
     const sectionBusy = busy === section;
     const setDraftKey = (key, value) => {
       setDraft(s => ({ ...s, [section]: { ...(s[section] || {}), [key]: value } }));
-      // Clear the inline error as soon as the user fixes the field.
       if (errors.includes(key)) setFieldErrors(e => ({ ...e, [section]: errors.filter(k => k !== key) }));
     };
     const inputClass = key => `input`;
@@ -248,16 +247,16 @@ export default function EmployeeForm({ formId, initial, submitLabel = 'Save', on
     return (
       <div className="space-y-3">
         {!employeeId && (
-          <p className="text-xs text-muted p-3 rounded-lg bg-bg/60 border border-line">
+          <p className="text-xs text-muted p-2.5 rounded-lg bg-bg/60 border border-line">
             Save the employee record first to manage {section} entries.
           </p>
         )}
         {employeeId && (
           <>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
               {fields.map(f => (
                 <div key={f.key}>
-                  <label className="block text-xs font-medium text-ink mb-1">{f.label}{f.required ? ' *' : ''}</label>
+                  <label className="block text-xs font-medium text-ink mb-0.5">{f.label}{f.required ? ' *' : ''}</label>
                   {f.type === 'checkbox' ? (
                     <label className="flex items-center gap-2 text-sm text-ink py-2">
                       <input
@@ -297,7 +296,7 @@ export default function EmployeeForm({ formId, initial, submitLabel = 'Save', on
               ))}
             </div>
             <div>
-              <button type="button" className="btn btn-ghost gap-2 text-sm" disabled={sectionBusy} onClick={() => addRecord(section)}>
+              <button type="button" className="btn btn-primary gap-2 text-sm" disabled={sectionBusy} onClick={() => addRecord(section)}>
                 <Plus size={16} />
                 Add entry
               </button>
@@ -332,14 +331,16 @@ export default function EmployeeForm({ formId, initial, submitLabel = 'Save', on
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex gap-1 flex-wrap border-b border-line pb-2">
+    <div className="space-y-3">
+      <div className="tabbar" role="tablist" aria-label="Employee sections">
         {TABS.map(t => (
           <button
             key={t.id}
             type="button"
+            role="tab"
+            aria-selected={active === t.id}
+            className={`tab ${active === t.id ? 'tab-active' : ''}`}
             onClick={() => setActive(t.id)}
-            className={`px-3 py-1.5 rounded-lg text-sm transition ${active === t.id ? 'bg-accent/10 text-accent font-semibold' : 'text-muted hover:text-ink'}`}
           >
             {t.label}
           </button>
@@ -348,96 +349,102 @@ export default function EmployeeForm({ formId, initial, submitLabel = 'Save', on
 
       {/* Personal tab: the main form (kept mounted so the modal footer submit works) */}
       <div className={active === 'personal' ? '' : 'hidden'}>
-        <form id={formId} onSubmit={e => { e.preventDefault(); onSubmit(form); }} className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
+        <form id={formId} onSubmit={e => { e.preventDefault(); onSubmit(form); }} className="space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
             <div>
-              <label htmlFor="e-no" className="block text-sm font-medium text-ink mb-1">Employee No. *</label>
+              <label htmlFor="e-no" className="block text-xs font-medium text-ink mb-0.5">Employee No. *</label>
               <input id="e-no" required className="input" value={form.employeeNumber ?? ''} onChange={e => set('employeeNumber', e.target.value)} placeholder="EMP-0xx" />
             </div>
             <div>
-              <label htmlFor="e-status" className="block text-sm font-medium text-ink mb-1">Employment Status</label>
+              <label htmlFor="e-status" className="block text-xs font-medium text-ink mb-0.5">Employment Status</label>
               <select id="e-status" className="select" value={form.status ?? 'ACTIVE'} onChange={e => set('status', e.target.value)}>
                 {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
           </div>
-          <div className="grid grid-cols-3 gap-3">
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
             <div>
-              <label htmlFor="e-last" className="block text-sm font-medium text-ink mb-1">Last Name *</label>
+              <label htmlFor="e-last" className="block text-xs font-medium text-ink mb-0.5">Last Name *</label>
               <input id="e-last" required className="input" value={form.lastName ?? ''} onChange={e => set('lastName', e.target.value)} />
             </div>
             <div>
-              <label htmlFor="e-first" className="block text-sm font-medium text-ink mb-1">First Name *</label>
+              <label htmlFor="e-first" className="block text-xs font-medium text-ink mb-0.5">First Name *</label>
               <input id="e-first" required className="input" value={form.firstName ?? ''} onChange={e => set('firstName', e.target.value)} />
             </div>
             <div>
-              <label htmlFor="e-middle" className="block text-sm font-medium text-ink mb-1">Middle Name</label>
+              <label htmlFor="e-middle" className="block text-xs font-medium text-ink mb-0.5">Middle Name</label>
               <input id="e-middle" className="input" value={form.middleName ?? ''} onChange={e => set('middleName', e.target.value)} />
             </div>
           </div>
-          <div className="grid grid-cols-3 gap-3">
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
             <div>
-              <label htmlFor="e-birth" className="block text-sm font-medium text-ink mb-1">Birth Date *</label>
+              <label htmlFor="e-birth" className="block text-xs font-medium text-ink mb-0.5">Birth Date *</label>
               <input id="e-birth" required type="date" className="input" value={form.birthDate ?? ''} onChange={e => set('birthDate', e.target.value)} />
             </div>
             <div>
-              <label htmlFor="e-gender" className="block text-sm font-medium text-ink mb-1">Gender *</label>
+              <label htmlFor="e-gender" className="block text-xs font-medium text-ink mb-0.5">Gender *</label>
               <select id="e-gender" required className="select" value={form.gender ?? ''} onChange={e => set('gender', e.target.value)}>
                 <option value="" disabled>Select...</option>
                 {GENDERS.map(g => <option key={g} value={g}>{g}</option>)}
               </select>
             </div>
             <div>
-              <label htmlFor="e-civil" className="block text-sm font-medium text-ink mb-1">Civil Status *</label>
+              <label htmlFor="e-civil" className="block text-xs font-medium text-ink mb-0.5">Civil Status *</label>
               <select id="e-civil" required className="select" value={form.civilStatus ?? ''} onChange={e => set('civilStatus', e.target.value)}>
                 <option value="" disabled>Select...</option>
                 {CIVIL_STATUSES.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
           </div>
+
           <div>
-            <label htmlFor="e-address" className="block text-sm font-medium text-ink mb-1">Address *</label>
+            <label htmlFor="e-address" className="block text-xs font-medium text-ink mb-0.5">Address *</label>
             <input id="e-address" required className="input" value={form.address ?? ''} onChange={e => set('address', e.target.value)} />
           </div>
-          <div className="grid grid-cols-2 gap-3">
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
             <div>
-              <label htmlFor="e-dept" className="block text-sm font-medium text-ink mb-1">Department *</label>
+              <label htmlFor="e-dept" className="block text-xs font-medium text-ink mb-0.5">Department *</label>
               <select id="e-dept" required className="select" value={form.departmentId ?? ''} onChange={e => set('departmentId', e.target.value)}>
                 <option value="" disabled>Select...</option>
                 {departments.map(d => <option key={d.id} value={d.id}>{d.code} - {d.name}</option>)}
               </select>
             </div>
             <div>
-              <label htmlFor="e-position" className="block text-sm font-medium text-ink mb-1">Position *</label>
+              <label htmlFor="e-position" className="block text-xs font-medium text-ink mb-0.5">Position *</label>
               <select id="e-position" required className="select" value={form.positionId ?? ''} onChange={e => set('positionId', e.target.value)}>
                 <option value="" disabled>Select...</option>
                 {positions.map(p => <option key={p.id} value={p.id}>{p.title} (SG {p.salaryGrade})</option>)}
               </select>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
             <div>
-              <label htmlFor="e-hired" className="block text-sm font-medium text-ink mb-1">Date Hired *</label>
+              <label htmlFor="e-hired" className="block text-xs font-medium text-ink mb-0.5">Date Hired *</label>
               <input id="e-hired" required type="date" className="input" value={form.hiredDate ?? ''} onChange={e => set('hiredDate', e.target.value)} />
             </div>
             <div>
-              <label htmlFor="e-sg" className="block text-sm font-medium text-ink mb-1">Salary Grade</label>
+              <label htmlFor="e-sg" className="block text-xs font-medium text-ink mb-0.5">Salary Grade</label>
               <input id="e-sg" className="input font-mono" value={salaryGrade} readOnly tabIndex={-1} placeholder="Auto from position" />
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
             <div>
-              <label htmlFor="e-monthly" className="block text-sm font-medium text-ink mb-1">Monthly Salary (₱) *</label>
+              <label htmlFor="e-monthly" className="block text-xs font-medium text-ink mb-0.5">Monthly Salary (₱) *</label>
               <input id="e-monthly" type="number" min="0" step="0.01" required className="input font-mono" value={form.monthlySalary ?? ''} onChange={e => set('monthlySalary', e.target.value === '' ? '' : Number(e.target.value))} placeholder="0.00" />
-              <p className="text-xs text-muted mt-1">Basis for payroll run generation. Whole numbers only for year-graduated fields.</p>
             </div>
             <div>
-              <label htmlFor="e-email" className="block text-sm font-medium text-ink mb-1">Email</label>
+              <label htmlFor="e-email" className="block text-xs font-medium text-ink mb-0.5">Email</label>
               <input id="e-email" type="email" className="input" value={form.email ?? ''} onChange={e => set('email', e.target.value)} placeholder="name@lgu.gov.ph" />
             </div>
           </div>
+
           <div>
-            <label htmlFor="e-contact" className="block text-sm font-medium text-ink mb-1">Contact No.</label>
+            <label htmlFor="e-contact" className="block text-xs font-medium text-ink mb-0.5">Contact No.</label>
             <input id="e-contact" className="input" value={form.contactNumber ?? ''} onChange={e => set('contactNumber', e.target.value)} placeholder="0917-000-0000" />
           </div>
         </form>

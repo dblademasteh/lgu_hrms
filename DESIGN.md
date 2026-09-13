@@ -12,6 +12,8 @@
 4. **Accessible by construction** — WCAG 2.1 AA targets, keyboard-first, both themes verified.
 5. **One system** — every screen consumes the same tokens and component classes; page-level styling is composition, not invention.
 6. **Professional-look** - move away from generic ai generated design
+7. **Clean-Look** - always consult skills when polishing, redesigning a page, component, etc.
+8. **Polishing & Re Design** - use skills installed for suggestions and update Design.MD
 
 ---
 

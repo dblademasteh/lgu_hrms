@@ -40,15 +40,20 @@ const groups = [
     items: [
       { name: 'Performance', path: '/performance', icon: BarChart3, roles: ['HR_MANAGER', 'ADMIN', 'DEPARTMENT_HEAD'] },
       { name: 'Learning', path: '/learning', icon: Landmark },
-      { name: 'Attendance DTR', path: '/attendance', icon: Clock, roles: ['HR_MANAGER', 'ADMIN', 'DEPARTMENT_HEAD'] },
-      { name: 'Attendance Portal', path: '/attendance-portal', icon: Clock },
+      { name: 'Attendance', path: '/attendance', icon: Clock, roles: ['HR_MANAGER', 'ADMIN', 'DEPARTMENT_HEAD'], children: [
+        { name: 'DTR', path: '/attendance' },
+        { name: 'Portal', path: '/attendance-portal' },
+      ]},
     ]
   },
   {
     label: 'Payroll & Benefits',
     items: [
       { name: 'Payroll', path: '/payroll', icon: Banknote, roles: ['PAYROLL_OFFICER', 'HR_MANAGER', 'ADMIN'] },
-      { name: 'Leave', path: '/leave', icon: CalendarDays, roles: ['HR_MANAGER', 'ADMIN', 'DEPARTMENT_HEAD'] },
+      { name: 'Leave', path: '/leave', icon: CalendarDays, roles: ['HR_MANAGER', 'ADMIN', 'DEPARTMENT_HEAD'], children: [
+        { name: 'Requests', path: '/leave' },
+        { name: 'Credits', path: '/leave/credits' },
+      ]},
     ]
   },
   {
@@ -77,14 +82,23 @@ const groups = [
 export function canSee(role, item, capabilities) {
   if (item.roles) {
     const rank = ROLE_RANK[role] ?? -1;
-    // Role-rank passes → visible.
     if (item.roles.some(r => rank >= (ROLE_RANK[r] ?? 99))) return true;
-    // Custom roles fall outside ROLE_RANK — visible when the granted capability
-    // is loaded and enabled (capabilities = { map: {...}, loaded: bool }).
     if (item.capability && capabilities?.loaded && capabilities.map[item.capability]) return true;
     return false;
   }
   return true;
+}
+
+export function filterVisible(items, role, capabilities) {
+  const capsLoaded = Object.keys(capabilities).length > 0;
+  return items.filter(item => {
+    if (!canSee(role, item, { map: capabilities, loaded: capsLoaded })) return false;
+    if (item.children) {
+      const visibleChildren = filterVisible(item.children, role, capabilities);
+      return visibleChildren.length > 0;
+    }
+    return true;
+  });
 }
 
 const GROUP_ICONS = {
@@ -99,7 +113,14 @@ const GROUP_ICONS = {
 
 function groupIndexForPath(visibleGroups, pathname) {
   const idx = visibleGroups.findIndex(g =>
-    g.items.some(i => pathname === i.path || pathname.startsWith(i.path + '/'))
+    g.items.some(i => {
+      const matchSelf = pathname === i.path || pathname.startsWith(i.path + '/');
+      if (matchSelf) return true;
+      if (i.children) {
+        return i.children.some(c => pathname === c.path || pathname.startsWith(c.path + '/'));
+      }
+      return false;
+    })
   );
   return idx === -1 ? 0 : idx;
 }
@@ -127,20 +148,40 @@ function ClassicSidebar({ collapsed, visibleGroups, expanded }) {
             <div className="space-y-1 px-2">
               {g.items.map(i => {
                 const Icon = i.icon;
+                const hasChildren = i.children && i.children.length > 0;
                 return (
-                  <NavLink
-                    key={i.path}
-                    to={i.path}
-                    title={i.name}
-                    className={({ isActive }) =>
-                      `flex items-center gap-3 px-3 py-2.5 rounded-[10px] transition-colors
-                        ${isActive ? 'bg-accent/10 text-accent font-semibold border-l-2 border-accent' : 'text-ink hover:bg-bg/60 border-l-2 border-transparent'}
-                        ${!expanded ? 'justify-center' : ''}`
-                    }
-                  >
-                    <Icon size={20} strokeWidth={1.75} aria-hidden="true" />
-                    {expanded && <span className="truncate text-sm">{i.name}</span>}
-                  </NavLink>
+                  <div key={i.path}>
+                    <NavLink
+                      to={i.path}
+                      title={i.name}
+                      className={({ isActive }) =>
+                        `flex items-center gap-3 px-3 py-2.5 rounded-[10px] transition-colors
+                          ${isActive ? 'bg-accent/10 text-accent font-semibold border-l-2 border-accent' : 'text-ink hover:bg-bg/60 border-l-2 border-transparent'}
+                          ${!expanded ? 'justify-center' : ''}`
+                      }
+                    >
+                      <Icon size={20} strokeWidth={1.75} aria-hidden="true" />
+                      {expanded && <span className="truncate text-sm flex-1">{i.name}</span>}
+                    </NavLink>
+                    {hasChildren && expanded && (
+                      <div className="ml-6 pl-3 border-l border-line/60 space-y-0.5 mt-0.5">
+                        {i.children.map(child => (
+                          <NavLink
+                            key={child.path}
+                            to={child.path}
+                            title={child.name}
+                            className={({ isActive }) =>
+                              `flex items-center gap-2 px-2.5 py-1.5 rounded-lg transition-colors text-xs
+                                ${isActive ? 'text-accent font-semibold bg-accent/5' : 'text-muted hover:text-ink hover:bg-bg/60'}`
+                            }
+                          >
+                            <span className="w-1 h-1 rounded-full bg-current opacity-60" aria-hidden="true" />
+                            <span className="truncate">{child.name}</span>
+                          </NavLink>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 );
               })}
             </div>
@@ -221,30 +262,50 @@ function DockSidebar({ collapsed, visibleGroups, role }) {
           <div className="px-4 pt-4 pb-3 border-b border-line/60">
             <p className="font-display font-bold text-ink text-[15px] leading-tight truncate">{activeGroup.label}</p>
             <p className="mono-label text-[10px] mt-1">
-              {activeGroup.items.length} MODULE{activeGroup.items.length !== 1 ? 'S' : ''} · {role || 'STAFF'}
+              {activeGroup.items.reduce((acc, i) => acc + 1 + (i.children?.length || 0), 0)} ITEMS · {role || 'STAFF'}
             </p>
           </div>
 
           <nav className="flex-1 overflow-y-auto hide-scrollbar p-2.5 space-y-1" aria-label={`${activeGroup.label} modules`}>
             {activeGroup.items.map(i => {
               const Icon = i.icon;
+              const hasChildren = i.children && i.children.length > 0;
               return (
-                <NavLink
-                  key={i.path}
-                  to={i.path}
-                  title={i.name}
-                  className={({ isActive }) =>
-                    `group flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-150 border
-                      ${isActive
-                        ? 'bg-accent/10 text-accent font-semibold border-accent/20 shadow-sm'
-                        : 'text-ink border-transparent hover:bg-bg hover:border-line/60'}`
-                  }
-                >
-                  <span className="w-8 h-8 rounded-lg bg-bg border border-line/60 grid place-items-center shrink-0">
-                    <Icon size={16} strokeWidth={1.75} aria-hidden="true" />
-                  </span>
-                  <span className="truncate text-[13px] leading-snug">{i.name}</span>
-                </NavLink>
+                <div key={i.path}>
+                  <NavLink
+                    to={i.path}
+                    title={i.name}
+                    className={({ isActive }) =>
+                      `group flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-150 border
+                        ${isActive
+                          ? 'bg-accent/10 text-accent font-semibold border-accent/20 shadow-sm'
+                          : 'text-ink border-transparent hover:bg-bg hover:border-line/60'}`
+                    }
+                  >
+                    <span className="w-8 h-8 rounded-lg bg-bg border border-line/60 grid place-items-center shrink-0">
+                      <Icon size={16} strokeWidth={1.75} aria-hidden="true" />
+                    </span>
+                    <span className="truncate text-[13px] leading-snug">{i.name}</span>
+                  </NavLink>
+                  {hasChildren && (
+                    <div className="ml-10 pl-2.5 border-l border-line/60 space-y-0.5 mt-0.5">
+                      {i.children.map(child => (
+                        <NavLink
+                          key={child.path}
+                          to={child.path}
+                          title={child.name}
+                          className={({ isActive }) =>
+                            `flex items-center gap-2 px-2 py-1.5 rounded-lg transition-colors text-xs
+                              ${isActive ? 'text-accent font-semibold bg-accent/5' : 'text-muted hover:text-ink hover:bg-bg/60'}`
+                          }
+                        >
+                          <span className="w-1 h-1 rounded-full bg-current opacity-60" aria-hidden="true" />
+                          <span className="truncate">{child.name}</span>
+                        </NavLink>
+                      ))}
+                    </div>
+                  )}
+                </div>
               );
             })}
           </nav>
@@ -326,9 +387,9 @@ function AccordionSidebar({ collapsed, visibleGroups, role }) {
   }, [activePath, role]);
 
   const q = query.trim().toLowerCase();
-  const filtered = visibleGroups
-    .map(g => ({ ...g, items: g.items.filter(i => !q || i.name.toLowerCase().includes(q)) }))
-    .filter(g => g.items.length > 0);
+    const filtered = visibleGroups
+      .map(g => ({ ...g, items: g.items.filter(i => !q || i.name.toLowerCase().includes(q) || (i.children && i.children.some(c => c.name.toLowerCase().includes(q)))) }))
+      .filter(g => g.items.length > 0);
   const searching = q.length > 0;
 
   if (collapsed) {
@@ -404,7 +465,7 @@ function AccordionSidebar({ collapsed, visibleGroups, role }) {
                 </span>
                 <span className="flex-1 min-w-0">
                   <span className="block truncate text-[13px] font-semibold">{g.label}</span>
-                  <span className="mono-label text-[10px] opacity-70">{g.items.length} MODULE{g.items.length !== 1 ? 'S' : ''}</span>
+                  <span className="mono-label text-[10px] opacity-70">{g.items.reduce((acc, i) => acc + 1 + (i.children?.length || 0), 0)} ITEMS</span>
                 </span>
                 <ChevronDown size={15} className={`text-muted/70 shrink-0 transition-transform duration-200 ${isOpen ? 'rotate-180 text-ink' : ''}`} aria-hidden="true" />
               </button>
@@ -412,19 +473,40 @@ function AccordionSidebar({ collapsed, visibleGroups, role }) {
                 <div className="px-1 pb-1.5 space-y-0.5">
                   {g.items.map(i => {
                     const Icon = i.icon;
+                    const hasChildren = i.children && i.children.length > 0;
                     return (
-                      <NavLink
-                        key={i.path}
-                        to={i.path}
-                        className={({ isActive }) =>
-                          `flex items-center gap-2.5 px-3 py-2 rounded-lg mx-1 transition-all duration-150 text-[13px]
-                            ${isActive
-                              ? 'bg-accent/10 text-accent font-semibold border-l-2 border-accent'
-                              : 'text-ink hover:bg-bg/60 border-l-2 border-transparent'}`}
-                      >
-                        <Icon size={15} strokeWidth={1.75} aria-hidden="true" className="shrink-0 text-muted/60 group-active:text-accent" />
-                        <span className="truncate">{i.name}</span>
-                      </NavLink>
+                      <div key={i.path}>
+                        <NavLink
+                          to={i.path}
+                          title={i.name}
+                          className={({ isActive }) =>
+                            `flex items-center gap-2.5 px-3 py-2 rounded-lg mx-1 transition-all duration-150 text-[13px]
+                              ${isActive
+                                ? 'bg-accent/10 text-accent font-semibold border-l-2 border-accent'
+                                : 'text-ink hover:bg-bg/60 border-l-2 border-transparent'}`}
+                        >
+                          <Icon size={15} strokeWidth={1.75} aria-hidden="true" className="shrink-0 text-muted/60" />
+                          <span className="truncate">{i.name}</span>
+                        </NavLink>
+                        {hasChildren && (
+                          <div className="ml-6 pl-3 border-l border-line/60 space-y-0.5 mt-0.5">
+                            {i.children.map(child => (
+                              <NavLink
+                                key={child.path}
+                                to={child.path}
+                                title={child.name}
+                                className={({ isActive }) =>
+                                  `flex items-center gap-2 px-2 py-1.5 rounded-lg transition-colors text-xs
+                                    ${isActive ? 'text-accent font-semibold bg-accent/5' : 'text-muted hover:text-ink hover:bg-bg/60'}`
+                                }
+                              >
+                                <span className="w-1 h-1 rounded-full bg-current opacity-60" aria-hidden="true" />
+                                <span className="truncate">{child.name}</span>
+                              </NavLink>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     );
                   })}
                 </div>
@@ -444,9 +526,8 @@ export default function Sidebar({ collapsed }) {
   const role = useAuthStore(s => s.user?.role);
   const style = useSidebarStyle();
   const capabilities = useUserCapabilities();
-  const capsLoaded = Object.keys(capabilities).length > 0;
   const visibleGroups = groups
-    .map(g => ({ ...g, items: g.items.filter(i => canSee(role, i, { map: capabilities, loaded: capsLoaded })) }))
+    .map(g => ({ ...g, items: filterVisible(g.items, role, capabilities) }))
     .filter(g => g.items.length > 0);
 
   if (style === 'dock') {

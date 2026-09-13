@@ -1,17 +1,11 @@
 import { prisma } from '../lib/prisma.js';
 import { withTenant, stampTenant } from '../middleware/tenant.js';
-import { getDepartmentScope } from '../middleware/departmentScope.js';
 
 export const leaveRepository = {
   async findAllRequests(req) {
     const where = withTenant(req);
-    
-    // DEPARTMENT_HEAD can only see leave requests for their department's employees.
-    const deptScope = getDepartmentScope(req);
-    if (deptScope) {
-      where.employee = { departmentId: deptScope };
-    }
-    
+    const deptScope = (await import('../middleware/departmentScope.js')).getDepartmentScope(req);
+    if (deptScope) where.employee = { departmentId: deptScope };
     return prisma.leaveRequest.findMany({
       where,
       include: { employee: { select: { id: true, employeeNumber: true, firstName: true, lastName: true } } },
@@ -19,34 +13,63 @@ export const leaveRepository = {
     });
   },
   async createRequest(req, data) {
-    const stamped = stampTenant(req, data);
-    return prisma.leaveRequest.create({ data: stamped });
+    return prisma.leaveRequest.create({ data: stampTenant(req, data) });
   },
-  async updateRequest(req, id, data) {
-    const scope = withTenant(req, { id });
-    const existing = await prisma.leaveRequest.findFirst({
-      where: scope,
+  async findRequest(req, id) {
+    return prisma.leaveRequest.findFirst({
+      where: { ...withTenant(req), id },
       include: { employee: { select: { departmentId: true } } },
     });
-    if (!existing) {
-      const e = new Error('Leave request not found');
-      e.status = 404;
-      throw e;
-    }
-    
-    const deptScope = getDepartmentScope(req);
-    if (deptScope && existing.employee?.departmentId !== deptScope) {
-      const err = new Error('Cannot update leave request for employee outside your department');
-      err.status = 403;
-      err.code = 'DEPARTMENT_FORBIDDEN';
-      throw err;
-    }
-    
-    const stamped = stampTenant(req, data);
-    return prisma.leaveRequest.update({ where: { id }, data: stamped });
   },
   async findCredits(req, employeeId) {
     const where = withTenant(req, { employeeId });
-    return prisma.leaveCredit.findMany({ where });
-  }
+    return prisma.leaveCredit.findMany({ where, orderBy: { type: 'asc' } });
+  },
+  async findOverlapping(req, employeeId, fromDate, toDate, excludeId) {
+    const where = {
+      ...withTenant(req),
+      employeeId,
+      status: { in: ['PENDING', 'APPROVED'] },
+      OR: [
+        { fromDate: { lte: toDate }, toDate: { gte: fromDate } },
+      ],
+    };
+    if (excludeId) where.id = { not: excludeId };
+    return prisma.leaveRequest.findFirst({ where });
+  },
+  async findLeaveCredit(req, employeeId, type, year) {
+    const where = withTenant(req, { employeeId, type, year });
+    return prisma.leaveCredit.findFirst({ where });
+  },
+  async upsertLeaveCredit(req, employeeId, type, year, balance) {
+    const tenantCode = req.tenantId === 'tenant-default' ? 'DEFAULT' : req.tenantId;
+    const where = withTenant(req, { employeeId, type, year });
+    return prisma.leaveCredit.upsert({
+      where: { id: `${employeeId}-${type}-${year}-${tenantCode}` },
+      update: { balance },
+      create: { employeeId, type, year, balance, ...stampTenant(req, {}) },
+    });
+  },
+  async createLeaveCredit(req, employeeId, type, year, balance) {
+    return prisma.leaveCredit.create({
+      data: { employeeId, type, year, balance, ...stampTenant(req, {}) },
+    });
+  },
+  async updateRequestStatus(req, id, data) {
+    return prisma.leaveRequest.update({ where: { id }, data });
+  },
+  async findLeaveRuleConfigs(req) {
+    const where = withTenant(req);
+    return prisma.leaveRuleConfig.findMany({ where, orderBy: { effectiveFrom: 'asc' } });
+  },
+  async updateLeaveCredit(req, employeeId, type, year, delta) {
+    const credit = await prisma.leaveCredit.findFirst({
+      where: { ...withTenant(req), employeeId, type, year },
+    });
+    if (!credit) return null;
+    return prisma.leaveCredit.update({
+      where: { id: credit.id },
+      data: { balance: { decrement: Math.abs(delta) } },
+    });
+  },
 };

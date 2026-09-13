@@ -1,6 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Edit, History as HistoryIcon, ChevronLeft, ChevronRight } from 'lucide-react';
-import Tabs from './Tabs.jsx';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { Edit, History as HistoryIcon, User, Briefcase, Calendar, FileText, Award, GraduationCap, Users, Wallet, ClipboardList, BookOpen, Loader2 } from 'lucide-react';
 import { badgeTone } from '../data/mock.js';
 import { api } from '../api/client.js';
 import { departmentsApi } from '../api/departments.js';
@@ -37,7 +36,7 @@ const RELATION_COLUMNS = {
   leaveCredits: [
     { key: 'type', label: 'Leave Type', get: r => dash(r.type) },
     { key: 'year', label: 'Year', get: r => dash(r.year) },
-    { key: 'balance', label: 'Balance', get: r => dash(r.balance) },
+    { key: 'balance', label: 'Balance', get: r => <span className="font-semibold text-accent">{dash(r.balance)}</span> },
   ],
   attendance: [
     { key: 'date', label: 'Date', get: r => d10(r.date) },
@@ -48,10 +47,11 @@ const RELATION_COLUMNS = {
   ],
   payroll: [
     { key: 'run', label: 'Period', get: r => dash(r.run?.period?.name ?? r.run?.runDate?.slice(0, 10)) },
+    { key: 'status', label: 'Status', get: r => dash(r.run?.status ?? '—') },
     { key: 'basicPay', label: 'Basic Pay', get: r => peso(r.basicPay) },
     { key: 'allowances', label: 'Allowances', get: r => peso(r.allowances) },
     { key: 'deductions', label: 'Deductions', get: r => peso(r.deductions) },
-    { key: 'netPay', label: 'Net Pay', get: r => peso(r.netPay) },
+    { key: 'netPay', label: 'Net Pay', get: r => <span className="font-semibold text-accent">{peso(r.netPay)}</span> },
   ],
   performance: [
     { key: 'reviewYear', label: 'Year', get: r => dash(r.reviewYear) },
@@ -67,7 +67,7 @@ const RELATION_COLUMNS = {
   ],
   loans: [
     { key: 'type', label: 'Type', get: r => dash(r.type) },
-    { key: 'amount', label: 'Amount', get: r => peso(r.amount) },
+    { key: 'amount', label: 'Amount', get: r => <span className="font-semibold text-accent">{peso(r.amount)}</span> },
     { key: 'termMonths', label: 'Term', get: r => `${r.termMonths} mo` },
     { key: 'startDate', label: 'Start', get: r => d10(r.startDate) },
     { key: 'status', label: 'Status', get: r => <span className={`badge ${badgeTone(r.status)}`}>{r.status}</span> },
@@ -97,10 +97,12 @@ async function getRefMaps() {
   return refCache;
 }
 
-function RelationTable({ employeeId, section, refreshKey }) {
+function RelationTable({ employeeId, section, refreshKey, onError, title }) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const onErrorRef = useRef(onError);
+  onErrorRef.current = onError;
 
   useEffect(() => {
     if (!employeeId) {
@@ -127,8 +129,12 @@ function RelationTable({ employeeId, section, refreshKey }) {
           if (row.dept && depMap[row.dept] !== undefined) row._deptString = depMap[row.dept];
         }
         setRows(list);
-      } catch {
-        if (!cancelled) setError(true);
+        onErrorRef.current?.(null);
+      } catch (err) {
+        if (!cancelled) {
+          setError(true);
+          onErrorRef.current?.(err?.response?.data?.error?.message || 'Failed to load');
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -136,24 +142,30 @@ function RelationTable({ employeeId, section, refreshKey }) {
     return () => { cancelled = true; };
   }, [employeeId, section, refreshKey]);
 
-  if (loading) return <p className="text-sm text-muted py-6 text-center">Loading records…</p>;
-  if (error) return <p className="text-sm text-error py-6 text-center">Failed to load records.</p>;
+  if (loading) return <SkeletonTable columns={RELATION_COLUMNS[section]?.length ?? 3} rows={3} />;
+  if (error) return <SectionError message="Failed to load records." />;
   if (!rows.length) return <p className="text-sm text-muted py-6 text-center">No records on file.</p>;
 
   const cols = RELATION_COLUMNS[section];
   if (!cols) return <p className="text-sm text-muted py-6 text-center">{rows.length} record(s) on file.</p>;
   return (
-    <div className="overflow-auto max-h-[40vh]">
-      <table className="data-table text-sm">
-        <thead><tr className="text-[10px] uppercase tracking-wide text-muted">{cols.map(c => <th key={c.key} className="text-left">{c.label}</th>)}</tr></thead>
-        <tbody>
-          {rows.map((row, i) => (
-            <tr key={row.id ?? i} className="hover:bg-accent/5">
-              {cols.map(c => <td key={c.key} className="text-sm">{c.get(row)}</td>)}
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <p className="mono-label text-xs">{title ?? section}</p>
+        <span className="mono-label text-xs text-muted">{rows.length} {rows.length === 1 ? 'record' : 'records'}</span>
+      </div>
+      <div className="overflow-auto max-h-[40vh]">
+        <table className="data-table text-sm">
+          <thead><tr>{cols.map(c => <th key={c.key} className="text-left">{c.label}</th>)}</tr></thead>
+          <tbody>
+            {rows.map((row, i) => (
+              <tr key={row.id ?? i} className="hover:bg-accent/5">
+                {cols.map(c => <td key={c.key} className="text-sm">{c.get(row)}</td>)}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
@@ -182,180 +194,209 @@ function PayslipPanel({ employeeId, refreshKey }) {
     return () => { cancelled = true; };
   }, [employeeId, refreshKey]);
 
-  if (loading) return <p className="text-sm text-muted py-6 text-center">Loading payslip…</p>;
-  if (error) return <p className="text-sm text-error py-6 text-center">Failed to load payslip.</p>;
+  if (loading) return <SkeletonTable columns={4} rows={2} />;
+  if (error) return <SectionError message="Failed to load payslip." />;
   if (!items.length) return <p className="text-sm text-muted py-6 text-center">No payroll records on file.</p>;
 
   const latest = items[0];
   const period = latest.run?.period?.name ?? latest.run?.runDate?.slice(0, 10) ?? 'Latest run';
+  const status = latest.run?.status ?? '—';
   return (
-    <div className="max-h-[35vh] overflow-auto">
-      <p className="mono-label mb-3">{period}</p>
-      <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
-        <div><dt className="mono-label">Basic Pay</dt><dd className="font-mono mt-0.5">{peso(latest.basicPay)}</dd></div>
-        <div><dt className="mono-label">Allowances</dt><dd className="font-mono mt-0.5">{peso(latest.allowances)}</dd></div>
-        <div><dt className="mono-label">Deductions</dt><dd className="font-mono mt-0.5">{peso(latest.deductions)}</dd></div>
-        <div><dt className="mono-label">Net Pay</dt><dd className="font-mono mt-0.5 font-semibold">{peso(latest.netPay)}</dd></div>
-      </dl>
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="mono-label">Latest Payslip</p>
+        <span className={`badge ${badgeTone(status)}`}>{status}</span>
+      </div>
+      <div className="card p-4">
+        <p className="mono-label text-xs text-muted mb-3">{period}</p>
+        <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+          <div><dt className="mono-label">Basic Pay</dt><dd className="font-mono mt-0.5">{peso(latest.basicPay)}</dd></div>
+          <div><dt className="mono-label">Allowances</dt><dd className="font-mono mt-0.5">{peso(latest.allowances)}</dd></div>
+          <div><dt className="mono-label">Deductions</dt><dd className="font-mono mt-0.5">{peso(latest.deductions)}</dd></div>
+          <div><dt className="mono-label">Net Pay</dt><dd className="font-mono mt-0.5 font-semibold text-accent">{peso(latest.netPay)}</dd></div>
+        </dl>
+      </div>
     </div>
   );
 }
 
-// Scrollable tab bar with navigation buttons
-function ScrollableTabBar({ tabs, active, onChange }) {
-  const scrollRef = useRef(null);
-  const [canScrollLeft, setCanScrollLeft] = useState(false);
-  const [canScrollRight, setCanScrollRight] = useState(false);
+const TAB_ICONS = {
+  profile: User,
+  payslip: Wallet,
+  history: HistoryIcon,
+  appointments: Briefcase,
+  leave: Calendar,
+  leaveCredits: FileText,
+  attendance: ClipboardList,
+  payroll: Wallet,
+  performance: Award,
+  training: BookOpen,
+  loans: Users,
+};
 
-  const updateScrollButtons = () => {
-    if (scrollRef.current) {
-      setCanScrollLeft(scrollRef.current.scrollLeft > 0);
-      setCanScrollRight(
-        scrollRef.current.scrollLeft + scrollRef.current.clientWidth < scrollRef.current.scrollWidth - 4
-      );
-    }
-  };
+const TAB_LABELS = {
+  profile: '201 Profile',
+  payslip: 'Payslip',
+  history: 'Employment History',
+  appointments: 'Appointments',
+  leave: 'Leave',
+  leaveCredits: 'Leave Credits',
+  attendance: 'Attendance',
+  payroll: 'Payroll',
+  performance: 'Performance',
+  training: 'Training',
+  loans: 'Loans',
+};
 
-  useEffect(() => {
-    updateScrollButtons();
-    window.addEventListener('resize', updateScrollButtons);
-    return () => window.removeEventListener('resize', updateScrollButtons);
-  }, [tabs, active]);
-
-  const scrollBy = (direction) => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollBy({ left: direction * 200, behavior: 'smooth' });
-    }
-  };
-
+function SkeletonTable({ columns = 4, rows = 3 }) {
   return (
-    <div className="relative">
-      <button
-        type="button"
-        className={`btn btn-ghost p-2 w-8 h-8 absolute left-0 top-1/2 -translate-y-1/2 z-10 ${canScrollLeft ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
-        onClick={() => scrollBy(-1)}
-        aria-label="Scroll tabs left"
-      >
-        <ChevronLeft size={16} />
-      </button>
-      <div
-        ref={scrollRef}
-        className="tabbar overflow-x-auto scrollbar-hide"
-        role="tablist"
-        aria-label="Employee detail sections"
-        onScroll={updateScrollButtons}
-      >
-        {tabs.map(t => (
-          <button
-            key={t.id}
-            type="button"
-            role="tab"
-            aria-selected={active === t.id}
-            className={`tab ${active === t.id ? 'tab-active' : ''} whitespace-nowrap flex-shrink-0`}
-            onClick={() => onChange(t.id)}
-          >
-            {t.label}
-          </button>
+    <div className="space-y-2">
+      <div className="flex gap-2 border-b border-line pb-2">
+        {Array.from({ length: columns }).map((_, i) => (
+          <div key={i} className="skeleton h-3 w-16" />
         ))}
       </div>
-      <button
-        type="button"
-        className={`btn btn-ghost p-2 w-8 h-8 absolute right-0 top-1/2 -translate-y-1/2 z-10 ${canScrollRight ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
-        onClick={() => scrollBy(1)}
-        aria-label="Scroll tabs right"
-      >
-        <ChevronRight size={16} />
-      </button>
+      {Array.from({ length: rows }).map((_, i) => (
+        <div key={i} className="flex gap-2">
+          {Array.from({ length: columns }).map((_, j) => (
+            <div key={j} className="skeleton h-4 w-full" />
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function SectionError({ message }) {
+  if (!message) return null;
+  return (
+    <div className="flex items-center gap-2 p-3 rounded-lg bg-error/5 border border-error/10 text-xs text-error">
+      <span>{message}</span>
     </div>
   );
 }
 
 export default function EmployeeProfileModal({ employee, onEdit, refreshKey = 0 }) {
   const [activeTab, setActiveTab] = useState('profile');
+  const [sectionErrors, setSectionErrors] = useState({});
+
+  const setSectionError = useCallback((section, message) => {
+    setSectionErrors(e => ({ ...e, [section]: message }));
+  }, []);
 
   useEffect(() => {
     setActiveTab('profile');
+    setSectionErrors({});
   }, [employee?.id]);
 
   const relationTabs = READONLY_TABS.map(id => ({
     id,
-    label: {
-      history: 'Employment History',
-      appointments: 'Appointments', leave: 'Leave', leaveCredits: 'Leave Credits',
-      attendance: 'Attendance', payroll: 'Payroll', performance: 'Performance',
-      training: 'Training', loans: 'Loans',
-    }[id],
-    content: <RelationTable employeeId={employee?.id} section={id} refreshKey={refreshKey} />,
+    label: TAB_LABELS[id],
+    icon: TAB_ICONS[id],
+    content: <RelationTable employeeId={employee?.id} section={id} refreshKey={refreshKey} title={TAB_LABELS[id]} onError={(msg) => setSectionError(id, msg)} />,
   }));
 
   const tabs = employee ? [
     {
       id: 'profile',
       label: '201 Profile',
+      icon: User,
       content: (
-        <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm max-h-[40vh] overflow-auto">
-          <div><dt className="mono-label">Employee No</dt><dd className="font-mono mt-0.5">{employee.employeeNumber}</dd></div>
-          <div><dt className="mono-label">Status</dt><dd className="mt-0.5"><span className={`badge ${badgeTone(employee.status)}`}>{employee.status}</span></dd></div>
-          <div><dt className="mono-label">Department</dt><dd className="text-ink mt-0.5">{employee.department}</dd></div>
-          <div><dt className="mono-label">Salary Grade</dt><dd className="font-mono text-ink mt-0.5">{employee.sg}</dd></div>
-          <div><dt className="mono-label">Date Hired</dt><dd className="font-mono text-ink mt-0.5">{employee.hired}</dd></div>
-          <div><dt className="mono-label">Email</dt><dd className="font-mono text-ink mt-0.5">{employee.email || '—'}</dd></div>
-          <div><dt className="mono-label">Contact</dt><dd className="font-mono text-ink mt-0.5">{employee.contact || '—'}</dd></div>
-          <div><dt className="mono-label">Position</dt><dd className="text-ink mt-0.5">{employee.position}</dd></div>
-        </dl>
+        <div className="space-y-5">
+          <div>
+            <h4 className="font-display font-semibold text-xs uppercase tracking-wide text-muted mb-3">Personal Information</h4>
+            <dl className="grid grid-cols-2 gap-x-4 gap-y-2.5 text-sm">
+              <div><dt className="mono-label">Full Name</dt><dd className="text-ink mt-0.5 font-medium">{employee.fullName}</dd></div>
+              <div><dt className="mono-label">Birth Date</dt><dd className="font-mono text-ink mt-0.5">{employee.birthDate || '—'}</dd></div>
+              <div><dt className="mono-label">Gender</dt><dd className="text-ink mt-0.5">{employee.gender || '—'}</dd></div>
+              <div><dt className="mono-label">Civil Status</dt><dd className="text-ink mt-0.5">{employee.civilStatus || '—'}</dd></div>
+              <div className="col-span-2"><dt className="mono-label">Address</dt><dd className="text-ink mt-0.5">{employee.address || '—'}</dd></div>
+            </dl>
+          </div>
+
+          <div className="border-t border-line pt-4">
+            <h4 className="font-display font-semibold text-xs uppercase tracking-wide text-muted mb-3">Employment Details</h4>
+            <dl className="grid grid-cols-2 gap-x-4 gap-y-2.5 text-sm">
+              <div><dt className="mono-label">Employee No</dt><dd className="font-mono mt-0.5">{employee.employeeNumber}</dd></div>
+              <div><dt className="mono-label">Status</dt><dd className="mt-0.5"><span className={`badge ${badgeTone(employee.status)}`}>{employee.status}</span></dd></div>
+              <div><dt className="mono-label">Department</dt><dd className="text-ink mt-0.5">{employee.department}</dd></div>
+              <div><dt className="mono-label">Position</dt><dd className="text-ink mt-0.5">{employee.position}</dd></div>
+              <div><dt className="mono-label">Salary Grade</dt><dd className="font-mono text-ink mt-0.5">{employee.sg}</dd></div>
+              <div><dt className="mono-label">Date Hired</dt><dd className="font-mono text-ink mt-0.5">{employee.hired}</dd></div>
+            </dl>
+          </div>
+
+          <div className="border-t border-line pt-4">
+            <h4 className="font-display font-semibold text-xs uppercase tracking-wide text-muted mb-3">Contact Information</h4>
+            <dl className="grid grid-cols-2 gap-x-4 gap-y-2.5 text-sm">
+              <div><dt className="mono-label">Email</dt><dd className="font-mono text-ink mt-0.5">{employee.email || '—'}</dd></div>
+              <div><dt className="mono-label">Contact No.</dt><dd className="font-mono text-ink mt-0.5">{employee.contact || '—'}</dd></div>
+            </dl>
+          </div>
+        </div>
       ),
     },
     {
       id: 'payslip',
       label: 'Payslip',
+      icon: Wallet,
       content: <PayslipPanel employeeId={employee.id} refreshKey={refreshKey} />,
     },
     ...relationTabs,
   ] : [];
 
   return (
-    <div className="p-4 h-full flex flex-col min-h-[560px]">
+    <div className="h-full flex flex-col min-h-[560px]">
       {employee ? (
         <>
-          <div className="flex items-center gap-3 mb-4 shrink-0">
-            <div className="w-12 h-12 rounded-xl bg-accent/10 text-accent font-display font-bold flex items-center justify-center shrink-0" aria-hidden="true">
+          <div className="flex items-center gap-3 mb-4 pb-3 border-b border-line shrink-0">
+            <div className="w-10 h-10 rounded-lg bg-accent/10 text-accent font-display font-bold flex items-center justify-center shrink-0" aria-hidden="true">
               {initialsOf(employee.name)}
             </div>
-            <div className="min-w-0">
-              <p className="font-display font-semibold text-ink truncate">{employee.fullName}</p>
-              <p className="text-sm text-muted truncate">{employee.position}</p>
-              <p className="mono-label mt-0.5">{employee.employeeNumber}</p>
+            <div className="min-w-0 flex-1">
+              <p className="font-display font-semibold text-sm text-ink truncate">{employee.fullName}</p>
+              <p className="text-xs text-muted truncate">{employee.position}</p>
             </div>
+            <span className="mono-label text-xs">{employee.employeeNumber}</span>
           </div>
 
           <div className="flex flex-1 min-h-0 gap-4">
-            <nav className="w-[220px] shrink-0 border-r border-line pr-2 overflow-auto">
+            <nav className="w-[200px] shrink-0 border-r border-line pr-3 overflow-auto" role="tablist" aria-label="Employee profile sections">
               <div className="space-y-0.5">
-                {tabs.map(t => (
-                  <button
-                    key={t.id}
-                    type="button"
-                    onClick={() => setActiveTab(t.id)}
-                    className={`w-full text-left px-3 py-2 rounded-lg text-sm transition ${activeTab === t.id ? 'bg-accent/10 text-accent font-semibold' : 'text-muted hover:text-ink hover:bg-ink/[0.04]'}`}
-                    aria-selected={activeTab === t.id}
-                  >
-                    {t.label}
-                  </button>
-                ))}
+                {tabs.map(t => {
+                  const Icon = t.icon;
+                  return (
+                     <button
+                      key={t.id}
+                      type="button"
+                      role="tab"
+                      id={`tab-${t.id}`}
+                      aria-selected={activeTab === t.id}
+                      aria-controls={`panel-${t.id}`}
+                      onClick={() => { setActiveTab(t.id); setSectionErrors({}); }}
+                      className="sidebar-link w-full"
+                      aria-current={activeTab === t.id ? 'page' : undefined}
+                    >
+                      {Icon && <Icon size={16} aria-hidden="true" />}
+                      {t.label}
+                    </button>
+                  );
+                })}
               </div>
             </nav>
 
-            <div className="flex-1 min-w-0 overflow-auto">
+            <div className="flex-1 min-w-0 overflow-auto" role="tabpanel" id={`panel-${activeTab}`} aria-labelledby={`tab-${activeTab}`}>
+              {sectionErrors[activeTab] && <SectionError message={sectionErrors[activeTab]} />}
               {tabs.find(t => t.id === activeTab)?.content}
             </div>
           </div>
 
           <div className="flex gap-2 mt-4 pt-3 border-t border-line shrink-0">
-            <button type="button" className="btn btn-primary gap-2 flex-1" onClick={() => onEdit?.(employee)}>
+            <button type="button" className="btn btn-ghost gap-2 flex-1" onClick={() => onEdit?.(employee)}>
               <Edit size={16} />
               Edit Profile
             </button>
-            <button type="button" className="btn btn-ghost gap-2" onClick={() => setActiveTab('history')}>
+            <button type="button" className="btn btn-ghost gap-2 flex-1" onClick={() => setActiveTab('history')}>
               <HistoryIcon size={16} />
               History
             </button>

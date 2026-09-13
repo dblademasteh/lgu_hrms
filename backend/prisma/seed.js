@@ -219,7 +219,7 @@ async function seedTenant(tenantId, tenantCode, hash) {
 
     await prisma.leaveCredit.upsert({
       where: { id: `${employee.id}-VACATION-2026-${tenantCode}` },
-      update: { tenantId },
+      update: { tenantId, balance: 15 },
       create: {
         id: `${employee.id}-VACATION-2026-${tenantCode}`,
         employeeId: employee.id,
@@ -232,12 +232,77 @@ async function seedTenant(tenantId, tenantCode, hash) {
 
     await prisma.leaveCredit.upsert({
       where: { id: `${employee.id}-SICK-2026-${tenantCode}` },
-      update: { tenantId },
+      update: { tenantId, balance: 15 },
       create: {
         id: `${employee.id}-SICK-2026-${tenantCode}`,
         employeeId: employee.id,
         type: 'SICK',
         balance: 15,
+        year: 2026,
+        tenantId,
+      },
+    });
+
+    await prisma.leaveCredit.upsert({
+      where: { id: `${employee.id}-SPECIAL_PRIVILEGE-2026-${tenantCode}` },
+      update: { tenantId, balance: 5 },
+      create: {
+        id: `${employee.id}-SPECIAL_PRIVILEGE-2026-${tenantCode}`,
+        employeeId: employee.id,
+        type: 'SPECIAL_PRIVILEGE',
+        balance: 5,
+        year: 2026,
+        tenantId,
+      },
+    });
+
+    await prisma.leaveCredit.upsert({
+      where: { id: `${employee.id}-SPECIAL_WOMEN-2026-${tenantCode}` },
+      update: { tenantId, balance: 60 },
+      create: {
+        id: `${employee.id}-SPECIAL_WOMEN-2026-${tenantCode}`,
+        employeeId: employee.id,
+        type: 'SPECIAL_WOMEN',
+        balance: 60,
+        year: 2026,
+        tenantId,
+      },
+    });
+
+    await prisma.leaveCredit.upsert({
+      where: { id: `${employee.id}-MATERNITY-2026-${tenantCode}` },
+      update: { tenantId, balance: 105 },
+      create: {
+        id: `${employee.id}-MATERNITY-2026-${tenantCode}`,
+        employeeId: employee.id,
+        type: 'MATERNITY',
+        balance: 105,
+        year: 2026,
+        tenantId,
+      },
+    });
+
+    await prisma.leaveCredit.upsert({
+      where: { id: `${employee.id}-PATERNITY-2026-${tenantCode}` },
+      update: { tenantId, balance: 7 },
+      create: {
+        id: `${employee.id}-PATERNITY-2026-${tenantCode}`,
+        employeeId: employee.id,
+        type: 'PATERNITY',
+        balance: 7,
+        year: 2026,
+        tenantId,
+      },
+    });
+
+    await prisma.leaveCredit.upsert({
+      where: { id: `${employee.id}-SOLO_PARENT-2026-${tenantCode}` },
+      update: { tenantId, balance: 7 },
+      create: {
+        id: `${employee.id}-SOLO_PARENT-2026-${tenantCode}`,
+        employeeId: employee.id,
+        type: 'SOLO_PARENT',
+        balance: 7,
         year: 2026,
         tenantId,
       },
@@ -323,6 +388,17 @@ async function seedTenant(tenantId, tenantCode, hash) {
       where: { id: `attd-tardiness-${tenantCode}` },
       update: { tenantId },
       create: { id: `attd-tardiness-${tenantCode}`, name: 'Tardiness', tardinessMin: 20, deductionRate: 50, active: true, tenantId },
+    });
+
+    await prisma.leaveRuleConfig.upsert({
+      where: { id: `leave-vl-${tenantCode}` },
+      update: { tenantId },
+      create: { id: `leave-vl-${tenantCode}`, leaveType: 'VACATION', accrualPerMonth: 1.25, maxCarryOver: 30, effectiveFrom: new Date('2026-01-01'), tenantId },
+    });
+    await prisma.leaveRuleConfig.upsert({
+      where: { id: `leave-sl-${tenantCode}` },
+      update: { tenantId },
+      create: { id: `leave-sl-${tenantCode}`, leaveType: 'SICK', accrualPerMonth: 1.25, maxCarryOver: 15, effectiveFrom: new Date('2026-01-01'), tenantId },
     });
 
     const emp2 = await prisma.employee.findFirst({ where: { employeeNumber: `EMP-${tenantCode}-0002`, tenantId } });

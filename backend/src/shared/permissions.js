@@ -19,6 +19,8 @@ export const CAPABILITIES = [
   { key: 'reports', label: 'Generate reports' },
   { key: 'ess', label: 'ESS self-service' },
   { key: 'attendancePortal', label: 'Attendance portal (biometric)' },
+  { key: 'appointmentsRead', label: 'View appointments' },
+  { key: 'appointmentsCRUD', label: 'Manage appointments' },
 ];
 
 /** route mapping (documentation only) */
@@ -27,11 +29,13 @@ export const CAPABILITY_ROUTES = {
   employeeRecordsCRUD: ['/employees', '/employees/:id/sections'],
   payrollRuns: ['/payroll/runs POST|approve|generate|post', '/payroll/periods POST|close', '/payroll-deduction writes'],
   payrollRead: ['/payroll GETs', '/payroll-deduction GET lines', 'payslip print HTML'],
-  leaveApproval: ['/leave PATCH'],
+  leaveApproval: ['/leave GET|PATCH', '/leave/credits', '/ess/leave-requests POST self-scoped'],
   auditTrail: ['/audit'],
   reports: ['/reports'],
   ess: ['/ess (frontend-gated, self-service)'],
   attendancePortal: ['/attendance-portal (frontend-gated, self-service)'],
+  appointmentsRead: ['/appointments GET'],
+  appointmentsCRUD: ['/appointments POST|PATCH|DELETE'],
 };
 
 /**
@@ -50,17 +54,21 @@ export const DEFAULT_PERMISSIONS = {
     reports: true,
     ess: true,
     attendancePortal: true,
+    appointmentsRead: true,
+    appointmentsCRUD: true,
   },
   HR_MANAGER: {
     manageUsersAndRoles: false,
     employeeRecordsCRUD: true,
-    payrollRuns: false, // /payroll/runs POST|approve is ADMIN+PAYROLL_OFFICER only
+    payrollRuns: false,
     payrollRead: true,
     leaveApproval: true,
     auditTrail: false,
     reports: true,
     ess: true,
     attendancePortal: true,
+    appointmentsRead: true,
+    appointmentsCRUD: true,
   },
   PAYROLL_OFFICER: {
     manageUsersAndRoles: false,
@@ -72,6 +80,8 @@ export const DEFAULT_PERMISSIONS = {
     reports: true,
     ess: true,
     attendancePortal: true,
+    appointmentsRead: false,
+    appointmentsCRUD: false,
   },
   DEPARTMENT_HEAD: {
     manageUsersAndRoles: false,
@@ -83,6 +93,8 @@ export const DEFAULT_PERMISSIONS = {
     reports: false,
     ess: true,
     attendancePortal: true,
+    appointmentsRead: false,
+    appointmentsCRUD: false,
   },
   AUDITOR: {
     manageUsersAndRoles: false,
@@ -94,16 +106,20 @@ export const DEFAULT_PERMISSIONS = {
     reports: true,
     ess: false,
     attendancePortal: false,
+    appointmentsRead: false,
+    appointmentsCRUD: false,
   },
   EMPLOYEE: {
     manageUsersAndRoles: false,
     employeeRecordsCRUD: false,
     payrollRuns: false,
-    payrollRead: false, // payslips via /ess/payslips (employee-scoped)
+    payrollRead: false,
     leaveApproval: false,
     auditTrail: false,
     reports: false,
     ess: true,
     attendancePortal: true,
+    appointmentsRead: false,
+    appointmentsCRUD: false,
   },
 };

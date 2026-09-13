@@ -406,6 +406,23 @@ model LeaveRequest {
   days        Float
   status      LeaveStatus @default(PENDING)
   reason      String?
+  isHalfDay   Boolean  @default(false)
+  isLwop      Boolean  @default(false)
+  isTerminal  Boolean  @default(false)
+  isForced    Boolean  @default(false)
+  studyBondMonths Int?
+  documentUrl String?
+  advanceNoticed Boolean @default(false)
+  monetized Boolean @default(false)
+  monetizedAt DateTime? @db.Timestamptz(6)
+  monetizedAmount Decimal? @db.Decimal(12,2)
+  recommendedBy String?
+  recommendedAt DateTime? @db.Timestamptz(6)
+  approvedBy  String?
+  approvedAt  DateTime? @db.Timestamptz(6)
+  deniedBy    String?
+  deniedAt    DateTime? @db.Timestamptz(6)
+  decisionNote String?
   createdAt   DateTime @default(now()) @db.Timestamptz(6)
   updatedAt   DateTime @updatedAt @db.Timestamptz(6)
   employee    Employee @relation(fields: [employeeId], references: [id])
@@ -452,6 +469,7 @@ model Appointment {
   position    String?
   dept        String?
   name        String?
+  deletedAt   DateTime? @db.Timestamptz(6)
   createdAt   DateTime @default(now()) @db.Timestamptz(6)
   employee    Employee @relation(fields: [employeeId], references: [id])
   designationOrders DesignationOrder[]
@@ -791,6 +809,7 @@ enum LeaveType {
 
 enum LeaveStatus {
   PENDING
+  RECOMMENDED
   APPROVED
   DENIED
   CANCELLED
