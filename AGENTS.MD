@@ -35,8 +35,12 @@
 - JWT verified by `backend/src/middleware/auth.js` `requireAuth`
 - `requireAuth` mounted globally after `/api/v1/auth` in `backend/src/routes/index.js`
 - Role gating: single `requireRole()` in `backend/src/middleware/rbac.js` (do NOT re-add the old copy in `auth.js`)
-- Route roles: `/users` ADMIN-only, `/audit` ADMIN+AUDITOR, `/payroll/runs POST|approve` ADMIN+PAYROLL_OFFICER, `/leave PATCH` ADMIN+HR_MANAGER+DEPARTMENT_HEAD, `/bonus` ADMIN+PAYROLL_OFFICER+HR_MANAGER, `/rules` writes ADMIN+HR_MANAGER, `/reports` ADMIN+HR_MANAGER+PAYROLL_OFFICER+AUDITOR
-- Frontend mirrors it: `Protected roles={...}` in `frontend/src/App.jsx` + rank-filtered `frontend/src/components/Sidebar.jsx` (ADMIN > HR_MANAGER > PAYROLL_OFFICER > DEPARTMENT_HEAD > AUDITOR)
+- Capability gating: single `requirePermission(...keys)` in `backend/src/middleware/permission.js` — authoritative on core admin routes, backed by the `RolePermission` table with `DEFAULT_PERMISSIONS` fallback (`backend/src/shared/permissions.js`); SUPER_ADMIN bypasses; edits are enforced immediately and apply to custom roles too
+- Matrix enforcement (defaults mirror the old role whitelists): `/users`+`/roles` → `manageUsersAndRoles`, `/employees`+`/employees/:id/sections` → `employeeRecordsCRUD`, `/audit` → `auditTrail`, `/reports` → `reports`, `/payroll/runs POST|approve|generate|post`+`/payroll/periods POST|close`+`/payroll-deduction` writes → `payrollRuns`, `/payroll` GETs (`/runs`, `/runs/:id`, `/periods`, `/payslips/:id/print`)+`/payroll-deduction` GET lines → `payrollRead`, `/leave PATCH` → `leaveApproval`; ESS/attendance-portal capabilities are descriptive (self-service, frontend-gated). Effective permissions = `DEFAULT_PERMISSIONS[role]` baseline with explicit `RolePermission` rows overriding (row > default), so new capabilities never false-deny seeded roles.
+- Still whitelisted (not yet matrix-backed): `/bonus`, `/rules`, `/performance`, `/database`, `/tenants`, `/attendance` writes, `/integrationRequests`
+- Matrix reads/writes: `GET /roles/capabilities`, `GET /roles/permissions`, `GET /roles/my-permissions` (self, ungated), `PATCH /roles/:name/permissions`; seeded per tenant in `prisma/seed.js`
+- Route roles: `/users` ADMIN-only, `/audit` ADMIN+AUDITOR, `/payroll/runs POST|approve|generate|post`+`/payroll/periods POST|close` ADMIN+PAYROLL_OFFICER, `/payroll` GETs ADMIN+HR_MANAGER+PAYROLL_OFFICER, `/leave PATCH` ADMIN+HR_MANAGER+DEPARTMENT_HEAD, `/bonus` ADMIN+PAYROLL_OFFICER+HR_MANAGER, `/rules` writes ADMIN+HR_MANAGER, `/reports` ADMIN+HR_MANAGER+PAYROLL_OFFICER+AUDITOR
+- Frontend mirrors it: `Protected roles={...}` + optional `capability` in `frontend/src/App.jsx` (e.g. `/users` gates on `manageUsersAndRoles`, open to SUPER_ADMIN) + rank-filtered `frontend/src/components/Sidebar.jsx` (ADMIN > HR_MANAGER > PAYROLL_OFFICER > DEPARTMENT_HEAD > AUDITOR; capability-backed items like Users & Roles appear for custom roles once granted); matrix UI in `frontend/src/pages/Users.jsx` reads/writes the API and shows edit controls when `manageUsersAndRoles` is held (no localStorage overrides — `frontend/src/config/permissions.js` only holds rank/badge/can + `useUserCapabilities()`)
 - Refresh re-reads the user row so the new access token carries the live role; INACTIVE users fail closed
 - Audit middleware `backend/src/middleware/audit.js` writes append-only `AuditLog` on mutating requests (shared Prisma client, before/after snapshots, failed attempts logged with `error: true`, failures go to stderr never swallowed)
 - User → Employee link via `User.externalId` = `Employee.employeeNumber` for ESS; user `status` is `ACTIVE`/`INACTIVE` uppercase (contract-enforced)
@@ -47,6 +51,8 @@
 - `GET /api/v1/loans` (paged, validated POST, GET by id, DELETE pending-only) + `frontend/src/api/loans.js`
 - `GET /api/v1/reports/payroll-summary` (real aggregation, CSV download in Reports page)
 - `GET /api/v1/payroll/periods|runs` + `GET /runs/:id` + `PATCH /runs/:id/approve` (DRAFT→APPROVED)
+- Payroll lifecycle: `POST /payroll/periods` + `PATCH /periods/:id/close`, `POST /runs/:id/generate` (computes items from `Employee.monthlySalary` + contribution/tax/attendance rules + due loan amortizations, all Decimal), `POST /runs/:id/post` (APPROVED→POSTED: append-only `LedgerEntry`, `Payslip` rows, marks amortizations paid), `GET /payroll/payslips/:itemId/print` (printable payslip HTML). Salary source of truth = `Employee.monthlySalary` (Decimal 12,2)
+- Payroll scale posture (≥1k employees): `GET /payroll/runs` is paginated (`page`/`limit`/`summary=true`, cap limit 100); list omits `deductionLines` (fetch `/runs/:id` or deduction lines); item creation batches with `createManyAndReturn` — never per-row `create` loops inside the generate transaction; AuditLog `after` capped at 64KB (bulk responses stored as `{count}` shape summary); composite `tenantId` indexes cover hot payroll reads (migration `20260913160000_payroll_scale_indexes`)
 - ESS page: `/ess` (leave filing modal wired), IPCR page: `/ipcr` (real columns)
 - Tenant routes: `GET /api/v1/tenants` public list for picker, `POST /api/v1/tenants` SUPER_ADMIN only; onboarding portal at `/tenant-register`
 
@@ -110,3 +116,26 @@
 - Do not re run dev, only if needed.
 - Always check terminals for dev to avoid duplicated dev.
 - Never hardcode secrets; use `.env` + `.env.example`
+
+## Do / Don't
+**Do:**
+- Wire to the API layer first and verify the component actually calls it; reuse `frontend/src/api/*` modules
+- Read AGENTS.md + DESIGN.md before touching layout or wiring, and keep both docs updated when you change conventions
+- Reuse existing components (`MasterTable`, `DetailPane`, `Tabs`, `Modal`, `ConfirmDialog`, `useToast`, badges) before writing new markup
+- Use `requireRole()` from `rbac.js` only, the global `auditLog` mount only, and `withTenant`/`stampTenant` on every query/write
+- Use Prisma Decimal for money, YYYY-MM-DD + UTC for dates, Zod for all external input
+- Toast every user action, confirm destructive actions, keep one `.btn-primary` per view, preserve design tokens
+- Verify with `npm run build` + `node --check` + color lint before finishing; commit per unit with conventional messages
+- Keep code in one-getter-wonders… sorry, keep one concern per file (thin routes, repo = queries, service = logic)
+- Report drift you find: update the guide, update TODOs, and open an interaction with the user when you spot design/workflow gaps
+
+**Don't:**
+- Don't ship mocks, hardcoded workflows, or sample data labeled as real — wire the API or label it honestly
+- Don't swallow errors (`catch { console.log }`), don't leak stack traces/DB internals to clients, don't log secrets or tokens
+- Don't bypass tenant isolation, RBAC, or the audit trail (adding a mutating route that skips `auditLog` is a release-blocker bug)
+- Don't hardcode colors, spacing, or font sizes; no `bg-white`/`text-white`/`slate-`/`gray-` class names (color lint fails)
+- Don't compute money with JS floats or trust client-sent totals; don't build raw SQL when Prisma works
+- Don't introduce a second styling system (no CSS-in-JS, no UI kit), don't add decorative animation
+- Don't duplicate AuditLog writes per route, don't re-add the old `requireRole` copy inside `auth.js`
+- Don't run duplicate dev watchers (file locks break prisma generate), don't keep dead code/mock leftovers
+- Don't commit directly to an undocumented change — verify, then conventional message

@@ -147,7 +147,7 @@ Command palette list rows and the header bell dropdown (absolute, right-anchored
 - **Designation** — search bar + summary cards (Active/Suspended counts), Orders table with Actions column (Remove button), New Order modal with form and footer (X/Cancel, Save/Create Order buttons with icons).
 - **Audit** — filterable log; Details modal with **Before/After JSON** side-by-side `pre` cards; Close button with X icon.
 - **Users & Roles** — accounts table (role badges, activate/deactivate confirm) + permissions matrix (✓ per role).
-- **Reports** — card grid (type mono-label, Generate/Preview → toasts until wired).
+- **Reports** — payroll-summary is **live** (`GET /api/v1/reports/payroll-summary`, real aggregation + CSV download). Card grid (type mono-label, Generate/Preview); standard-report PDF/XLSX generation still tracked in TODOs.
 - **404 / Error** — centered `.card` with mono error label + recovery button.
 
 ## 7. Motion
@@ -170,18 +170,27 @@ Interaction feedback only — **no decorative animation**. Durations: 150ms (but
 - Destructive or audit-relevant actions always pass through `ConfirmDialog`.
 - Sample/placeholder data that will be replaced by the API is labeled (`.mono-label` "Sample figures — wires to the payroll API").
 
-## 10. Settings > Account Spec
+## 10. Responsive, Print & Provenance
 
-**Settings > Account** tab design built from tokens/classes.
+- **Responsive** — composed from Tailwind breakpoints only: `md` (≥768) enables KPI grid columns; `lg` (≥1024) unlocks the 2-col master/detail rows; `xl` rarely. Layout scales for phones (single-column, drawer hidden below `md`) up to wide desktop (`max-w` content). No fixed viewport hacks.
+- **Print** — **not implemented yet** (tracked in TODOs). Target (mirrors lgu_ims): `@media print` isolates a `.print-area` (COA payslips, service records, CSC forms) and hides chrome via `.no-print`. Don't build print pages until the shared print contract lands.
+- **Provenance** — fonts self-hosted via `@fontsource-variable/*` (see §3); PWA manifest at `frontend/public/manifest.webmanifest` + `icon.svg`; theme applied pre-paint (index.html). Icons are `lucide-react` only.
 
-- Profile card: avatar placeholder, name/email, role/department scope badge, completeness meter progress bar.
-- Security card: password last changed, Change Password button opens modal with policy + strength meter; 2FA toggle with setup modal placeholder; Sessions list table with Revoke button; Login history mini table.
-- Preferences card: display language, date format, timezone, notification channel consent toggles.
-- Privacy card: Data export / Download my data button, Account deactivation with ConfirmDialog.
+## 11. Provenance & benchmark
 
-All actions toast. Mock data labeled `.mono-label`. Wire-later affordances show “Coming soon”.
+`DESIGN.md` is recorded from the built world (React 19 + Vite + Tailwind 4, `index.css`, live pages) — same discipline as the sibling **lgu_ims** docs. Both repos originate from the shared `TEMPLATE_AGENT.md` / `TEMPLATE_DESIGN.md`/`UI_UX_TEMPLATE.md` templates (see `..\lgu_ims\TEMPLATE_AGENT.md`); token names, single-source-of-truth rule, and class-convention style are identical. **Benchmarked against lgu_ims DESIGN.md** — adopted: responsive/breakpoint table, provenance, print plan, per-page namespace documentation. HRMS keeps its own: more compact component library, contrast measurements, personalization layer (`§2.1`), and page specs (`§6`).
 
-## 10. Do / Don't
+## 12. Settings page spec
+
+**Settings** has four tabs — **Appearance**, **Notifications**, **Account**, **Database** (`{ id, label }` tabs array, top alt-bar). All actions toast. Wire-later affordances show “Coming soon”.
+
+- **Appearance** — theme (light/dark), accent presets, font-family, UI scale/compactness; persists via the localStorage keys in §2.1.
+- **Notifications** — in-app/email/SMS/push channel consent, quiet hours.
+- **Account** — profile card (avatar placeholder, name/email, role/department scope badge, completeness meter); Security card (password last changed, Change Password modal with policy + strength meter, 2FA toggle + Sessions list with Revoke, Login history); Preferences card (language, date format, timezone); Privacy card (Data export / Download my data, deactivation behind `ConfirmDialog`).
+- **Database (ADMIN)** — table browser/schema, CRUD on rows, CSV import (dry-run → commit), backups (JSON, SQL dump, data-only), health/migrations/slow-queries/retention panels, SQL console. **ADMIN-only safety**: destructive ops require explicit confirm; rows are tenant-scoped.
+- **External Systems** (in-app modal, not a tab) — manage HRIS/other system integrations (name, type, base URL, api key/secret, headers, sync direction) via `frontend/src/api/integrations.js`.
+
+## 13. Do / Don't
 
 **Do:** compose from tokens + classes; verify both themes; keep one `.btn-primary` per view; use `color-mix` tints for hierarchy; label wire-later affordances honestly; use `lucide-react` icons with `aria-label` on icon-only buttons; toast on every user action.
 **Don't:** hardcode hex/slate/gray in JSX (lint fails); invent new component classes for one-off needs; add decorative animation; use warning token for body text (AA); close modals on overlay click (spec: explicit close); introduce a second styling system (no CSS-in-JS, no UI kit).
