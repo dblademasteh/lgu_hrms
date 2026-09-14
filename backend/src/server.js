@@ -3,6 +3,7 @@ import helmet from 'helmet';
 import cors from 'cors';
 import routes from './routes/index.js';
 import { apiLimiter } from './middleware/rateLimit.js';
+import { prisma } from './lib/prisma.js';
 
 const app = express();
 
@@ -40,6 +41,52 @@ app.use((err, req, res, next) => {
 });
 
 const PORT = process.env.PORT || 4000;
-app.listen(PORT, () => {
+const server = app.listen(PORT, async () => {
   console.log(`LGU HRMS Backend running on http://localhost:${PORT}`);
+
+  // Run pending Prisma migrations on startup in production.
+  // Skipped in development to avoid interfering with `prisma migrate dev`.
+  if (process.env.NODE_ENV === 'production' || process.env.RUN_MIGRATIONS_ON_STARTUP === 'true') {
+    try {
+      const { execFile } = await import('child_process');
+      const { promisify } = await import('util');
+      const execFileAsync = promisify(execFile);
+      console.log('[startup] Running prisma migrate deploy...');
+      await execFileAsync('npx', ['prisma', 'migrate', 'deploy'], {
+        cwd: process.cwd(),
+        timeout: 120000,
+      });
+      console.log('[startup] Migrations applied successfully');
+    } catch (e) {
+      console.error('[startup] Migration failed:', e);
+      // In production, fail fast rather than serving stale schema.
+      if (process.env.NODE_ENV === 'production') {
+        process.exit(1);
+      }
+    }
+  }
 });
+
+// Graceful shutdown: drain connections, then exit.
+const shutdown = (signal) => {
+  console.log(`\n${signal} received: shutting down gracefully...`);
+  server.close(async () => {
+    console.log('HTTP server closed');
+    try {
+      await prisma.$disconnect();
+      console.log('Prisma client disconnected');
+    } catch (e) {
+      console.error('Error during disconnect:', e);
+    }
+    process.exit(0);
+  });
+
+  // Force exit after 30 seconds if graceful shutdown hangs.
+  setTimeout(() => {
+    console.error('Forced shutdown after timeout');
+    process.exit(1);
+  }, 30000);
+};
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));

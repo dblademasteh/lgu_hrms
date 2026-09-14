@@ -1,6 +1,14 @@
 import { Router } from 'express';
 import { tenantRepository } from '../middleware/tenant.js';
 import { requireRole } from '../middleware/rbac.js';
+import { z } from 'zod';
+
+const createTenantSchema = z.object({
+  code: z.string().min(1).max(20),
+  name: z.string().min(1).max(120),
+  domain: z.string().optional().nullable(),
+  lguLevel: z.enum(['PROVINCIAL', 'CITY', 'MUNICIPAL']).default('PROVINCIAL'),
+});
 
 const router = Router();
 
@@ -19,9 +27,8 @@ router.use(requireRole('SUPER_ADMIN'));
 
 router.post('/', async (req, res, next) => {
   try {
-    const { code, name, domain } = req.body || {};
-    if (!code || !name) return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'code and name are required' } });
-    res.status(201).json(await tenantRepository.create({ code, name, domain: domain || null }));
+    const parsed = createTenantSchema.parse(req.body || {});
+    res.status(201).json(await tenantRepository.create(parsed));
   } catch (e) {
     if (e.code === 'P2002') return res.status(409).json({ error: { code: 'CONFLICT', message: 'Tenant code or domain already exists' } });
     next(e);
@@ -30,8 +37,8 @@ router.post('/', async (req, res, next) => {
 
 router.patch('/:id', async (req, res, next) => {
   try {
-    const { name, domain, isActive } = req.body || {};
-    res.json(await tenantRepository.update(req.params.id, { ...(name && { name }), ...(domain !== undefined && { domain }), ...(isActive !== undefined && { isActive }) }));
+    const { name, domain, isActive, lguLevel } = req.body || {};
+    res.json(await tenantRepository.update(req.params.id, { ...(name && { name }), ...(domain !== undefined && { domain }), ...(isActive !== undefined && { isActive }), ...(lguLevel && { lguLevel }) }));
   } catch (e) { next(e); }
 });
 

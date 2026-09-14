@@ -3,6 +3,10 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Login from './pages/Login.jsx';
 import AuthCallback from './pages/AuthCallback.jsx';
 import TenantRegister from './pages/TenantRegister.jsx';
+import SuperAdminDashboard from './pages/SuperAdminDashboard.jsx';
+import Tenants from './pages/Tenants.jsx';
+import TenantDetail from './pages/TenantDetail.jsx';
+import DatabaseTools from './pages/DatabaseTools.jsx';
 import UserDashboard from './pages/UserDashboard.jsx';
 import Employees from './pages/Employees.jsx';
 import Organization from './pages/Organization.jsx';
@@ -46,8 +50,7 @@ function Protected({ children, roles, capability }) {
   if (!useAuthStore.getState().user) return <Navigate to="/" replace />;
   const current = useAuthStore.getState().user;
   if (roles && !roles.includes(current.role)) return <Navigate to="/dashboard" replace />;
-  if (capability) {
-    // Wait for the capability map so admins are never flashed out during load.
+  if (capability && current.role !== 'SUPER_ADMIN') {
     if (Object.keys(caps).length === 0) return null;
     if (!caps[capability]) return <Navigate to="/dashboard" replace />;
   }
@@ -62,7 +65,11 @@ export default function App() {
            <Routes>
              <Route path="/" element={<Login />} />
              <Route path="/auth/callback" element={<AuthCallback />} />
-             <Route path="/tenant-register" element={<TenantRegister />} />
+              <Route path="/tenant-register" element={<Protected roles={['SUPER_ADMIN']}><TenantRegister /></Protected>} />
+              <Route path="/platform" element={<Protected roles={['SUPER_ADMIN']}><SuperAdminDashboard /></Protected>} />
+              <Route path="/platform/tenants" element={<Protected roles={['SUPER_ADMIN']}><Tenants /></Protected>} />
+              <Route path="/platform/tenants/:id" element={<Protected roles={['SUPER_ADMIN']}><TenantDetail /></Protected>} />
+              <Route path="/platform/database" element={<Protected roles={['SUPER_ADMIN']}><DatabaseTools /></Protected>} />
              <Route path="/dashboard" element={<Protected><UserDashboard /></Protected>} />
              <Route path="/employees" element={<Protected roles={['ADMIN', 'HR_MANAGER', 'DEPARTMENT_HEAD']}><Employees /></Protected>} />
               <Route path="/organization" element={<Protected roles={['ADMIN', 'HR_MANAGER', 'DEPARTMENT_HEAD']}><Organization /></Protected>} />
