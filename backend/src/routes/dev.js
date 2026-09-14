@@ -12,7 +12,7 @@ router.post('/switch-role', async (req, res, next) => {
     if (!role || !req.user?.id) {
       return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'role and authenticated user are required' } });
     }
-    const data = await authService.switchRole(req.user.id, role);
+    const data = await authService.switchRole(req.user.id, role, req);
     res.json(data);
   } catch (e) {
     next(e);

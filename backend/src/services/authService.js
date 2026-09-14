@@ -133,7 +133,7 @@ export const authService = {
     const accessToken = jwt.sign({ id: user.id, role: user.role, tenantId: user.tenantId ?? null }, ACCESS_SECRET, { expiresIn: '15m' });
     return { accessToken };
   },
-  async switchRole(userId, newRole) {
+  async switchRole(userId, newRole, req) {
     if (process.env.NODE_ENV === 'production') {
       const err = new Error('Role switching is disabled in production');
       err.status = 403;
@@ -145,13 +145,21 @@ export const authService = {
       err.status = 404;
       throw err;
     }
-    const role = await prisma.role.findFirst({ where: { name: newRole, tenantId: user.tenantId } });
-    if (!role) {
-      const err = new Error('Invalid role');
-      err.status = 400;
-      throw err;
+    // SUPER_ADMIN is a platform role (no tenant row in Role table) — allow it;
+    // otherwise the role must exist for the user's tenant.
+    if (newRole !== 'SUPER_ADMIN') {
+      const role = await prisma.role.findFirst({ where: { name: newRole, tenantId: user.tenantId } });
+      if (!role) {
+        const err = new Error('Invalid role');
+        err.status = 400;
+        throw err;
+      }
     }
-    const patched = await prisma.user.update({ where: { id: userId }, data: { role: newRole } });
-    return issueSession(patched, { ip: '127.0.0.1', get: () => 'dev' });
+    // Session-only override: never persist the role to the user row. The
+    // mismatched role applies to this access token only; a refresh or new
+    // login reverts to the stored role. Persisting here lets dev testing
+    // silently escalate seeded admin accounts to SUPER_ADMIN.
+    const patched = { ...user, role: newRole };
+    return issueSession(patched, req || { ip: '127.0.0.1', get: () => 'dev' });
   }
 };

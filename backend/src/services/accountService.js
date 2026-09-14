@@ -19,14 +19,19 @@ export const accountService = {
     return { user: { ...safe, pinEnabled: !!pinHash }, completeness };
   },
   async updateProfile(userId, data) {
-    return userRepository.update(userId, data);
+    const { passwordHash, pinHash, twoFactorSecret, ...safe } = data;
+    if (Object.keys(safe).length === 0) return { user: safe };
+    await prisma.user.update({ where: { id: userId }, data: safe });
+    return { user: safe };
   },
   async changePassword(userId, currentPassword, newPassword) {
-    const user = await userRepository.findById(userId);
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new Error('User not found');
     const valid = await bcrypt.compare(currentPassword, user.passwordHash);
     if (!valid) throw new Error('Invalid current password');
     const hash = await bcrypt.hash(newPassword, 12);
-    return userRepository.update(userId, { passwordHash: hash, passwordChangedAt: new Date() });
+    await prisma.user.update({ where: { id: userId }, data: { passwordHash: hash, passwordChangedAt: new Date() } });
+    return { message: 'Password changed' };
   },
   async getSessions(userId) {
     return userRepository.getSessions(userId);
@@ -48,7 +53,8 @@ export const accountService = {
     return userRepository.deleteDelegation(delegationId, userId);
   },
   async deactivateAccount(userId) {
-    return userRepository.update(userId, { externalId: 'DEACTIVATED' });
+    await prisma.user.update({ where: { id: userId }, data: { status: 'INACTIVE', externalId: 'DEACTIVATED' } });
+    return { message: 'Account deactivated' };
   }
 };
 
