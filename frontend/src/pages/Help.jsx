@@ -73,7 +73,7 @@ export default function Help() {
         {
           title: 'Tenant Registration',
           items: [
-            { label: 'Onboarding Portal', description: 'Go to /tenant-register to create a new LGU tenant. Requires platform operator access.' },
+            { label: 'Platform Operator Only', description: 'Tenant creation is restricted to SUPER_ADMIN. Use the admin portal or contact the platform operator.' },
             { label: 'Seed Data', description: 'After creation, run seedTenant for DEFAULT/TARLAC to populate initial departments, users, employees, payroll.' },
             { label: 'Provisioning Docs', description: 'See docs/TENANT_PROVISIONING.md for full provisioning steps.' },
           ]

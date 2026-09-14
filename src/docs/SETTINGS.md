@@ -128,23 +128,25 @@ The Settings page consists of seven primary tabs:
 
 ---
 
-## Database Settings (ADMIN Only)
+## Database Settings (ADMIN and SUPER_ADMIN)
+
+- **Roles:** Both roles get the tenant-scoped dashboard, table browser, per-table export, and tenant backup/dump. SUPER_ADMIN additionally gets the query console, full backup/dump, slow queries, retention, connections, size, and record writes. Tenants never see other tenants' rows.
 
 ### Dashboard Information
 - **Connection:** PostgreSQL latency + uptime
-- **DB Size:** Database file size in MB
+- **DB Size:** Database file size in MB (SUPER_ADMIN only)
 - **Migrations:** Prisma migration status (In sync / X pending)
 - **Migration History:** Applied migrations with timestamps
 
 ### Table Browser
 - **Filter:** Search by table name or description
 - **Columns:** Table name, record count, description
+- **Browse:** Selecting a table lists up to 3 rows first with a **"Show all (N)"** expand / "Collapse" toggle in the table header and a "Show all N rows" button at the bottom; the row limit pagination takes over once expanded.
 - **Actions (per table):**
-  - Add Record
-  - Edit Record
-  - Delete Record (with FK constraint checking)
-  - Export CSV/JSON
-  - Check dependents before deletion
+  - Add Record / Edit / Delete (SUPER_ADMIN only; ADMIN sees read-only/locked states)
+  - Export CSV/JSON (both roles)
+  - Check dependents before deletion (SUPER_ADMIN only)
+  - `browse` validates `orderBy`; deleting a row with FK references returns a clean 409
 
 ### Query Console
 - **Read-only:** SELECT/WITH statements only
@@ -153,13 +155,14 @@ The Settings page consists of seven primary tabs:
 - **Note:** SUPER_ADMIN role required for `POST /api/v1/database/query`
 
 ### Backups
-- **Options:**
-  - Full JSON backup
-  - SQL dump (`.sql` via pg_dump)
-  - Data-only dump
+- **Both roles:** Tenant backup via `GET /tenant-dump` / `GET /tenant-export` (scoped to the caller's tenant; SUPER_ADMIN can pick a tenant with `X-Tenant-Id`)
+- **SUPER_ADMIN only:**
+  - Full JSON backup (`GET /backup`, gzipped JSON of all managed tables)
+  - SQL dump (`.sql` via pg_dump, `GET /dump`)
+  - Data-only dump (`GET /dump?dataOnly=true`)
 - **Storage:** Client-side download
 
-### Retention & Cleanup
+### Retention & Cleanup (SUPER_ADMIN only)
 - **Preview:** Shows purge candidates for:
   - Login events
   - Revoked sessions
@@ -167,7 +170,7 @@ The Settings page consists of seven primary tabs:
   - Soft-deleted employees
 - **Purge:** Execute cleanup operations
 
-### Slow Query Analysis
+### Slow Query Analysis (SUPER_ADMIN only)
 - Requires `pg_stat_statements` extension
 - Shows: Query, Calls, Total ms, Mean ms, % of DB time
 
@@ -199,19 +202,25 @@ The Settings page consists of seven primary tabs:
 | GET | `/api/v1/database/summary` | DB summary | ADMIN |
 | GET | `/api/v1/database/health` | Connection health | ADMIN |
 | GET | `/api/v1/database/migrations` | Migration status | ADMIN |
-| GET | `/api/v1/database/backup` | Download backup | ADMIN |
-| GET | `/api/v1/database/dump` | SQL data dump | ADMIN |
-| GET | `/api/v1/database/slow-queries` | Slow query list | ADMIN |
-| GET | `/api/v1/database/retention` | Retention preview | ADMIN |
+| GET | `/api/v1/database/tenant-dump` | Tenant-scoped JSON backup | ADMIN |
+| GET | `/api/v1/database/tenant-export` | Tenant-scoped export bundle | ADMIN |
+| GET | `/api/v1/database/:name/schema` | Table schema | ADMIN |
+| GET | `/api/v1/database/:name/browse` | Browse records (validated orderBy) | ADMIN |
+| GET | `/api/v1/database/:name/export` | Export records CSV/JSON | ADMIN |
+| GET | `/api/v1/database/:name/dependents/:id` | Check FK dependents | ADMIN |
+| GET | `/api/v1/database/:name/:id` | Get one record | ADMIN |
+| GET | `/api/v1/database/backup` | Download full backup | SUPER_ADMIN |
+| GET | `/api/v1/database/dump` | SQL data dump | SUPER_ADMIN |
+| GET | `/api/v1/database/slow-queries` | Slow query list | SUPER_ADMIN |
+| GET | `/api/v1/database/retention` | Retention preview | SUPER_ADMIN |
+| GET | `/api/v1/database/connections` | Active connections | SUPER_ADMIN |
+| GET | `/api/v1/database/size` | DB + per-table sizes | SUPER_ADMIN |
 | POST | `/api/v1/database/query` | Execute query | SUPER_ADMIN |
 | POST | `/api/v1/database/retention/run` | Run retention cleanup | SUPER_ADMIN |
-| POST | `/api/v1/database/:name/import` | Import CSV | SUPER_ADMIN |
-| GET | `/api/v1/database/:name/schema` | Table schema | ADMIN |
-| GET | `/api/v1/database/:name/browse` | Browse records | ADMIN |
-| GET | `/api/v1/database/:name/export` | Export records | ADMIN |
-| POST | `/api/v1/database/:name` | Create record | ADMIN |
-| PUT | `/api/v1/database/:name/:id` | Update record | ADMIN |
-| DELETE | `/api/v1/database/:name/:id` | Delete record | ADMIN |
+| POST | `/api/v1/database/:name/import` | Import CSV (stamps tenantId) | SUPER_ADMIN |
+| POST | `/api/v1/database/:name` | Create record | SUPER_ADMIN |
+| PUT | `/api/v1/database/:name/:id` | Update record | SUPER_ADMIN |
+| DELETE | `/api/v1/database/:name/:id` | Delete record (409 on FK) | SUPER_ADMIN |
 
 ### Integration Endpoints
 | Method | Endpoint | Description | Required Role |
@@ -283,3 +292,5 @@ Get-ChildItem frontend/src -Recurse -Include *.jsx,*.js |
 | System | ✓ | | | | |
 
 "✓" = Read access,Bold = Write/modify access
+
+> Nuance: Database is ✓ (read) for ADMIN — tenant-scoped browser/dashboards/exports/tenant backups. SUPER_ADMIN only: record writes (Add/Edit/Delete), CSV import, query console, full backup/dump, slow queries, retention, connections, and DB size.
