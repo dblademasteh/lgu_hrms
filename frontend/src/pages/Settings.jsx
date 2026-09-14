@@ -1,5 +1,5 @@
 ﻿import React, { useEffect, useState, useMemo } from 'react';
-import { Moon, Sun, LayoutGrid, Bell, User, ShieldCheck, Info, Settings as SettingsIcon, Database, Table, X, Save, Check, Plus, Download, Key, LogOut, UserX, Pencil, Trash2, Type, Palette, RefreshCw, Edit3, Server, Activity, Clock, HardDrive, Hash, AlertTriangle, Link2, Power, PowerOff, Globe, Webhook } from 'lucide-react';
+import { Moon, Sun, LayoutGrid, Bell, User, ShieldCheck, Info, Settings as SettingsIcon, Database, Table, X, Save, Check, Plus, Download, Key, LogOut, UserX, Pencil, Trash2, Type, Palette, RefreshCw, Edit3, Server, Activity, Clock, HardDrive, Hash, AlertTriangle, Link2, Power, PowerOff, Globe, Webhook, ChevronLeft, ChevronRight, Zap, Wrench, Upload } from 'lucide-react';
 import Layout from '../components/Layout.jsx';
 import { useTheme, toggleTheme } from '../theme.js';
 import { useSidebarStyle, setSidebarStyle, SIDEBAR_STYLES, SIDEBAR_STYLE_META } from '../sidebarStyle.js';
@@ -68,13 +68,17 @@ export default function Settings() {
 
   const ADMIN_ROLES = ['ADMIN', 'SUPER_ADMIN'];
   const isAdmin = ADMIN_ROLES.includes(currentRole);
+  const isSuperAdmin = currentRole === 'SUPER_ADMIN';
 
   const visibleTabs = useMemo(() => tabs.filter(tab => {
-    if (['integrations', 'database', 'compliance', 'system'].includes(tab.id)) {
+    if (tab.id === 'integrations') {
+      return isSuperAdmin;
+    }
+    if (['database', 'compliance', 'system'].includes(tab.id)) {
       return isAdmin;
     }
     return true;
-  }), [isAdmin]);
+  }), [isAdmin, isSuperAdmin]);
 
   useEffect(() => {
     if (!visibleTabs.some(t => t.id === active)) {
@@ -125,6 +129,7 @@ export default function Settings() {
   const [dbSqlResult, setDbSqlResult] = useState(null);
   const [dbSqlBusy, setDbSqlBusy] = useState(false);
   const [dbImportText, setDbImportText] = useState('');
+  const [dbImportFileName, setDbImportFileName] = useState(null);
   const [dbImportResult, setDbImportResult] = useState(null);
   const [dbImportBusy, setDbImportBusy] = useState(false);
   const [dbDeps, setDbDeps] = useState(null);
@@ -150,6 +155,9 @@ export default function Settings() {
   const [dbEditingRecord, setDbEditingRecord] = useState(null);
   const [dbCreateForm, setDbCreateForm] = useState({});
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
+  const [dbMaintenanceLoading, setDbMaintenanceLoading] = useState({ vacuumRun: false, vacuumAnalyze: false, analyze: false, reindex: false });
+  const [dbMaintenanceResult, setDbMaintenanceResult] = useState(null);
+  const [dbShowAllRows, setDbShowAllRows] = useState(false);
   const toast = useToast();
 
   useEffect(() => {
@@ -212,18 +220,34 @@ export default function Settings() {
         .then(res => { setDbTables(res.tables); setDbTotalTables(res.totalTables ?? res.tables.length); setDbTotalRecords(res.totalRecords ?? 0); setDbLoading(false); })
         .catch(() => { setDbError('Could not load database info'); setDbLoading(false); });
       const get = async (fn) => { try { const r = await fn(); return r; } catch { return null; } };
-      Promise.all([get(() => databaseApi.health()), get(() => databaseApi.migrations()), get(() => databaseApi.slowQueries()), get(() => databaseApi.retention(90))])
-        .then(([health, migrations, slow, retention]) => { setDbOps({ health, migrations }); setDbSlow(slow); setDbRetention(retention); setDbOpsLoading(false); });
+      Promise.all([
+        get(() => databaseApi.health()),
+        get(() => databaseApi.migrations()),
+        isSuperAdmin ? get(() => databaseApi.slowQueries()) : Promise.resolve(null),
+        isSuperAdmin ? get(() => databaseApi.retention(90)) : Promise.resolve(null),
+        isSuperAdmin ? get(() => databaseApi.connections()) : Promise.resolve(null),
+        isSuperAdmin ? get(() => databaseApi.databaseSize()) : Promise.resolve(null),
+      ])
+        .then(([health, migrations, slow, retention, connections, dbSize]) => {
+          setDbOps({ health, migrations, connections, dbSize });
+          setDbSlow(slow);
+          setDbRetention(retention);
+          setDbOpsLoading(false);
+        });
     }
   }, [active]);
 
   useEffect(() => {
     if (active === 'database' && dbSelectedTable) {
-      setDbBrowseSkip(0);
       databaseApi.tableSchema(dbSelectedTable.name)
         .then(res => setDbTableSchema(res))
         .catch(() => setDbTableSchema(null));
-      databaseApi.browse(dbSelectedTable.name, { skip: 0, take: dbBrowseTake })
+    }
+  }, [active, dbSelectedTable]);
+
+  useEffect(() => {
+    if (active === 'database' && dbSelectedTable) {
+      databaseApi.browse(dbSelectedTable.name, { skip: dbBrowseSkip, take: dbBrowseTake })
         .then(res => { setDbRecords(res.data); setDbRecordCount(res.count); })
         .catch(() => { setDbRecords([]); setDbRecordCount(0); });
     }
@@ -373,6 +397,28 @@ export default function Settings() {
     databaseApi.exportData(dbSelectedTable.name, format);
   };
 
+  const handleDbImportFile = (file) => {
+    if (!file) return;
+    if (!/\.csv$/i.test(file.name) && file.type !== 'text/csv' && file.type !== 'application/vnd.ms-excel') {
+      toast('Please select a .csv file', 'error');
+      return;
+    }
+    if (file.size > 500 * 1024) {
+      toast('CSV too large — keep it under ~500KB', 'error');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const text = String(e.target?.result || '');
+      if (!text.trim()) { toast('The file is empty', 'error'); return; }
+      setDbImportText(text);
+      setDbImportFileName(file.name);
+      setDbImportResult(null);
+    };
+    reader.onerror = () => toast('Could not read the file', 'error');
+    reader.readAsText(file);
+  };
+
   const handleDbRefresh = () => {
     setDbBrowseSkip(0);
     databaseApi.summary()
@@ -401,7 +447,37 @@ export default function Settings() {
       setDbRecords(res.data);
       setDbRecordCount(res.count);
     } catch {
-      toast('Could not delete record â€” foreign key constraint or missing permission', 'error');
+      toast('Could not delete record — foreign key constraint or missing permission', 'error');
+    }
+  };
+
+  const handleMaintenance = async (action, payload = {}) => {
+    const loadingKey = action === 'vacuum' ? (payload.analyze ? 'vacuumAnalyze' : 'vacuumRun') : action;
+    setDbMaintenanceLoading(prev => ({ ...prev, [loadingKey]: true }));
+    setDbMaintenanceResult(null);
+    try {
+      let result;
+      switch (action) {
+        case 'vacuum':
+          result = await databaseApi.vacuum(payload.table, payload.analyze, payload.verbose);
+          break;
+        case 'analyze':
+          result = await databaseApi.analyze(payload.table);
+          break;
+        case 'reindex':
+          result = await databaseApi.reindex(payload.table, payload.concurrently);
+          break;
+        default:
+          break;
+      }
+      toast(`${action} completed successfully`, 'success');
+      setDbMaintenanceResult({ action, success: true, result });
+      handleDbRefresh();
+    } catch (e) {
+      toast(`${action} failed: ${e?.response?.data?.error?.message || e.message}`, 'error');
+      setDbMaintenanceResult({ action, success: false, error: e?.response?.data?.error?.message || e.message });
+    } finally {
+      setDbMaintenanceLoading(prev => ({ ...prev, [loadingKey]: false }));
     }
   };
 
@@ -520,53 +596,422 @@ export default function Settings() {
             )}
 
             {active === 'database' && (
-              <section className="card p-6 space-y-5">
+              <section className="space-y-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h2 className="font-display font-semibold text-ink flex items-center gap-2"><Database size={18} className="text-accent"/> Database Management</h2>
-                    <p className="text-sm text-muted">Inspect and manage database tables (ADMIN only) · {dbTotalTables} tables · {Number(dbTotalRecords).toLocaleString()} records</p>
-                    <input value={dbSearch} onChange={e => setDbSearch(e.target.value)} placeholder="Filter tables…" aria-label="Filter tables" className="input w-full max-w-xs mt-2" />
+                    <h2 className="font-display text-xl font-bold text-ink flex items-center gap-2">
+                      <Database size={20} className="text-accent" />
+                      Database
+                    </h2>
+                    <p className="text-sm text-muted mt-0.5">Inspect, back up, and maintain the database</p>
                   </div>
-                  <div className="flex gap-2">
-                    <button className="btn btn-ghost btn-sm gap-2" onClick={handleDbRefresh}><RefreshCw size={14}/> Refresh</button>
-                    {dbSelectedTable && !dbSelectedTable.readOnly && (
-                      <>
-                        <button className="btn btn-ghost btn-sm gap-2" onClick={() => setShowDbCreateModal(true)} disabled={!dbTableSchema}><Plus size={14}/> Add Record</button>
-                        <button className="btn btn-ghost btn-sm gap-2" onClick={() => handleDbExport("csv")}><Download size={14}/> CSV</button>
-                        <button className="btn btn-ghost btn-sm gap-2" onClick={() => handleDbExport("json")}><Download size={14}/> JSON</button>
-                      </>
-                    )}
-                  </div>
+                  <button type="button" className="btn btn-outline btn-sm gap-2" onClick={handleDbRefresh}>
+                    <RefreshCw size={14} /> Refresh
+                  </button>
                 </div>
 
-                {dbError && <p className="text-error text-sm">{dbError}</p>}
-
-                <div className="grid md:grid-cols-3 gap-4">
-                  <div className="p-4 border border-line rounded-xl bg-bg/50">
-                    <p className="mono-label">Connection</p>
-                    <p className={`font-display font-bold text-ink mt-1 ${dbOps?.health ? 'text-success' : ''}`}>{dbOpsLoading ? '…' : dbOps?.health ? `${dbOps.health.latencyMs}ms` : '—'}</p>
-                    <p className="text-[11px] text-muted mt-0.5">{dbOps?.health?.uptime ? `Up ${dbOps.health.uptime}` : 'Postgres latency + uptime'}</p>
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+                  <div className="card p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Activity className="text-accent" size={16} />
+                      <span className="mono-label text-[10px] uppercase text-muted">Latency</span>
+                    </div>
+                    <p className="font-display text-lg font-bold text-ink">
+                      {dbOpsLoading ? '…' : dbOps?.health ? `${dbOps.health.latencyMs}ms` : '—'}
+                    </p>
+                    <p className="text-xs text-muted mt-1">
+                      {dbOps?.health?.uptime ? `Uptime ${dbOps.health.uptime}` : 'Postgres latency'}
+                    </p>
                   </div>
-                  <div className="p-4 border border-line rounded-xl bg-bg/50">
-                    <p className="mono-label">DB size</p>
-                    <p className="font-display font-bold text-ink mt-1">{dbOpsLoading ? '…' : dbOps?.health?.sizeBytes != null ? `${(dbOps.health.sizeBytes / 1048576).toFixed(1)} MB` : '—'}</p>
-                    <p className="text-[11px] text-muted mt-0.5 truncate" title={dbOps?.health?.version ?? ''}>{dbOps?.health?.version ? dbOps.health.version.split(' ').slice(0, 2).join(' ') : 'pg_database_size'}</p>
+                  <div className="card p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <HardDrive className="text-accent" size={16} />
+                      <span className="mono-label text-[10px] uppercase text-muted">Size</span>
+                    </div>
+                    <p className="font-display text-lg font-bold text-ink">
+                      {dbOpsLoading ? '…' : dbOps?.health?.sizeBytes != null ? `${(dbOps.health.sizeBytes / 1048576).toFixed(1)} MB` : '—'}
+                    </p>
+                    <p className="text-xs text-muted mt-1 truncate" title={dbOps?.health?.version ?? ''}>
+                      {dbOps?.health?.version ? dbOps.health.version.split(' ').slice(0, 2).join(' ') : 'PostgreSQL'}
+                    </p>
                   </div>
-                  <div className="p-4 border border-line rounded-xl bg-bg/50">
-                    <p className="mono-label">Migrations</p>
-                    <p className={`font-display font-bold text-ink mt-1 ${dbOps?.migrations ? (dbOps.migrations.inSync ? 'text-success' : 'text-error') : ''}`}>{dbOpsLoading ? '…' : dbOps?.migrations ? (dbOps.migrations.inSync ? 'In sync' : `${dbOps.migrations.pendingCount} pending`) : '—'}</p>
-                    <p className="text-[11px] text-muted mt-0.5">{dbOps?.migrations ? `${dbOps.migrations.appliedCount} applied` : 'Prisma _prisma_migrations'}</p>
+                  <div className="card p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Table className="text-accent" size={16} />
+                      <span className="mono-label text-[10px] uppercase text-muted">Tables</span>
+                    </div>
+                    <p className="font-display text-lg font-bold text-ink">{dbTotalTables}</p>
+                    <p className="text-xs text-muted mt-1">{Number(dbTotalRecords).toLocaleString()} records</p>
+                  </div>
+                  <div className="card p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <RefreshCw className="text-accent" size={16} />
+                      <span className="mono-label text-[10px] uppercase text-muted">Migrations</span>
+                    </div>
+                    <p className={`font-display text-lg font-bold ${dbOps?.migrations ? (dbOps.migrations.inSync ? 'text-success' : 'text-error') : 'text-ink'}`}>
+                      {dbOpsLoading ? '…' : dbOps?.migrations ? (dbOps.migrations.inSync ? 'In sync' : `${dbOps.migrations.pendingCount} pending`) : '—'}
+                    </p>
+                    <p className="text-xs text-muted mt-1">{dbOps?.migrations ? `${dbOps.migrations.appliedCount} applied` : 'Prisma migrations'}</p>
+                  </div>
+                  <div className="card p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Server className="text-accent" size={16} />
+                      <span className="mono-label text-[10px] uppercase text-muted">Connections</span>
+                    </div>
+                    <p className="font-display text-lg font-bold text-ink">
+                      {dbOpsLoading ? '…' : dbOps?.connections ? dbOps.connections.total : '—'}
+                    </p>
+                    <p className="text-xs text-muted mt-1 truncate">
+                      {dbOps?.connections?.oldestConnection ? `Oldest ${new Date(dbOps.connections.oldestConnection).toLocaleTimeString()}` : 'pg_stat_activity'}
+                    </p>
                   </div>
                 </div>
 
                 {dbOps?.migrations && dbOps.migrations.pending.length > 0 && (
-                  <div className="p-4 border border-error/40 rounded-xl bg-error/5 space-y-1">
-                    <p className="text-sm font-medium text-ink">Pending migrations — run <span className="font-mono">npx prisma migrate deploy</span> on the server</p>
-                    {dbOps.migrations.pending.map(m => <p key={m} className="font-mono text-xs text-muted">{m}</p>)}
+                  <div className="card p-4 border-error/30 bg-error/5">
+                    <div className="flex items-center gap-2 mb-2">
+                      <AlertTriangle size={16} className="text-error" />
+                      <p className="font-display font-semibold text-ink">Pending migrations</p>
+                    </div>
+                    <p className="text-sm text-muted mb-3">
+                      Run <code className="font-mono text-xs bg-bg px-1.5 py-0.5 rounded border border-line">npx prisma migrate deploy</code> on the server.
+                    </p>
+                    <div className="space-y-1">
+                      {dbOps.migrations.pending.map(name => (
+                        <div key={name} className="font-mono text-xs text-ink bg-bg px-2 py-1 rounded border border-line">
+                          {name}
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
 
-                {dbOps?.migrations?.history?.length > 0 && (
+                <div className="card p-6">
+                  <h3 className="font-display font-semibold text-ink mb-4">Quick Actions</h3>
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                    {isSuperAdmin && (
+                      <>
+                        <button type="button" className="card p-4 hover:border-accent/40 transition-colors text-left" onClick={async () => { try { await databaseApi.backup(); toast('JSON backup downloaded', 'success'); } catch (e) { toast(e?.response?.data?.error?.message || 'Backup failed', 'error'); } }}>
+                          <div className="flex items-center gap-3">
+                            <div className="w-9 h-9 rounded-lg bg-success/10 text-success grid place-items-center">
+                              <Download size={18} />
+                            </div>
+                            <div>
+                              <p className="font-display font-semibold text-ink text-sm">JSON Backup</p>
+                              <p className="text-[11px] text-muted">Platform snapshot</p>
+                            </div>
+                          </div>
+                        </button>
+                        <button type="button" className="card p-4 hover:border-accent/40 transition-colors text-left" onClick={async () => { try { await databaseApi.dump(false); toast('SQL dump started', 'success'); } catch (e) { toast(e?.response?.data?.error?.message || 'Dump unavailable', 'error'); } }}>
+                          <div className="flex items-center gap-3">
+                            <div className="w-9 h-9 rounded-lg bg-accent/10 text-accent grid place-items-center">
+                              <Download size={18} />
+                            </div>
+                            <div>
+                              <p className="font-display font-semibold text-ink text-sm">SQL Dump</p>
+                              <p className="text-[11px] text-muted">Full schema + data</p>
+                            </div>
+                          </div>
+                        </button>
+                      </>
+                    )}
+                    {isAdmin && !isSuperAdmin && (
+                      <>
+                        <button type="button" className="card p-4 hover:border-accent/40 transition-colors text-left" onClick={async () => { try { await databaseApi.tenantBackup(); toast('Tenant JSON backup downloaded', 'success'); } catch (e) { toast(e?.response?.data?.error?.message || 'Backup failed', 'error'); } }}>
+                          <div className="flex items-center gap-3">
+                            <div className="w-9 h-9 rounded-lg bg-success/10 text-success grid place-items-center">
+                              <Download size={18} />
+                            </div>
+                            <div>
+                              <p className="font-display font-semibold text-ink text-sm">JSON Backup</p>
+                              <p className="text-[11px] text-muted">This tenant's snapshot</p>
+                            </div>
+                          </div>
+                        </button>
+                        <button type="button" className="card p-4 hover:border-accent/40 transition-colors text-left" onClick={async () => { try { await databaseApi.tenantDump(); toast('Tenant SQL dump downloaded', 'success'); } catch (e) { toast(e?.response?.data?.error?.message || 'Tenant dump failed', 'error'); } }}>
+                          <div className="flex items-center gap-3">
+                            <div className="w-9 h-9 rounded-lg bg-accent/10 text-accent grid place-items-center">
+                              <Download size={18} />
+                            </div>
+                            <div>
+                              <p className="font-display font-semibold text-ink text-sm">SQL Dump</p>
+                              <p className="text-[11px] text-muted">This tenant's data</p>
+                            </div>
+                          </div>
+                        </button>
+                      </>
+                    )}
+                    <button type="button" className="card p-4 hover:border-accent/40 transition-colors text-left" onClick={handleDbRefresh}>
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-lg bg-accent/10 text-accent grid place-items-center">
+                          <RefreshCw size={18} />
+                        </div>
+                        <div>
+                          <p className="font-display font-semibold text-ink text-sm">Refresh</p>
+                          <p className="text-[11px] text-muted">Reload all data</p>
+                        </div>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+
+                {isSuperAdmin && (
+                  <div className="card p-6">
+                    <h3 className="font-display font-semibold text-ink mb-4">Maintenance</h3>
+                    <p className="text-xs text-muted mb-4">Run database maintenance operations. These are safe for production when using CONCURRENTLY.</p>
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      <div className="p-4 border border-line rounded-xl bg-bg/50 space-y-3">
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-lg bg-accent/10 text-accent grid place-items-center">
+                            <RefreshCw size={16} />
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-ink">VACUUM</p>
+                            <p className="text-[11px] text-muted">Reclaim storage</p>
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <button type="button" className="btn btn-outline btn-sm flex-1" disabled={dbMaintenanceLoading.vacuumRun} onClick={() => handleMaintenance('vacuum', { table: '', analyze: false, verbose: false })}>
+                            {dbMaintenanceLoading.vacuumRun ? 'Running…' : 'Run'}
+                          </button>
+                          <button type="button" className="btn btn-outline btn-sm flex-1" disabled={dbMaintenanceLoading.vacuumAnalyze} onClick={() => handleMaintenance('vacuum', { table: '', analyze: true, verbose: false })}>
+                            {dbMaintenanceLoading.vacuumAnalyze ? 'Running…' : 'Analyze'}
+                          </button>
+                        </div>
+                      </div>
+                      <div className="p-4 border border-line rounded-xl bg-bg/50 space-y-3">
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-lg bg-success/10 text-success grid place-items-center">
+                            <Activity size={16} />
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-ink">ANALYZE</p>
+                            <p className="text-[11px] text-muted">Update statistics</p>
+                          </div>
+                        </div>
+                        <button type="button" className="btn btn-outline btn-sm w-full" disabled={dbMaintenanceLoading.analyze} onClick={() => handleMaintenance('analyze', { table: '' })}>
+                          {dbMaintenanceLoading.analyze ? 'Running…' : 'Run'}
+                        </button>
+                      </div>
+                      <div className="p-4 border border-line rounded-xl bg-bg/50 space-y-3">
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-lg bg-warning/10 text-warning grid place-items-center">
+                            <Zap size={16} />
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-ink">REINDEX</p>
+                            <p className="text-[11px] text-muted">Rebuild indexes</p>
+                          </div>
+                        </div>
+                        <button type="button" className="btn btn-outline btn-sm w-full" disabled={dbMaintenanceLoading.reindex} onClick={() => handleMaintenance('reindex', { table: '', concurrently: true })}>
+                          {dbMaintenanceLoading.reindex ? 'Running…' : 'Run Concurrently'}
+                        </button>
+                      </div>
+                    </div>
+                    {dbMaintenanceResult && (
+                      <div className={`mt-4 p-3 rounded-lg border ${dbMaintenanceResult.success ? 'border-success/30 bg-success/5' : 'border-error/30 bg-error/5'}`}>
+                        <p className="text-sm text-ink">
+                          {dbMaintenanceResult.success ? 'Maintenance completed' : 'Maintenance failed'}
+                          {dbMaintenanceResult.result?.sql && <span className="font-mono text-xs text-muted ml-2">{dbMaintenanceResult.result.sql}</span>}
+                        </p>
+                        {dbMaintenanceResult.error && <p className="text-xs text-error mt-1">{dbMaintenanceResult.error}</p>}
+                      </div>
+                    )}
+                  </div>
+                )}
+                {!isSuperAdmin && (
+                  <div className="card p-6">
+                    <h3 className="font-display font-semibold text-ink mb-2">Maintenance</h3>
+                    <p className="text-xs text-muted">Database maintenance operations are restricted to SUPER_ADMIN users.</p>
+                  </div>
+                )}
+
+                {isSuperAdmin && (
+                  <div className="card p-6">
+                    <h3 className="font-display font-semibold text-ink mb-4">Backup & Restore</h3>
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      <button type="button" className="card p-4 hover:border-accent/40 transition-colors text-left" onClick={async () => { try { await databaseApi.backup(); toast('JSON backup downloaded', 'success'); } catch (e) { toast(e?.response?.data?.error?.message || 'Backup failed', 'error'); } }}>
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-lg bg-success/10 text-success grid place-items-center">
+                            <Download size={18} />
+                          </div>
+                          <div>
+                            <p className="font-display font-semibold text-ink text-sm">JSON Backup</p>
+                            <p className="text-[11px] text-muted">Platform snapshot</p>
+                          </div>
+                        </div>
+                      </button>
+                      <button type="button" className="card p-4 hover:border-accent/40 transition-colors text-left" onClick={async () => { try { await databaseApi.dump(false); toast('SQL dump started', 'success'); } catch (e) { toast(e?.response?.data?.error?.message || 'Dump unavailable', 'error'); } }}>
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-lg bg-accent/10 text-accent grid place-items-center">
+                            <Download size={18} />
+                          </div>
+                          <div>
+                            <p className="font-display font-semibold text-ink text-sm">SQL Dump</p>
+                            <p className="text-[11px] text-muted">Full schema + data</p>
+                          </div>
+                        </div>
+                      </button>
+                      <button type="button" className="card p-4 hover:border-accent/40 transition-colors text-left" onClick={async () => { try { await databaseApi.dump(true); toast('Data-only dump started', 'success'); } catch (e) { toast(e?.response?.data?.error?.message || 'Dump unavailable', 'error'); } }}>
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-lg bg-warning/10 text-warning grid place-items-center">
+                            <Upload size={18} />
+                          </div>
+                          <div>
+                            <p className="font-display font-semibold text-ink text-sm">Data Only</p>
+                            <p className="text-[11px] text-muted">Exclude schema</p>
+                          </div>
+                        </div>
+                      </button>
+                    </div>
+                    <p className="text-xs text-muted mt-3">SQL dumps are restorable via pg_dump. JSON backups are portable and have sensitive fields stripped.</p>
+                  </div>
+                )}
+                {isAdmin && !isSuperAdmin && (
+                  <div className="card p-6">
+                    <h3 className="font-display font-semibold text-ink mb-4">Backup & Restore</h3>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <button type="button" className="card p-4 hover:border-accent/40 transition-colors text-left" onClick={async () => { try { await databaseApi.tenantBackup(); toast('Tenant JSON backup downloaded', 'success'); } catch (e) { toast(e?.response?.data?.error?.message || 'Backup failed', 'error'); } }}>
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-lg bg-success/10 text-success grid place-items-center">
+                            <Download size={18} />
+                          </div>
+                          <div>
+                            <p className="font-display font-semibold text-ink text-sm">JSON Backup</p>
+                            <p className="text-[11px] text-muted">Tenant snapshot</p>
+                          </div>
+                        </div>
+                      </button>
+                      <button type="button" className="card p-4 hover:border-accent/40 transition-colors text-left" onClick={async () => { try { await databaseApi.tenantDump(); toast('Tenant SQL dump downloaded', 'success'); } catch (e) { toast(e?.response?.data?.error?.message || 'Tenant dump failed', 'error'); } }}>
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-lg bg-accent/10 text-accent grid place-items-center">
+                            <Download size={18} />
+                          </div>
+                          <div>
+                            <p className="font-display font-semibold text-ink text-sm">SQL Dump</p>
+                            <p className="text-[11px] text-muted">Tenant data only</p>
+                          </div>
+                        </div>
+                      </button>
+                    </div>
+                    <p className="text-xs text-muted mt-3">JSON backups are portable with sensitive fields stripped. SQL dumps are portable INSERT statements.</p>
+                  </div>
+                )}
+
+                {isSuperAdmin && (
+                <div className="card p-6">
+                  <h3 className="font-display font-semibold text-ink mb-4">Query Console</h3>
+                  <p className="text-xs text-muted mb-3">Read-only SQL console. Single SELECT/WITH statements only, capped at 200 rows.</p>
+                  <div className="space-y-3">
+                    <textarea value={dbSql} onChange={e => setDbSql(e.target.value)} rows={3} spellCheck={false} className="input font-mono text-xs w-full" aria-label="SQL query" placeholder="SELECT * FROM &quot;User&quot; LIMIT 10" />
+                    <div className="flex gap-2">
+                      <button type="button" className="btn btn-primary btn-sm gap-2" disabled={dbSqlBusy} onClick={async () => { setDbSqlBusy(true); try { setDbSqlResult(await databaseApi.query(dbSql, false)); } catch (e) { toast(e?.response?.data?.error?.message || 'Query failed', 'error'); setDbSqlResult(null); } setDbSqlBusy(false); }}>
+                        {dbSqlBusy ? 'Running…' : 'Run'}
+                      </button>
+                      <button type="button" className="btn btn-outline btn-sm gap-2" disabled={dbSqlBusy} onClick={async () => { setDbSqlBusy(true); try { setDbSqlResult(await databaseApi.query(dbSql, true)); } catch (e) { toast(e?.response?.data?.error?.message || 'Explain failed', 'error'); } setDbSqlBusy(false); }}>
+                        Explain
+                      </button>
+                    </div>
+                    {dbSqlResult?.explain && (
+                      <pre className="text-[11px] font-mono overflow-auto max-h-48 bg-bg/60 border border-line rounded-lg p-3">
+                        {JSON.stringify(dbSqlResult.explain, null, 2)}
+                      </pre>
+                    )}
+                    {dbSqlResult?.rows && (
+                      <div className="overflow-auto max-h-80 border border-line rounded-lg">
+                        <table className="data-table">
+                          <thead>
+                            <tr>{Object.keys(dbSqlResult.rows[0] || {}).map(c => <th key={c}>{c}</th>)}</tr>
+                          </thead>
+                          <tbody>
+                            {dbSqlResult.rows.map((r, i) => (
+                              <tr key={i}>
+                                {Object.values(r).map((v, j) => (
+                                  <td key={j} className="font-mono text-xs">{v == null ? '—' : String(v).slice(0, 120)}</td>
+                                ))}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                        <p className="mono-label p-2 text-xs border-t border-line">
+                          {dbSqlResult.count} rows · {dbSqlResult.ms}ms · capped
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                )}
+
+                {isSuperAdmin && (
+                <div className="grid lg:grid-cols-2 gap-4">
+                  <div className="p-4 border border-line rounded-xl bg-bg/50 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-medium text-ink">Retention</p>
+                      <label className="flex items-center gap-2 text-xs text-muted">Older than <input type="number" min={1} max={3650} value={dbRetentionDays} onChange={e => setDbRetentionDays(Number(e.target.value))} className="input w-20" /> days
+                        <button type="button" className="btn btn-ghost btn-sm" onClick={async () => { try { setDbRetention(await databaseApi.retention(dbRetentionDays)); } catch { toast('Retention check failed', 'error'); } }}>Preview</button>
+                      </label>
+                    </div>
+                    {dbRetention ? (
+                      <ul className="text-xs space-y-1.5">
+                        <li className="flex items-center justify-between gap-2"><span className="text-muted">Login events · {dbRetention.candidates.loginEvents}</span><button type="button" className="btn btn-ghost btn-sm text-xs" disabled={!dbRetention.candidates.loginEvents} onClick={() => setDbPurgeTarget('loginEvents')}>Purge</button></li>
+                        <li className="flex items-center justify-between gap-2"><span className="text-muted">Revoked sessions · {dbRetention.candidates.revokedSessions}</span><button type="button" className="btn btn-ghost btn-sm text-xs" disabled={!dbRetention.candidates.revokedSessions} onClick={() => setDbPurgeTarget('revokedSessions')}>Purge</button></li>
+                        <li className="flex items-center justify-between gap-2"><span className="text-muted">Audit logs · {dbRetention.candidates.auditLogs === -1 ? 'n/a' : dbRetention.candidates.auditLogs} <span className="mono-label">(preview only)</span></span></li>
+                        <li className="flex items-center justify-between gap-2"><span className="text-muted">Soft-deleted employees · {dbRetention.candidates.softDeletedEmployees} <span className="mono-label">(restore via Employees)</span></span></li>
+                      </ul>
+                    ) : <p className="text-xs text-muted">{dbOpsLoading ? 'Checking…' : 'No preview yet.'}</p>}
+                  </div>
+
+                  <div className="p-4 border border-line rounded-xl bg-bg/50 space-y-2">
+                    <p className="text-sm font-medium text-ink">CSV import {dbSelectedTable && <span className="text-muted font-normal">→ {dbSelectedTable.label}</span>}</p>
+                    {!dbSelectedTable
+                      ? <p className="text-xs text-muted">Select a table below first.</p>
+                      : dbSelectedTable.readOnly
+                        ? <p className="text-xs text-muted">Table is read-only.</p>
+                        : <>
+                            <div className="rounded-lg border border-dashed border-line px-3 py-4 text-center space-y-1.5 transition-colors"
+                                 onDragOver={e => { e.preventDefault(); e.stopPropagation(); e.currentTarget.classList.add('border-ink/40'); }}
+                                 onDragLeave={e => { e.preventDefault(); e.currentTarget.classList.remove('border-ink/40'); }}
+                                 onDrop={e => { e.preventDefault(); e.stopPropagation(); e.currentTarget.classList.remove('border-ink/40'); handleDbImportFile(e.dataTransfer.files?.[0]); }}>
+                              <p className="text-xs text-muted">Drop a <span className="font-mono">.csv</span> file here</p>
+                              <label className="btn btn-ghost btn-sm cursor-pointer inline-flex">
+                                choose file
+                                <input type="file" accept=".csv,text/csv" className="hidden" onChange={e => { handleDbImportFile(e.target.files?.[0]); e.target.value = ''; }} />
+                              </label>
+                              {dbImportFileName && (
+                                <p className="mono-label text-xs text-ink truncate max-w-full px-2">{dbImportFileName}</p>
+                              )}
+                            </div>
+                            <textarea value={dbImportText} onChange={e => { setDbImportText(e.target.value); setDbImportResult(null); }} rows={3} spellCheck={false} placeholder="…or paste CSV here (header1,header2 &#10;val1,val2)" className="input font-mono text-xs w-full" aria-label="CSV text" />
+                            <div className="flex gap-2">
+                              <button type="button" className="btn btn-ghost btn-sm" disabled={dbImportBusy || !dbImportText.trim()} onClick={async () => { setDbImportBusy(true); try { setDbImportResult(await databaseApi.importCsv(dbSelectedTable.name, dbImportText, true)); } catch (e) { toast(e?.response?.data?.error?.message || 'Validation failed', 'error'); } setDbImportBusy(false); }}>Dry-run</button>
+                              <button type="button" className="btn btn-primary btn-sm" disabled={dbImportBusy || !dbImportResult?.dryRun} onClick={async () => { setDbImportBusy(true); try { const r = await databaseApi.importCsv(dbSelectedTable.name, dbImportText, false); setDbImportResult(r); toast(`Inserted ${r.inserted}`, 'success'); handleDbRefresh(); } catch (e) { toast(e?.response?.data?.error?.message || 'Import failed', 'error'); } setDbImportBusy(false); }}>Commit</button>
+                            </div>
+                            {dbImportResult && (
+                              <div className="text-xs">
+                                {dbImportResult.dryRun
+                                  ? <p className="text-muted">{dbImportResult.rowCount} rows · columns: <span className="font-mono">{dbImportResult.columns.join(', ')}</span> · preview {dbImportResult.preview.length} shown</p>
+                                  : <p className="text-muted">Inserted {dbImportResult.inserted} · failed {dbImportResult.failed}{dbImportResult.skipped > 0 && ` · skipped ${dbImportResult.skipped}`}{dbImportResult.errors?.length > 0 && ` · row ${dbImportResult.errors[0].row}: ${dbImportResult.errors[0].message}`}</p>}
+                              </div>
+                            )}
+                          </>}
+                  </div>
+                </div>
+                )}
+                {isSuperAdmin && (
+                <div className="p-4 border border-line rounded-xl bg-bg/50">
+                  <p className="text-sm font-medium text-ink mb-2">Slow queries {dbSlow && !dbSlow.available && <span className="mono-label font-normal">· {dbSlow.hint}</span>}</p>
+                  {dbSlow?.available ? (
+                    <div className="overflow-auto max-h-56">
+                      <table className="data-table">
+                        <thead><tr><th>Query</th><th className="text-right">Calls</th><th className="text-right">Total ms</th><th className="text-right">Mean ms</th><th className="text-right">%</th></tr></thead>
+                        <tbody>{dbSlow.queries.map((q, i) => <tr key={i}><td className="font-mono text-xs max-w-md truncate" title={q.query}>{q.query}</td><td className="font-mono text-xs text-right">{q.calls}</td><td className="font-mono text-xs text-right">{q.totalMs}</td><td className="font-mono text-xs text-right">{q.meanMs}</td><td className="font-mono text-xs text-right">{q.pct}</td></tr>)}</tbody>
+                      </table>
+                    </div>
+                  ) : <p className="text-xs text-muted">{dbOpsLoading ? 'Checking…' : 'pg_stat_statements not enabled — run CREATE EXTENSION pg_stat_statements; in Postgres.'}</p>}
+                </div>
+                )}
+
+                {isSuperAdmin && dbOps?.migrations?.history?.length > 0 && (
                   <details className="p-4 border border-line rounded-xl bg-bg/50">
                     <summary className="text-sm font-medium text-ink cursor-pointer">
                       Migration history · {dbOps.migrations.appliedCount} applied
@@ -583,121 +1028,80 @@ export default function Settings() {
                   </details>
                 )}
 
-                <div className="flex flex-wrap gap-2 items-center">
-                  <button className="btn btn-ghost btn-sm gap-2" onClick={() => { databaseApi.backup(); toast('Backup download started', 'success'); }}><Download size={14}/> Full JSON backup</button>
-                  <button className="btn btn-ghost btn-sm gap-2" onClick={async () => { try { await databaseApi.dump(false); toast('SQL dump download started', 'success'); } catch (e) { toast(e?.response?.data?.error?.message || 'Dump unavailable', 'error'); } }}><Download size={14}/> SQL dump</button>
-                  <button className="btn btn-ghost btn-sm gap-2" onClick={async () => { try { await databaseApi.dump(true); toast('Data-only dump started', 'success'); } catch (e) { toast(e?.response?.data?.error?.message || 'Dump unavailable', 'error'); } }}><Download size={14}/> Data only</button>
-                  <span className="mono-label">restorable .sql via pg_dump · JSON is portable + stripped</span>
-                </div>
-
-                <div className="grid lg:grid-cols-2 gap-4">
-                  <div className="p-4 border border-line rounded-xl bg-bg/50 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm font-medium text-ink">Query console <span className="mono-label">read-only · SELECT/WITH · 200 rows</span></p>
-                      <div className="flex gap-2">
-                        <button className="btn btn-ghost btn-sm" disabled={dbSqlBusy} onClick={async () => { setDbSqlBusy(true); try { setDbSqlResult(await databaseApi.query(dbSql, false)); } catch (e) { toast(e?.response?.data?.error?.message || 'Query failed', 'error'); setDbSqlResult(null); } setDbSqlBusy(false); }}>Run</button>
-                        <button className="btn btn-ghost btn-sm" disabled={dbSqlBusy} onClick={async () => { setDbSqlBusy(true); try { setDbSqlResult(await databaseApi.query(dbSql, true)); } catch (e) { toast(e?.response?.data?.error?.message || 'Explain failed', 'error'); } setDbSqlBusy(false); }}>Explain</button>
-                      </div>
-                    </div>
-                    <textarea value={dbSql} onChange={e => setDbSql(e.target.value)} rows={3} spellCheck={false} className="input font-mono text-xs w-full" aria-label="SQL query" />
-                    {dbSqlResult?.explain && <pre className="text-[11px] font-mono overflow-auto max-h-48 bg-bg/60 border border-line rounded-lg p-2">{JSON.stringify(dbSqlResult.explain, null, 1)}</pre>}
-                    {dbSqlResult?.rows && (
-                      <div className="overflow-auto max-h-56 border border-line rounded-lg">
-                        <table className="data-table">
-                          <thead><tr>{Object.keys(dbSqlResult.rows[0] || {}).map(c => <th key={c}>{c}</th>)}</tr></thead>
-                          <tbody>{dbSqlResult.rows.map((r, i) => <tr key={i}>{Object.values(r).map((v, j) => <td key={j} className="font-mono text-xs">{v == null ? '—' : String(v).slice(0, 80)}</td>)}</tr>)}</tbody>
-                        </table>
-                        <p className="mono-label p-2">{dbSqlResult.count} rows · {dbSqlResult.ms}ms · capped</p>
-                      </div>
-                    )}
+                <div className="card p-6">
+                  <h3 className="font-display font-semibold text-ink mb-4">Browse Tables</h3>
+                  <div className="mb-4">
+                    <input
+                      value={dbSearch}
+                      onChange={e => setDbSearch(e.target.value)}
+                      placeholder="Search tables…"
+                      aria-label="Filter tables"
+                      className="input w-full max-w-xs"
+                    />
                   </div>
-
-                  <div className="space-y-4">
-                    <div className="p-4 border border-line rounded-xl bg-bg/50 space-y-2">
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="text-sm font-medium text-ink">Retention</p>
-                        <label className="flex items-center gap-2 text-xs text-muted">Older than <input type="number" min={1} max={3650} value={dbRetentionDays} onChange={e => setDbRetentionDays(Number(e.target.value))} className="input w-20" /> days
-                          <button className="btn btn-ghost btn-sm" onClick={async () => { try { setDbRetention(await databaseApi.retention(dbRetentionDays)); } catch { toast('Retention check failed', 'error'); } }}>Preview</button>
-                        </label>
-                      </div>
-                      {dbRetention ? (
-                        <ul className="text-xs space-y-1.5">
-                          <li className="flex items-center justify-between gap-2"><span className="text-muted">Login events · {dbRetention.candidates.loginEvents}</span><button className="btn btn-ghost btn-sm text-xs" disabled={!dbRetention.candidates.loginEvents} onClick={() => setDbPurgeTarget('loginEvents')}>Purge</button></li>
-                          <li className="flex items-center justify-between gap-2"><span className="text-muted">Revoked sessions · {dbRetention.candidates.revokedSessions}</span><button className="btn btn-ghost btn-sm text-xs" disabled={!dbRetention.candidates.revokedSessions} onClick={() => setDbPurgeTarget('revokedSessions')}>Purge</button></li>
-                          <li className="flex items-center justify-between gap-2"><span className="text-muted">Audit logs · {dbRetention.candidates.auditLogs === -1 ? 'n/a' : dbRetention.candidates.auditLogs} <span className="mono-label">(preview only)</span></span></li>
-                          <li className="flex items-center justify-between gap-2"><span className="text-muted">Soft-deleted employees · {dbRetention.candidates.softDeletedEmployees} <span className="mono-label">(restore via Employees)</span></span></li>
-                        </ul>
-                      ) : <p className="text-xs text-muted">{dbOpsLoading ? 'Checking…' : 'No preview yet.'}</p>}
+                  {dbError && <p className="text-error text-sm mb-3">{dbError}</p>}
+                  {dbLoading ? (
+                    <p className="text-sm text-muted">Loading tables…</p>
+                  ) : (
+                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                      {dbTables
+                        .filter(t => !dbSearch.trim() || t.label.toLowerCase().includes(dbSearch.trim().toLowerCase()) || t.name.toLowerCase().includes(dbSearch.trim().toLowerCase()))
+                        .map(t => (
+                          <button
+                            key={t.name}
+                            onClick={() => handleDbTableSelect(t)}
+                            className={`card p-4 text-left border cursor-pointer transition ${dbSelectedTable?.name === t.name ? 'border-accent bg-accent/5' : 'border-line hover:bg-bg/60'}`}
+                          >
+                            <div className="flex items-center justify-between mb-2 gap-2">
+                              <p className="font-medium text-ink truncate">{t.label}</p>
+                              <span className="flex items-center gap-1.5 shrink-0">
+                                {t.readOnly && <span className="badge mono-label">read-only</span>}
+                                <span className="badge mono-label">{t.count !== undefined ? (t.count === -1 ? '—' : t.count) : (t.rowCount === -1 ? '—' : t.rowCount)}</span>
+                              </span>
+                            </div>
+                            <p className="text-xs text-muted">{t.description}</p>
+                            <p className="mono-label text-[10px] mt-1">{t.name}</p>
+                          </button>
+                        ))}
+                      {dbTables.length === 0 && (
+                        <p className="text-sm text-muted col-span-full">No tables found.</p>
+                      )}
                     </div>
-
-                    <div className="p-4 border border-line rounded-xl bg-bg/50 space-y-2">
-                      <p className="text-sm font-medium text-ink">CSV import {dbSelectedTable && <span className="text-muted font-normal">→ {dbSelectedTable.label}</span>}</p>
-                      {!dbSelectedTable
-                        ? <p className="text-xs text-muted">Select a table below first.</p>
-                        : dbSelectedTable.readOnly
-                          ? <p className="text-xs text-muted">Table is read-only.</p>
-                          : <>
-                              <textarea value={dbImportText} onChange={e => { setDbImportText(e.target.value); setDbImportResult(null); }} rows={3} spellCheck={false} placeholder="header1,header2&#10;val1,val2" className="input font-mono text-xs w-full" aria-label="CSV text" />
-                              <div className="flex gap-2">
-                                <button className="btn btn-ghost btn-sm" disabled={dbImportBusy || !dbImportText.trim()} onClick={async () => { setDbImportBusy(true); try { setDbImportResult(await databaseApi.importCsv(dbSelectedTable.name, dbImportText, true)); } catch (e) { toast(e?.response?.data?.error?.message || 'Validation failed', 'error'); } setDbImportBusy(false); }}>Dry-run</button>
-                                <button className="btn btn-primary btn-sm" disabled={dbImportBusy || !dbImportResult?.dryRun} onClick={async () => { setDbImportBusy(true); try { const r = await databaseApi.importCsv(dbSelectedTable.name, dbImportText, false); setDbImportResult(r); toast(`Inserted ${r.inserted}`, 'success'); handleDbRefresh(); } catch (e) { toast(e?.response?.data?.error?.message || 'Import failed', 'error'); } setDbImportBusy(false); }}>Commit</button>
-                              </div>
-                              {dbImportResult && (
-                                <div className="text-xs">
-                                  {dbImportResult.dryRun
-                                    ? <p className="text-muted">{dbImportResult.rowCount} rows · columns: <span className="font-mono">{dbImportResult.columns.join(', ')}</span> · preview {dbImportResult.preview.length} shown</p>
-                                    : <p className="text-muted">Inserted {dbImportResult.inserted} · failed {dbImportResult.failed}{dbImportResult.errors?.length > 0 && ` · row ${dbImportResult.errors[0].row}: ${dbImportResult.errors[0].message}`}</p>}
-                                </div>
-                              )}
-                            </>}
-                    </div>
-                  </div>
+                  )}
                 </div>
-
-                <div className="p-4 border border-line rounded-xl bg-bg/50">
-                  <p className="text-sm font-medium text-ink mb-2">Slow queries {dbSlow && !dbSlow.available && <span className="mono-label font-normal">· {dbSlow.hint}</span>}</p>
-                  {dbSlow?.available ? (
-                    <div className="overflow-auto max-h-56">
-                      <table className="data-table">
-                        <thead><tr><th>Query</th><th className="text-right">Calls</th><th className="text-right">Total ms</th><th className="text-right">Mean ms</th><th className="text-right">%</th></tr></thead>
-                        <tbody>{dbSlow.queries.map((q, i) => <tr key={i}><td className="font-mono text-xs max-w-md truncate" title={q.query}>{q.query}</td><td className="font-mono text-xs text-right">{q.calls}</td><td className="font-mono text-xs text-right">{q.totalMs}</td><td className="font-mono text-xs text-right">{q.meanMs}</td><td className="font-mono text-xs text-right">{q.pct}</td></tr>)}</tbody>
-                      </table>
-                    </div>
-                  ) : <p className="text-xs text-muted">{dbOpsLoading ? 'Checking…' : 'pg_stat_statements not enabled — run CREATE EXTENSION pg_stat_statements; in Postgres.'}</p>}
-                </div>
-
-                {dbLoading ? (
-                  <p className="text-sm text-muted">Loading tables…</p>
-                ) : (
-                  <div className="grid md:grid-cols-3 gap-4">
-                    {dbTables.filter(t => !dbSearch.trim() || t.label.toLowerCase().includes(dbSearch.trim().toLowerCase()) || t.name.toLowerCase().includes(dbSearch.trim().toLowerCase())).map(t => (
-                      <button key={t.name} onClick={() => handleDbTableSelect(t)} className={`card p-4 text-left border cursor-pointer transition ${dbSelectedTable?.name === t.name ? 'border-accent bg-accent/5' : 'border-line hover:bg-bg/60'}`}>
-                        <div className="flex items-center justify-between mb-2 gap-2">
-                          <p className="font-medium text-ink truncate">{t.label}</p>
-                          <span className="flex items-center gap-1.5 shrink-0">
-                            {t.readOnly && <span className="badge mono-label">read-only</span>}
-                            <span className="badge mono-label">{t.count !== undefined ? (t.count === -1 ? '—' : t.count) : (t.rowCount === -1 ? '—' : t.rowCount)}</span>
-                          </span>
-                        </div>
-                        <p className="text-xs text-muted">{t.description}</p>
-                        <p className="mono-label text-[10px] mt-1">{t.name}</p>
-                      </button>
-                    ))}
-                  </div>
-                )}
 
                 {dbSelectedTable && dbTableSchema && (
-                  <div className="mt-6 card p-4">
-                    <div className="flex items-center justify-between mb-3">
-                      <h3 className="font-display font-semibold text-ink flex items-center gap-2"><Table size={16}/> {dbSelectedTable.label}</h3>
-                      <div className="flex items-center gap-3 text-xs text-muted">
-                        <span>{dbRecordCount} total records</span>
-                        <button className="btn btn-ghost btn-sm" onClick={handleDbPrev} disabled={dbBrowseSkip === 0}>?</button>
-                        <button className="btn btn-ghost btn-sm" onClick={handleDbNext} disabled={dbBrowseSkip + dbBrowseTake >= dbRecordCount}>?</button>
-                      </div>
+                  <div className="card p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="font-display font-semibold text-ink flex items-center gap-2">
+                        <Table size={16} /> {dbSelectedTable.label}
+                      </h3>
+                       <div className="flex items-center gap-3">
+                         <span className="text-xs text-muted">{dbRecordCount} total records</span>
+                         {isSuperAdmin && dbSelectedTable && !dbSelectedTable.readOnly && (
+                           <button type="button" className="btn btn-ghost btn-sm gap-2" onClick={() => setShowDbCreateModal(true)} disabled={!dbTableSchema}><Plus size={14}/> Add Record</button>
+                         )}
+                         {dbSelectedTable && !dbSelectedTable.readOnly && (
+                           <>
+                             <button type="button" className="btn btn-ghost btn-sm gap-2" onClick={() => handleDbExport("csv")}><Download size={14}/> CSV</button>
+                             <button type="button" className="btn btn-ghost btn-sm gap-2" onClick={() => handleDbExport("json")}><Download size={14}/> JSON</button>
+                           </>
+                         )}
+                         {dbRecords.length > 3 && (
+                           <button type="button" className="btn btn-ghost btn-sm" onClick={() => setDbShowAllRows(!dbShowAllRows)}>
+                             {dbShowAllRows ? 'Collapse' : `Show all (${dbRecordCount})`}
+                           </button>
+                         )}
+                         <button type="button" className="btn btn-ghost btn-sm" onClick={handleDbPrev} disabled={dbBrowseSkip === 0}>
+                           <ChevronLeft size={16} />
+                         </button>
+                         <button type="button" className="btn btn-ghost btn-sm" onClick={handleDbNext} disabled={dbBrowseSkip + dbBrowseTake >= dbRecordCount}>
+                           <ChevronRight size={16} />
+                         </button>
+                       </div>
                     </div>
 
-                    <div className="overflow-x-auto">
+                    <div className="overflow-x-auto border border-line rounded-lg">
                       <table className="data-table w-full">
                         <thead>
                           <tr>
@@ -706,7 +1110,7 @@ export default function Settings() {
                           </tr>
                         </thead>
                         <tbody>
-                          {dbRecords.map(rec => (
+                          {(dbShowAllRows ? dbRecords : dbRecords.slice(0, 3)).map(rec => (
                             <tr key={rec.id}>
                               {dbTableSchema.map(col => (
                                 <td key={col.column_name} className="font-mono text-xs">
@@ -718,27 +1122,40 @@ export default function Settings() {
                               <td className="text-center">
                                 {dbSelectedTable.readOnly ? (
                                   <span className="mono-label text-[10px]">locked</span>
-                                ) : (
-                                  <>
-                                    <button className="btn btn-ghost btn-sm text-xs" onClick={() => { setDbEditingRecord(rec); setDbCreateForm({ ...rec }); setShowDbEditModal(true); }}>
-                                      <Pencil size={14}/> Edit
+                                ) : isSuperAdmin ? (
+                                  <span className="inline-flex gap-1">
+                                    <button type="button" className="btn btn-ghost btn-sm text-xs" onClick={() => { setDbEditingRecord(rec); setDbCreateForm({ ...rec }); setShowDbEditModal(true); }}>
+                                      <Pencil size={14} /> Edit
                                     </button>
-                                    <button className="btn btn-ghost btn-sm text-xs text-error" onClick={async () => {
+                                    <button type="button" className="btn btn-ghost btn-sm text-xs text-error" onClick={async () => {
                                       try {
                                         const deps = await databaseApi.dependents(dbSelectedTable.name, rec.id);
                                         setDbDeps({ table: dbSelectedTable, record: rec, ...deps });
                                       } catch { setShowDeleteConfirm({ table: dbSelectedTable, record: rec }); }
                                       setDbImportResult(null);
                                     }}>
-                                      <Trash2 size={14}/> Delete
+                                      <Trash2 size={14} /> Delete
                                     </button>
-                                  </>
+                                  </span>
+                                ) : (
+                                  <span className="mono-label text-[10px]">read-only</span>
                                 )}
                               </td>
                             </tr>
                           ))}
                           {dbRecords.length === 0 && (
-                            <tr><td colSpan={dbTableSchema.length + 1} className="text-muted text-sm py-6 text-center">No records</td></tr>
+                            <tr>
+                              <td colSpan={dbTableSchema.length + 1} className="text-muted text-sm py-8 text-center">No records found in this table.</td>
+                            </tr>
+                          )}
+                          {!dbShowAllRows && dbRecords.length > 3 && (
+                            <tr>
+                              <td colSpan={dbTableSchema.length + 1} className="text-center py-2">
+                                <button type="button" className="btn btn-ghost btn-sm" onClick={() => setDbShowAllRows(true)}>
+                                  Show all {dbRecordCount} rows
+                                </button>
+                              </td>
+                            </tr>
                           )}
                         </tbody>
                       </table>

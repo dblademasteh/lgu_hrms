@@ -1,11 +1,11 @@
-﻿import { promises as fs } from 'fs';
+import { promises as fs } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { execFile } from 'child_process';
 import { prisma } from '../lib/prisma.js';
 import { withTenant, stampTenant } from '../middleware/tenant.js';
 
-// Tables that are safe to inspect — synced with prisma/schema.prisma (42 models).
+// Tables that are safe to inspect � synced with prisma/schema.prisma (42 models).
 // Audit-adjacent tables are read-only: the trail must stay append-only.
 const MANAGED_TABLES = [
   { name: 'User', label: 'Users', description: 'System users with roles and auth' },
@@ -128,17 +128,29 @@ export const databaseController = {
     const takeNum = Math.min(100, Math.max(1, Number(take)));
     const orderStr = order.toLowerCase() === 'asc' ? 'asc' : 'desc';
 
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(orderBy)) {
+      return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: `Invalid orderBy field: ${orderBy}` } });
+    }
+
     const model = delegate(name);
     const where = withTenant(req);
-    const [data, count] = await Promise.all([
-      model.findMany({
-        where,
-        skip: skipNum,
-        take: takeNum,
-        orderBy: { [orderBy]: orderStr },
-      }),
-      model.count({ where }),
-    ]);
+    let data = [], count = 0;
+    try {
+      [data, count] = await Promise.all([
+        model.findMany({
+          where,
+          skip: skipNum,
+          take: takeNum,
+          orderBy: { [orderBy]: orderStr },
+        }),
+        model.count({ where }),
+      ]);
+    } catch (e) {
+      if (/unknown argument/i.test(e?.message || '')) {
+        return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: `Invalid orderBy field: ${orderBy}` } });
+      }
+      throw e;
+    }
 
     res.json({ data: data.map(_filterSensitive), count, skip: skipNum, take: takeNum });
   },
@@ -149,8 +161,13 @@ export const databaseController = {
     if (!isManaged(name)) {
       return res.status(400).json({ error: `Unknown table: ${name}` });
     }
-    const where = withTenant(req, { id: Number(id) || id });
-    const record = await delegate(name).findFirst({ where });
+    let record;
+    try {
+      record = await delegate(name).findFirst({ where: withTenant(req, { id: Number(id) || id }) });
+    } catch (e) {
+      if (e?.name !== 'PrismaClientValidationError') throw e;
+      record = await delegate(name).findFirst({ where: withTenant(req, { id }) });
+    }
     if (!record) return res.status(404).json({ error: 'Record not found' });
     res.json(_filterSensitive(record));
   },
@@ -227,6 +244,9 @@ export const databaseController = {
       res.status(204).send();
     } catch (e) {
       if (e.code === 'P2025') return res.status(404).json({ error: 'Record not found' });
+      if (e.code === 'P2003') {
+        return res.status(409).json({ error: { code: 'FK_CONSTRAINT', message: `Cannot delete: record is referenced by ${e.meta?.field_name || 'other records'}` } });
+      }
       throw e;
     }
   },
@@ -349,6 +369,69 @@ export const databaseController = {
     } catch (e) { next(e); }
   },
 
+  // Tenant-scoped SQL dump (INSERT statements) for ADMIN users.
+  // Generates portable .sql from the current tenant's managed tables only.
+  async tenantDump(req, res, next) {
+    try {
+      const tables = {};
+      for (const t of MANAGED_TABLES) {
+        try {
+          const rows = await delegate(t.name).findMany({ where: withTenant(req) });
+          tables[t.name] = rows.map(r => _filterSensitive(r));
+        } catch {
+          tables[t.name] = [];
+        }
+      }
+      const lines = [`-- LGU-HRMS tenant dump: ${new Date().toISOString()}\n-- Tenant: ${req.tenantId || 'all'}\nBEGIN;\n`];
+      for (const [table, rows] of Object.entries(tables)) {
+        if (!rows.length) continue;
+        const cols = Object.keys(rows[0]);
+        for (const row of rows) {
+          const vals = cols.map(c => {
+            const v = row[c];
+            if (v === null || v === undefined) return 'NULL';
+            if (typeof v === 'number') return String(v);
+            if (typeof v === 'boolean') return v ? 'TRUE' : 'FALSE';
+            if (v instanceof Date) return `'${v.toISOString()}'`;
+            return `'${String(v).replace(/'/g, "''")}'`;
+          });
+          lines.push(`INSERT INTO "${table}" (${cols.map(c => `"${c}"`).join(', ')}) VALUES (${vals.join(', ')});\n`);
+        }
+      }
+      lines.push('COMMIT;\n');
+      const stamp = new Date().toISOString().slice(0, 10);
+      res.setHeader('Content-Type', 'application/sql');
+      res.setHeader('Content-Disposition', `attachment; filename="tenant-dump-${stamp}.sql"`);
+      res.send(lines.join(''));
+    } catch (e) { next(e); }
+  },
+
+  // Tenant-scoped JSON backup for ADMIN users.
+  // Identical to backup() but filtered to the current tenant.
+  async tenantBackup(req, res, next) {
+    try {
+      const perTable = Math.min(Math.max(Number(req.query.limit) || 5000, 1), 50000);
+      const tables = {};
+      for (const t of MANAGED_TABLES) {
+        try {
+          const rows = await delegate(t.name).findMany({ where: withTenant(req), take: perTable });
+          tables[t.name] = rows.map(_filterSensitive);
+        } catch {
+          tables[t.name] = null;
+        }
+      }
+      const payload = {
+        exportedAt: new Date().toISOString(),
+        perTableLimit: perTable,
+        tables,
+      };
+      const stamp = new Date().toISOString().slice(0, 10);
+      res.setHeader('Content-Type', 'application/json');
+      res.setHeader('Content-Disposition', `attachment; filename="tenant-backup-${stamp}.json"`);
+      res.json(payload);
+    } catch (e) { next(e); }
+  },
+
   // Full JSON snapshot of every managed table (sensitive fields stripped).
   // Streams as a download; capped per-table to avoid OOM on large DBs.
   async backup(req, res, next) {
@@ -398,7 +481,7 @@ export const databaseController = {
         timeout: 120000,
       }, (err, stdout, stderr) => {
         if (err) {
-          const hint = 'pg_dump unavailable — is Docker running and DB_CONTAINER correct?';
+          const hint = 'pg_dump unavailable � is Docker running and DB_CONTAINER correct?';
           return res.status(503).json({ error: { code: 'DUMP_UNAVAILABLE', message: hint, detail: String(stderr || err.message).slice(0, 500) } });
         }
         const stamp = new Date().toISOString().slice(0, 10);
@@ -419,7 +502,7 @@ export const databaseController = {
       }
       const cleaned = sql.trim().replace(/;+\s*$/, '');
       if (/;/.test(cleaned)) {
-        return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'Single statement only — no semicolons' } });
+        return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'Single statement only � no semicolons' } });
       }
       if (!/^(select|with|explain)\s/i.test(cleaned)) {
         return res.status(400).json({ error: { code: 'FORBIDDEN', message: 'Read-only console: SELECT/WITH only' } });
@@ -467,14 +550,14 @@ export const databaseController = {
             `SELECT COUNT(*)::int AS count FROM "${r.table}" WHERE "${r.column}" = $1`, String(id)
           );
           out.push({ table: r.table, column: r.column, count, sampleIds: rows.map(x => x.id) });
-        } catch { /* table may use composite keys — skip */ }
+        } catch { /* table may use composite keys � skip */ }
       }
       const total = out.reduce((s, d) => s + d.count, 0);
       res.json({ table: name, id, dependents: out, total, blocked: total > 0 });
     } catch (e) { next(e); }
   },
 
-  // CSV import: dry-run validates, commit inserts. Unknown columns rejected.
+// CSV import: dry-run validates, commit inserts. Unknown columns rejected.
   async importCsv(req, res, next) {
     try {
       const { name } = req.params;
@@ -503,32 +586,63 @@ export const databaseController = {
         if (cur !== '' || row.length) { row.push(cur); rows.push(row); }
         return rows;
       };
+      // Coerce raw CSV strings into the column's Prisma/Postgres type so
+      // numeric/boolean/json fields don't get rejected as "expected Int, provided String".
+      const coerceCsvValue = (raw, dataType = '') => {
+        if (raw === '' || raw === undefined) return raw;
+        const t = dataType.toLowerCase();
+        if (['integer', 'bigint', 'smallint'].includes(t)) {
+          const n = Number(raw);
+          return Number.isNaN(n) ? raw : n;
+        }
+        if (['numeric', 'decimal', 'real', 'double precision'].includes(t)) {
+          const n = Number(raw);
+          return Number.isNaN(n) ? raw : n;
+        }
+        if (t === 'boolean') {
+          const s = String(raw).trim().toLowerCase();
+          if (['true', '1', 'yes', 't', 'on'].includes(s)) return true;
+          if (['false', '0', 'no', 'f', 'off'].includes(s)) return false;
+          return raw;
+        }
+        if (['json', 'jsonb'].includes(t)) {
+          try { return JSON.parse(raw); } catch { return raw; }
+        }
+        return raw;
+      };
       const lines = parseCsv(csv.trim());
       if (lines.length < 2) return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'Need header + at least 1 data row' } });
       const [header, ...data] = lines;
       const cols = await prisma.$queryRawUnsafe(
-        `SELECT column_name FROM information_schema.columns WHERE table_name = $1`, name
+        `SELECT column_name, data_type FROM information_schema.columns WHERE table_name = $1`, name
       );
-      const valid = new Set(cols.map(c => c.column_name).filter(c => c !== 'id' && c !== 'createdAt' && c !== 'updatedAt'));
+      const typeByCol = Object.fromEntries(cols.map(c => [c.column_name, c.data_type]));
+      const valid = new Set(Object.keys(typeByCol).filter(c => c !== 'id' && c !== 'createdAt' && c !== 'updatedAt'));
       const unknown = header.filter(h => !valid.has(h));
       if (unknown.length) {
         return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: `Unknown columns: ${unknown.join(', ')}` } });
       }
       const rows = data.filter(r => r.some(v => v !== '')).map(r => {
         const o = {};
-        header.forEach((h, i) => { if (r[i] !== '' && r[i] !== undefined) o[h] = r[i]; });
+        header.forEach((h, i) => {
+          if (r[i] !== '' && r[i] !== undefined) o[h] = coerceCsvValue(r[i], typeByCol[h]);
+        });
         return o;
       });
       if (dryRun) {
         return res.json({ dryRun: true, table: name, columns: header, rowCount: rows.length, preview: rows.slice(0, 5) });
       }
       const model = delegate(name);
-      let inserted = 0; const errors = [];
+      let inserted = 0; let errors = []; let skipped = 0;
       for (let i = 0; i < rows.length; i++) {
-        try { await model.create({ data: rows[i] }); inserted++; }
-        catch (e) { errors.push({ row: i + 2, message: e.message?.slice(0, 200) }); if (errors.length >= 20) break; }
+        try { await model.create({ data: stampTenant(req, rows[i]) }); inserted++; }
+        catch (e) {
+          if (errors.length < 20) errors.push({ row: i + 2, message: e.message?.slice(0, 200) });
+          else skipped++;
+          if (skipped > 0 && errors.length >= 20) break;
+        }
       }
-      res.json({ dryRun: false, table: name, inserted, failed: errors.length, errors });
+      res.json({ dryRun: false, table: name, inserted, failed: errors.length, skipped, errors });
     } catch (e) { next(e); }
   },
 
@@ -546,7 +660,7 @@ export const databaseController = {
       res.json({
         cutoff: cutoff.toISOString(), days,
         candidates: { loginEvents, revokedSessions: sessions, auditLogs: audit, softDeletedEmployees: softDeleted },
-        note: 'AuditLog purge is preview-only — the trail stays append-only. Export before any delete.',
+        note: 'AuditLog purge is preview-only � the trail stays append-only. Export before any delete.',
       });
     } catch (e) { next(e); }
   },
@@ -583,5 +697,114 @@ export const databaseController = {
       }
       res.json({ available: true, queries: rows });
     } catch (e) { next(e); }
+  },
+
+  // Maintenance: VACUUM (with optional VERBOSE/ANALYZE)
+  async vacuum(req, res, next) {
+    try {
+      const { table, analyze = false, verbose = false } = req.body || {};
+      const target = databaseController.helpers._safeTable(table);
+      let sql = 'VACUUM';
+      if (verbose) sql += ' VERBOSE';
+      if (analyze) sql += ' ANALYZE';
+      if (target) sql += ` ${target}`;
+      await prisma.$executeRawUnsafe(sql);
+      res.json({ ok: true, sql, message: 'VACUUM completed' });
+    } catch (e) {
+      next(e);
+    }
+  },
+
+  // Maintenance: ANALYZE (update statistics)
+  async analyze(req, res, next) {
+    try {
+      const target = databaseController.helpers._safeTable(req.body?.table);
+      const sql = target ? `ANALYZE ${target}` : 'ANALYZE';
+      await prisma.$executeRawUnsafe(sql);
+      res.json({ ok: true, sql, message: 'ANALYZE completed' });
+    } catch (e) {
+      next(e);
+    }
+  },
+
+  // Maintenance: REINDEX (with optional table)
+  async reindex(req, res, next) {
+    try {
+      const { table, concurrently = true } = req.body || {};
+      const target = databaseController.helpers._safeTable(table);
+      let sql = target
+        ? (concurrently ? `REINDEX TABLE CONCURRENTLY ${target}` : `REINDEX TABLE ${target}`)
+        : 'REINDEX DATABASE';
+      try {
+        await prisma.$executeRawUnsafe(sql);
+        res.json({ ok: true, sql, message: 'REINDEX completed' });
+      } catch (e) {
+        if (e?.code === '42501' || /permission denied/i.test(e?.message || '') || /permission denied/i.test(e?.meta?.message || '')) {
+          return res.status(403).json({ error: { code: 'PERMISSION_DENIED', message: 'REINDEX requires superuser privileges. Ask your DBA or platform operator to run this.' } });
+        }
+        throw e;
+      }
+    } catch (e) {
+      next(e);
+    }
+  },
+
+  helpers: {
+    _safeTable(table) {
+      if (!table) return null;
+      const t = String(table).trim();
+      if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(t)) {
+        const err = new Error('Invalid table name for maintenance operation');
+        err.status = 400; err.code = 'INVALID_TABLE';
+        throw err;
+      }
+      return `"${t}"`;
+    },
+  },
+
+  // Connection stats: count, state breakdown, oldest connection
+  async connections(req, res, next) {
+    try {
+      const [countRows, stateRows, oldestRow] = await Promise.all([
+        prisma.$queryRawUnsafe(`SELECT count(*)::int AS total FROM pg_stat_activity WHERE datname = current_database()`),
+        prisma.$queryRawUnsafe(`SELECT state, count(*)::int AS count FROM pg_stat_activity WHERE datname = current_database() GROUP BY state`),
+        prisma.$queryRawUnsafe(`SELECT max(backend_start) AS oldest FROM pg_stat_activity WHERE datname = current_database()`),
+      ]);
+      res.json({
+        total: Number(countRows?.[0]?.total || 0),
+        states: stateRows.reduce((acc, r) => ({ ...acc, [r.state || 'unknown']: Number(r.count) }), {}),
+        oldestConnection: oldestRow?.[0]?.oldest || null,
+      });
+    } catch (e) {
+      if (e?.code === '42501' || /permission denied/i.test(e?.message || '') || /pg_stat_activity/i.test(e?.message || '')) {
+        return res.status(403).json({ error: { code: 'PERMISSION_DENIED', message: 'Connection stats require access to pg_stat_activity. Ask your DBA or platform operator to grant access.' } });
+      }
+      next(e);
+    }
+  },
+
+  // Database size details: total, per-table sizes
+  async databaseSize(req, res, next) {
+    try {
+      const [totalRow, tables] = await Promise.all([
+        prisma.$queryRawUnsafe(`SELECT pg_database_size(current_database())::bigint AS bytes`),
+        prisma.$queryRawUnsafe(
+          `SELECT schemaname AS schema, relname AS table, pg_size_pretty(pg_total_relation_size(quote_ident(schemaname) || '.' || quote_ident(relname))) AS size,
+                   pg_total_relation_size(quote_ident(schemaname) || '.' || quote_ident(relname))::bigint AS bytes
+            FROM pg_stat_user_tables
+            ORDER BY pg_total_relation_size(quote_ident(schemaname) || '.' || quote_ident(relname)) DESC
+            LIMIT 20`
+        ),
+      ]);
+      res.json({
+        totalBytes: Number(totalRow?.[0]?.bytes || 0),
+        tables: tables.map(t => ({ ...t, bytes: Number(t.bytes) })),
+      });
+    } catch (e) {
+      if (e?.code === '42501' || /permission denied/i.test(e?.message || '') || /pg_stat_user_tables/i.test(e?.message || '')) {
+        return res.status(403).json({ error: { code: 'PERMISSION_DENIED', message: 'Database size details require access to pg_stat_user_tables. Ask your DBA or platform operator to grant access.' } });
+      }
+      next(e);
+    }
   },
 };
