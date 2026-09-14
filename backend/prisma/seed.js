@@ -4,111 +4,207 @@ import { DEFAULT_PERMISSIONS } from '../src/shared/permissions.js';
 
 const prisma = new PrismaClient();
 
-async function seedTenant(tenantId, tenantCode, hash) {
-  // ── LGU Organizational Structure per CSC Resolution 2200373 ──────────
-  // Provincial-level departments/divisions/sections with OSSP compliance fields
+const OFFICE_TEMPLATES = {
+  PROVINCIAL: {
+    prefix: 'P',
+    executive: [
+      { code: 'PGO', name: "Governor's Office", headTitle: 'Provincial Governor', isHrmOffice: false },
+      { code: 'PVGO', name: "Vice Governor's Office", headTitle: 'Provincial Vice Governor', isHrmOffice: false },
+    ],
+    legislative: [
+      { code: 'SP', name: 'Sangguniang Panlalawigan', headTitle: 'Presiding Officer', sanggunianConcurrence: true },
+    ],
+    line: [
+      { code: 'PPDO', name: 'Provincial Planning & Development Office', headTitle: 'Provincial Planner' },
+      { code: 'PTO', name: "Provincial Treasurer's Office", headTitle: 'Provincial Treasurer' },
+      { code: 'PAO', name: 'Provincial Assessor\'s Office', headTitle: 'Provincial Assessor' },
+      { code: 'PACO', name: 'Provincial Accounting Office', headTitle: 'Provincial Accountant' },
+      { code: 'PBO', name: 'Provincial Budget Office', headTitle: 'Provincial Budget Officer' },
+      { code: 'PEngr', name: 'Provincial Engineering Office', headTitle: 'Provincial Engineer' },
+      { code: 'PHO', name: 'Provincial Health Office', headTitle: 'Provincial Health Officer' },
+      { code: 'PSWD', name: 'Provincial Social Welfare & Development Office', headTitle: 'Provincial Social Welfare Officer' },
+      { code: 'PAgr', name: 'Provincial Agriculture Office', headTitle: 'Provincial Agriculture Officer' },
+      { code: 'PDRRMO', name: 'Provincial DRRM Office', headTitle: 'Provincial DRRM Officer' },
+    ],
+    support: [
+      { code: 'PHRMO', name: 'Provincial Human Resource Management Office', headTitle: 'Provincial HRMO', isHrmOffice: true },
+      { code: 'PITO', name: 'Provincial Information Technology Office', headTitle: 'Provincial IT Officer' },
+      { code: 'PLegal', name: 'Provincial Legal Office', headTitle: 'Provincial Legal Officer' },
+      { code: 'PGSO', name: 'Provincial General Services Office', headTitle: 'Provincial General Services Officer' },
+    ],
+  },
+  CITY: {
+    prefix: 'C',
+    executive: [
+      { code: 'CMO', name: "Office of the City Mayor", headTitle: 'City Mayor', isHrmOffice: false },
+      { code: 'CVM', name: "Office of the City Vice Mayor", headTitle: 'City Vice Mayor', isHrmOffice: false },
+    ],
+    legislative: [
+      { code: 'SP', name: 'Sangguniang Panlungsod', headTitle: 'Presiding Officer', sanggunianConcurrence: true },
+    ],
+    line: [
+      { code: 'CPDO', name: 'City Planning & Development Office', headTitle: 'City Planner' },
+      { code: 'CTO', name: "City Treasurer's Office", headTitle: 'City Treasurer' },
+      { code: 'CAO', name: 'City Assessor\'s Office', headTitle: 'City Assessor' },
+      { code: 'CACO', name: 'City Accounting Office', headTitle: 'City Accountant' },
+      { code: 'CBO', name: 'City Budget Office', headTitle: 'City Budget Officer' },
+      { code: 'CEngr', name: 'City Engineering Office', headTitle: 'City Engineer' },
+      { code: 'CHO', name: 'City Health Office', headTitle: 'City Health Officer' },
+      { code: 'CSWD', name: 'City Social Welfare & Development Office', headTitle: 'City Social Welfare Officer' },
+      { code: 'CAgr', name: 'City Agriculture Office', headTitle: 'City Agriculture Officer' },
+      { code: 'CDRRMO', name: 'City DRRM Office', headTitle: 'City DRRM Officer' },
+    ],
+    support: [
+      { code: 'CHRMO', name: 'City Human Resource Management Office', headTitle: 'City HRMO', isHrmOffice: true },
+      { code: 'CITO', name: 'City Information Technology Office', headTitle: 'City IT Officer' },
+      { code: 'CLegal', name: 'City Legal Office', headTitle: 'City Legal Officer' },
+      { code: 'CGSO', name: 'City General Services Office', headTitle: 'City General Services Officer' },
+    ],
+  },
+  MUNICIPAL: {
+    prefix: 'M',
+    executive: [
+      { code: 'MMO', name: "Office of the Municipal Mayor", headTitle: 'Municipal Mayor', isHrmOffice: false },
+      { code: 'MVM', name: "Office of the Municipal Vice Mayor", headTitle: 'Municipal Vice Mayor', isHrmOffice: false },
+    ],
+    legislative: [
+      { code: 'SB', name: 'Sangguniang Bayan', headTitle: 'Presiding Officer', sanggunianConcurrence: true },
+    ],
+    line: [
+      { code: 'MPDO', name: 'Municipal Planning & Development Office', headTitle: 'Municipal Planner' },
+      { code: 'MTO', name: "Municipal Treasurer's Office", headTitle: 'Municipal Treasurer' },
+      { code: 'MAO', name: 'Municipal Assessor\'s Office', headTitle: 'Municipal Assessor' },
+      { code: 'MACO', name: 'Municipal Accounting Office', headTitle: 'Municipal Accountant' },
+      { code: 'MBO', name: 'Municipal Budget Office', headTitle: 'Municipal Budget Officer' },
+      { code: 'MEngr', name: 'Municipal Engineering Office', headTitle: 'Municipal Engineer' },
+      { code: 'MHO', name: 'Municipal Health Office', headTitle: 'Municipal Health Officer' },
+      { code: 'MSWD', name: 'Municipal Social Welfare & Development Office', headTitle: 'Municipal Social Welfare Officer' },
+      { code: 'MAgr', name: 'Municipal Agriculture Office', headTitle: 'Municipal Agriculture Officer' },
+      { code: 'MDRRMO', name: 'Municipal DRRM Office', headTitle: 'Municipal DRRM Officer' },
+    ],
+    support: [
+      { code: 'MHRMO', name: 'Municipal Human Resource Management Office', headTitle: 'Municipal HRMO', isHrmOffice: true },
+      { code: 'MITO', name: 'Municipal Information Technology Office', headTitle: 'Municipal IT Officer' },
+      { code: 'MLegal', name: 'Municipal Legal Office', headTitle: 'Municipal Legal Officer' },
+      { code: 'MGSO', name: 'Municipal General Services Office', headTitle: 'Municipal General Services Officer' },
+    ],
+  },
+};
 
-  // 1. Office of the Provincial Governor (mandatory, top level)
-  const deptPGO = await prisma.department.upsert({
-    where: { code: `PGO-${tenantCode}` },
+function officeCode(prefix, code, tenantCode) {
+  return `${prefix}${code}-${tenantCode}`;
+}
+
+async function seedTenant(tenantId, tenantCode, lguLevel, hash) {
+  const template = OFFICE_TEMPLATES[lguLevel];
+  if (!template) throw new Error(`Unsupported LGU level: ${lguLevel}`);
+
+  const sanggunian = template.legislative[0];
+  const governor = template.executive[0];
+  const viceGovernor = template.executive[1];
+  const hrmo = template.support.find(s => s.isHrmOffice);
+
+  const deptSanggunian = await prisma.department.upsert({
+    where: { code: officeCode(template.prefix, sanggunian.code, tenantCode) },
     update: { tenantId },
     create: {
-      code: `PGO-${tenantCode}`,
-      name: "Governor's Office",
+      code: officeCode(template.prefix, sanggunian.code, tenantCode),
+      name: sanggunian.name,
       level: 0,
       unitType: 'DEPARTMENT',
+      lguOfficeCategory: 'LEGISLATIVE',
       isMandatory: true,
       isHrmOffice: false,
-      headTitle: 'Provincial Governor',
+      headTitle: sanggunian.headTitle,
+      sanggunianConcurrence: sanggunian.sanggunianConcurrence ?? false,
+      concurrenceDate: sanggunian.sanggunianConcurrence ? new Date('2022-11-01') : null,
+      concurrenceResolution: sanggunian.sanggunianConcurrence ? `${template.prefix}SP-${tenantCode}-2022-001` : null,
       tenant: { connect: { id: tenantId } },
     },
   });
 
-  // 2. Office of the Provincial Vice Governor (mandatory)
-  const deptPVGO = await prisma.department.upsert({
-    where: { code: `PVGO-${tenantCode}` },
+  const deptGovernor = await prisma.department.upsert({
+    where: { code: officeCode(template.prefix, governor.code, tenantCode) },
     update: { tenantId },
     create: {
-      code: `PVGO-${tenantCode}`,
-      name: "Vice Governor's Office",
+      code: officeCode(template.prefix, governor.code, tenantCode),
+      name: governor.name,
       level: 0,
       unitType: 'DEPARTMENT',
+      lguOfficeCategory: 'EXECUTIVE',
       isMandatory: true,
-      isHrmOffice: false,
-      headTitle: 'Provincial Vice Governor',
+      isHrmOffice: governor.isHrmOffice ?? false,
+      headTitle: governor.headTitle,
       tenant: { connect: { id: tenantId } },
     },
   });
 
-  // 3. Sangguniang Panlalawigan (mandatory)
-  const deptSP = await prisma.department.upsert({
-    where: { code: `SP-${tenantCode}` },
+  const deptVice = await prisma.department.upsert({
+    where: { code: officeCode(template.prefix, viceGovernor.code, tenantCode) },
     update: { tenantId },
     create: {
-      code: `SP-${tenantCode}`,
-      name: 'Sangguniang Panlalawigan',
+      code: officeCode(template.prefix, viceGovernor.code, tenantCode),
+      name: viceGovernor.name,
       level: 0,
       unitType: 'DEPARTMENT',
+      lguOfficeCategory: 'EXECUTIVE',
       isMandatory: true,
-      isHrmOffice: false,
-      headTitle: 'Presiding Officer',
-      sanggunianConcurrence: true,
-      concurrenceDate: new Date('2022-11-01'),
-      concurrenceResolution: `SP-${tenantCode}-2022-001`,
+      isHrmOffice: viceGovernor.isHrmOffice ?? false,
+      headTitle: viceGovernor.headTitle,
       tenant: { connect: { id: tenantId } },
     },
   });
 
-  // 4. HR Management Office (mandatory, encouraged by CSC)
   const deptHR = await prisma.department.upsert({
-    where: { code: `HRMO-${tenantCode}` },
+    where: { code: officeCode(template.prefix, hrmo.code, tenantCode) },
     update: { tenantId },
     create: {
-      code: `HRMO-${tenantCode}`,
-      name: 'Human Resource Management Office',
-      parent: { connect: { id: deptPGO.id } },
+      code: officeCode(template.prefix, hrmo.code, tenantCode),
+      name: hrmo.name,
+      parent: { connect: { id: deptGovernor.id } },
       level: 1,
       unitType: 'DEPARTMENT',
+      lguOfficeCategory: 'SUPPORT_OFFICE',
       isMandatory: true,
       isHrmOffice: true,
-      headTitle: 'HRMO',
+      headTitle: hrmo.headTitle,
       sanggunianConcurrence: true,
       concurrenceDate: new Date('2022-11-05'),
-      concurrenceResolution: `SP-${tenantCode}-2022-002`,
+      concurrenceResolution: `${template.prefix}SP-${tenantCode}-2022-002`,
       tenant: { connect: { id: tenantId } },
     },
   });
 
-  // 5. Finance Office (mandatory)
-  const deptFIN = await prisma.department.upsert({
-    where: { code: `FIN-${tenantCode}` },
+  const deptFinance = await prisma.department.upsert({
+    where: { code: officeCode(template.prefix, 'FIN', tenantCode) },
     update: { tenantId },
     create: {
-      code: `FIN-${tenantCode}`,
+      code: officeCode(template.prefix, 'FIN', tenantCode),
       name: 'Finance Office',
-      parent: { connect: { id: deptPGO.id } },
+      parent: { connect: { id: deptGovernor.id } },
       level: 1,
       unitType: 'DEPARTMENT',
+      lguOfficeCategory: 'SUPPORT_OFFICE',
       isMandatory: true,
       isHrmOffice: false,
-      headTitle: 'Provincial Accountant',
+      headTitle: `${lguLevel === 'PROVINCIAL' ? 'Provincial' : lguLevel === 'CITY' ? 'City' : 'Municipal'} Accountant`,
       sanggunianConcurrence: true,
       concurrenceDate: new Date('2022-11-05'),
-      concurrenceResolution: `SP-${tenantCode}-2022-003`,
+      concurrenceResolution: `${template.prefix}SP-${tenantCode}-2022-003`,
       tenant: { connect: { id: tenantId } },
     },
   });
 
-  // 6. Accounting Division under Finance (optional but common)
   const deptAccountingDiv = await prisma.department.upsert({
-    where: { code: `ACCTG-DIV-${tenantCode}` },
+    where: { code: officeCode(template.prefix, 'ACCTG-DIV', tenantCode) },
     update: { tenantId },
     create: {
-      code: `ACCTG-DIV-${tenantCode}`,
+      code: officeCode(template.prefix, 'ACCTG-DIV', tenantCode),
       name: 'Accounting Division',
-      parent: { connect: { id: deptFIN.id } },
+      parent: { connect: { id: deptFinance.id } },
       level: 2,
       unitType: 'DIVISION',
+      lguOfficeCategory: 'SUPPORT_OFFICE',
       isMandatory: false,
       isOptional: true,
       isHrmOffice: false,
@@ -117,16 +213,16 @@ async function seedTenant(tenantId, tenantCode, hash) {
     },
   });
 
-  // 7. Budget Division under Finance (optional)
   const deptBudgetDiv = await prisma.department.upsert({
-    where: { code: `BUDGET-DIV-${tenantCode}` },
+    where: { code: officeCode(template.prefix, 'BUDGET-DIV', tenantCode) },
     update: { tenantId },
     create: {
-      code: `BUDGET-DIV-${tenantCode}`,
+      code: officeCode(template.prefix, 'BUDGET-DIV', tenantCode),
       name: 'Budget Division',
-      parent: { connect: { id: deptFIN.id } },
+      parent: { connect: { id: deptFinance.id } },
       level: 2,
       unitType: 'DIVISION',
+      lguOfficeCategory: 'SUPPORT_OFFICE',
       isMandatory: false,
       isOptional: true,
       isHrmOffice: false,
@@ -135,16 +231,16 @@ async function seedTenant(tenantId, tenantCode, hash) {
     },
   });
 
-  // 8. IT Office (optional)
   const deptIT = await prisma.department.upsert({
-    where: { code: `ITO-${tenantCode}` },
+    where: { code: officeCode(template.prefix, 'ITO', tenantCode) },
     update: { tenantId },
     create: {
-      code: `ITO-${tenantCode}`,
+      code: officeCode(template.prefix, 'ITO', tenantCode),
       name: 'Information Technology Office',
-      parent: { connect: { id: deptPGO.id } },
+      parent: { connect: { id: deptGovernor.id } },
       level: 1,
       unitType: 'DEPARTMENT',
+      lguOfficeCategory: 'SUPPORT_OFFICE',
       isMandatory: false,
       isOptional: true,
       isHrmOffice: false,
@@ -153,16 +249,16 @@ async function seedTenant(tenantId, tenantCode, hash) {
     },
   });
 
-  // 9. Administration Division under PGO (mandatory)
   const deptAdminDiv = await prisma.department.upsert({
-    where: { code: `ADMIN-DIV-${tenantCode}` },
+    where: { code: officeCode(template.prefix, 'ADMIN-DIV', tenantCode) },
     update: { tenantId },
     create: {
-      code: `ADMIN-DIV-${tenantCode}`,
+      code: officeCode(template.prefix, 'ADMIN-DIV', tenantCode),
       name: 'Administration Division',
-      parent: { connect: { id: deptPGO.id } },
+      parent: { connect: { id: deptGovernor.id } },
       level: 2,
       unitType: 'DIVISION',
+      lguOfficeCategory: 'SUPPORT_OFFICE',
       isMandatory: true,
       isOptional: false,
       isHrmOffice: false,
@@ -171,16 +267,16 @@ async function seedTenant(tenantId, tenantCode, hash) {
     },
   });
 
-  // 10. Administration Section under Administration Division
   const deptAdminSec = await prisma.department.upsert({
-    where: { code: `ADMIN-SEC-${tenantCode}` },
+    where: { code: officeCode(template.prefix, 'ADMIN-SEC', tenantCode) },
     update: { tenantId },
     create: {
-      code: `ADMIN-SEC-${tenantCode}`,
+      code: officeCode(template.prefix, 'ADMIN-SEC', tenantCode),
       name: 'Administration Section',
       parent: { connect: { id: deptAdminDiv.id } },
       level: 3,
       unitType: 'SECTION',
+      lguOfficeCategory: 'SUPPORT_OFFICE',
       isMandatory: false,
       isOptional: true,
       isHrmOffice: false,
@@ -188,16 +284,16 @@ async function seedTenant(tenantId, tenantCode, hash) {
     },
   });
 
-  // 11. Legal Office (optional)
   const deptLegal = await prisma.department.upsert({
-    where: { code: `LEGAL-${tenantCode}` },
+    where: { code: officeCode(template.prefix, 'LEGAL', tenantCode) },
     update: { tenantId },
     create: {
-      code: `LEGAL-${tenantCode}`,
+      code: officeCode(template.prefix, 'LEGAL', tenantCode),
       name: 'Legal Office',
-      parent: { connect: { id: deptPGO.id } },
+      parent: { connect: { id: deptGovernor.id } },
       level: 1,
       unitType: 'DEPARTMENT',
+      lguOfficeCategory: 'SUPPORT_OFFICE',
       isMandatory: false,
       isOptional: true,
       isHrmOffice: false,
@@ -205,6 +301,26 @@ async function seedTenant(tenantId, tenantCode, hash) {
       tenant: { connect: { id: tenantId } },
     },
   });
+
+  for (const line of template.line) {
+    await prisma.department.upsert({
+      where: { code: officeCode(template.prefix, line.code, tenantCode) },
+      update: { tenantId },
+      create: {
+        code: officeCode(template.prefix, line.code, tenantCode),
+        name: line.name,
+        parent: { connect: { id: deptGovernor.id } },
+        level: 1,
+        unitType: 'DEPARTMENT',
+        lguOfficeCategory: 'LINE_OFFICE',
+        isMandatory: false,
+        isOptional: true,
+        isHrmOffice: false,
+        headTitle: line.headTitle,
+        tenant: { connect: { id: tenantId } },
+      },
+    });
+  }
 
   const roles = ['ADMIN', 'HR_MANAGER', 'PAYROLL_OFFICER', 'DEPARTMENT_HEAD', 'AUDITOR', 'EMPLOYEE'];
   for (const roleName of roles) {
@@ -216,7 +332,6 @@ async function seedTenant(tenantId, tenantCode, hash) {
     }
   }
 
-  // Default capability matrix (mirrors historical role whitelist; editable later).
   for (const roleName of roles) {
     const role = await prisma.role.findFirst({ where: { name: roleName, tenantId } });
     if (!role) continue;
@@ -239,32 +354,37 @@ async function seedTenant(tenantId, tenantCode, hash) {
     { username: `employee-${tenantCode.toLowerCase()}`, role: 'EMPLOYEE' },
   ];
   for (const u of roleUsers) {
+    const ext = u.role === 'EMPLOYEE' ? `EMP-${tenantCode}-0001` : null;
+    const link = ext ? { linkedEmployee: { connect: { employeeNumber: ext } } } : {};
     await prisma.user.upsert({
       where: { username: u.username },
-      update: { passwordHash: hash, passwordChangedAt: new Date(), tenantId, role: u.role },
+      update: {
+        passwordHash: hash,
+        passwordChangedAt: new Date(),
+        tenant: { connect: { id: tenantId } },
+        role: u.role,
+        ...link,
+      },
       create: {
         username: u.username,
         passwordHash: hash,
         passwordChangedAt: new Date(),
         role: u.role,
-        department: { connect: { id: deptPGO.id } },
+        department: { connect: { id: deptGovernor.id } },
         tenant: { connect: { id: tenantId } },
+        ...link,
       },
     });
   }
-
-  const adminUser = await prisma.user.findUnique({ where: { username: `admin-${tenantCode.toLowerCase()}` } });
-
-  // ── Positions per IOS-LGU 2021 Edition ──────────────────────────────
 
   const posGov = await prisma.position.upsert({
     where: { id: `position-governor-${tenantCode}` },
     update: { tenantId },
     create: {
       id: `position-governor-${tenantCode}`,
-      title: 'Provincial Governor',
+      title: governor.headTitle,
       parentheticalTitle: 'Elected Official',
-      iosLguCode: 'GOV-01',
+      iosLguCode: `${template.prefix}GOV-01`,
       salaryGrade: 30,
       isMandatory: true,
       isCoterminous: true,
@@ -277,9 +397,9 @@ async function seedTenant(tenantId, tenantCode, hash) {
     update: { tenantId },
     create: {
       id: `position-vice-governor-${tenantCode}`,
-      title: 'Provincial Vice Governor',
+      title: viceGovernor.headTitle,
       parentheticalTitle: 'Elected Official',
-      iosLguCode: 'VGOV-01',
+      iosLguCode: `${template.prefix}VGOV-01`,
       salaryGrade: 29,
       isMandatory: true,
       isCoterminous: true,
@@ -292,9 +412,9 @@ async function seedTenant(tenantId, tenantCode, hash) {
     update: { tenantId },
     create: {
       id: `position-sanggunian-${tenantCode}`,
-      title: 'Sanggunian Member',
+      title: sanggunian.headTitle,
       parentheticalTitle: 'Legislative',
-      iosLguCode: 'SP-01',
+      iosLguCode: `${template.prefix}SP-01`,
       salaryGrade: 24,
       isMandatory: true,
       isCoterminous: true,
@@ -307,9 +427,9 @@ async function seedTenant(tenantId, tenantCode, hash) {
     update: { tenantId },
     create: {
       id: `position-hrmo-${tenantCode}`,
-      title: 'HRMO',
-      parentheticalTitle: 'Human Resource Management Office',
-      iosLguCode: 'HRM-02',
+      title: hrmo.headTitle,
+      parentheticalTitle: hrmo.name,
+      iosLguCode: `${template.prefix}HRM-02`,
       salaryGrade: 24,
       isMandatory: true,
       isCoterminous: false,
@@ -325,7 +445,7 @@ async function seedTenant(tenantId, tenantCode, hash) {
       id: `position-accountant-${tenantCode}`,
       title: 'Accountant',
       parentheticalTitle: 'Accounting',
-      iosLguCode: 'ACC-01',
+      iosLguCode: `${template.prefix}ACC-01`,
       salaryGrade: 15,
       isMandatory: true,
       isCoterminous: false,
@@ -341,7 +461,7 @@ async function seedTenant(tenantId, tenantCode, hash) {
       id: `position-budget-officer-${tenantCode}`,
       title: 'Budget Officer',
       parentheticalTitle: 'Budget',
-      iosLguCode: 'BDG-01',
+      iosLguCode: `${template.prefix}BDG-01`,
       salaryGrade: 15,
       isMandatory: true,
       isCoterminous: false,
@@ -357,7 +477,7 @@ async function seedTenant(tenantId, tenantCode, hash) {
       id: `position-admin-assistant-${tenantCode}`,
       title: 'Administrative Assistant',
       parentheticalTitle: 'Administrative Support',
-      iosLguCode: 'ADM-01',
+      iosLguCode: `${template.prefix}ADM-01`,
       salaryGrade: 8,
       isMandatory: true,
       isCoterminous: false,
@@ -372,7 +492,7 @@ async function seedTenant(tenantId, tenantCode, hash) {
       id: `position-it-officer-${tenantCode}`,
       title: 'IT Officer',
       parentheticalTitle: 'Information Technology',
-      iosLguCode: 'IT-01',
+      iosLguCode: `${template.prefix}IT-01`,
       salaryGrade: 15,
       isMandatory: false,
       isCoterminous: false,
@@ -387,7 +507,7 @@ async function seedTenant(tenantId, tenantCode, hash) {
       id: `position-legal-officer-${tenantCode}`,
       title: 'Legal Officer',
       parentheticalTitle: 'Legal Services',
-      iosLguCode: 'LEG-01',
+      iosLguCode: `${template.prefix}LEG-01`,
       salaryGrade: 24,
       isMandatory: false,
       isCoterminous: true,
@@ -396,11 +516,10 @@ async function seedTenant(tenantId, tenantCode, hash) {
     },
   });
 
-  // ── Plantilla Items (OSSP) ─────────────────────────────────────────
   const plantillaItems = [
-    { itemNumber: `PLT-${tenantCode}-GOV-01`, positionId: posGov.id, departmentId: deptPGO.id, status: 'FILLED', isMandatory: true, itemType: 'NEW_STYLE', salaryGrade: '30', step: '1', sourceOfFund: 'Local Funds', appropriationCode: `2026-${tenantCode}-001`, authorizedSalary: 180000 },
-    { itemNumber: `PLT-${tenantCode}-VGOV-01`, positionId: posViceGov.id, departmentId: deptPVGO.id, status: 'FILLED', isMandatory: true, itemType: 'NEW_STYLE', salaryGrade: '29', step: '1', sourceOfFund: 'Local Funds', appropriationCode: `2026-${tenantCode}-002`, authorizedSalary: 165000 },
-    { itemNumber: `PLT-${tenantCode}-SP-01`, positionId: posSanggunian.id, departmentId: deptSP.id, status: 'FILLED', isMandatory: true, itemType: 'NEW_STYLE', salaryGrade: '24', step: '1', sourceOfFund: 'Local Funds', appropriationCode: `2026-${tenantCode}-003`, authorizedSalary: 120000 },
+    { itemNumber: `PLT-${tenantCode}-GOV-01`, positionId: posGov.id, departmentId: deptGovernor.id, status: 'FILLED', isMandatory: true, itemType: 'NEW_STYLE', salaryGrade: '30', step: '1', sourceOfFund: 'Local Funds', appropriationCode: `2026-${tenantCode}-001`, authorizedSalary: 180000 },
+    { itemNumber: `PLT-${tenantCode}-VGOV-01`, positionId: posViceGov.id, departmentId: deptVice.id, status: 'FILLED', isMandatory: true, itemType: 'NEW_STYLE', salaryGrade: '29', step: '1', sourceOfFund: 'Local Funds', appropriationCode: `2026-${tenantCode}-002`, authorizedSalary: 165000 },
+    { itemNumber: `PLT-${tenantCode}-SP-01`, positionId: posSanggunian.id, departmentId: deptSanggunian.id, status: 'FILLED', isMandatory: true, itemType: 'NEW_STYLE', salaryGrade: '24', step: '1', sourceOfFund: 'Local Funds', appropriationCode: `2026-${tenantCode}-003`, authorizedSalary: 120000 },
     { itemNumber: `PLT-${tenantCode}-HRM-01`, positionId: posHRMO.id, departmentId: deptHR.id, status: 'FILLED', isMandatory: true, itemType: 'NEW_STYLE', salaryGrade: '24', step: '1', sourceOfFund: 'Local Funds', appropriationCode: `2026-${tenantCode}-004`, authorizedSalary: 120000 },
     { itemNumber: `PLT-${tenantCode}-ACC-01`, positionId: posAccountant.id, departmentId: deptAccountingDiv.id, status: 'FILLED', isMandatory: true, itemType: 'NEW_STYLE', salaryGrade: '15', step: '1', sourceOfFund: 'Local Funds', appropriationCode: `2026-${tenantCode}-005`, authorizedSalary: 60000 },
     { itemNumber: `PLT-${tenantCode}-BDG-01`, positionId: posBudgetOfficer.id, departmentId: deptBudgetDiv.id, status: 'FILLED', isMandatory: true, itemType: 'NEW_STYLE', salaryGrade: '15', step: '1', sourceOfFund: 'Local Funds', appropriationCode: `2026-${tenantCode}-006`, authorizedSalary: 60000 },
@@ -420,7 +539,6 @@ async function seedTenant(tenantId, tenantCode, hash) {
     });
   }
 
-  // ── Employees ──────────────────────────────────────────────────────
   const employeesData = [
     {
       employeeNumber: `EMP-${tenantCode}-0001`,
@@ -430,7 +548,7 @@ async function seedTenant(tenantId, tenantCode, hash) {
       birthDate: new Date('1990-05-12'),
       gender: 'Female',
       civilStatus: 'Married',
-      address: 'Tarlac City, Tarlac',
+      address: lguLevel === 'PROVINCIAL' ? 'Tarlac City, Tarlac' : lguLevel === 'CITY' ? 'Tarlac City' : 'San Jose, Tarlac',
       departmentId: deptHR.id,
       positionId: posHRMO.id,
       hiredDate: new Date('2015-01-15'),
@@ -444,8 +562,8 @@ async function seedTenant(tenantId, tenantCode, hash) {
       birthDate: new Date('1988-09-30'),
       gender: 'Male',
       civilStatus: 'Single',
-      address: 'San Jose, Tarlac',
-      departmentId: deptFIN.id,
+      address: lguLevel === 'PROVINCIAL' ? 'San Jose, Tarlac' : 'Poblacion, Tarlac',
+      departmentId: deptFinance.id,
       positionId: posBudgetOfficer.id,
       hiredDate: new Date('2018-06-01'),
       monthlySalary: 35000,
@@ -458,8 +576,8 @@ async function seedTenant(tenantId, tenantCode, hash) {
       birthDate: new Date('1992-02-20'),
       gender: 'Female',
       civilStatus: 'Single',
-      address: 'Capas, Tarlac',
-      departmentId: deptPGO.id,
+      address: lguLevel === 'PROVINCIAL' ? 'Capas, Tarlac' : 'Poblacion, Tarlac',
+      departmentId: deptGovernor.id,
       positionId: posAdminAsst.id,
       hiredDate: new Date('2020-03-10'),
       monthlySalary: 28000,
@@ -472,8 +590,8 @@ async function seedTenant(tenantId, tenantCode, hash) {
       birthDate: new Date('1985-11-15'),
       gender: 'Male',
       civilStatus: 'Married',
-      address: 'Camiling, Tarlac',
-      departmentId: deptPGO.id,
+      address: lguLevel === 'PROVINCIAL' ? 'Camiling, Tarlac' : 'Poblacion, Tarlac',
+      departmentId: deptGovernor.id,
       positionId: posAdminAsst.id,
       hiredDate: new Date('2012-07-01'),
       monthlySalary: 60000,
@@ -486,8 +604,8 @@ async function seedTenant(tenantId, tenantCode, hash) {
       birthDate: new Date('1995-08-22'),
       gender: 'Female',
       civilStatus: 'Single',
-      address: 'Tarlac City, Tarlac',
-      departmentId: deptFIN.id,
+      address: lguLevel === 'PROVINCIAL' ? 'Tarlac City, Tarlac' : 'Poblacion, Tarlac',
+      departmentId: deptFinance.id,
       positionId: posAccountant.id,
       hiredDate: new Date('2019-01-15'),
       monthlySalary: 32000,
@@ -500,7 +618,7 @@ async function seedTenant(tenantId, tenantCode, hash) {
       birthDate: new Date('1993-03-18'),
       gender: 'Male',
       civilStatus: 'Single',
-      address: 'Tarlac City, Tarlac',
+      address: lguLevel === 'PROVINCIAL' ? 'Tarlac City, Tarlac' : 'Poblacion, Tarlac',
       departmentId: deptIT.id,
       positionId: posIT.id,
       hiredDate: new Date('2021-05-10'),
@@ -523,7 +641,6 @@ async function seedTenant(tenantId, tenantCode, hash) {
     }
   }
 
-  // ── Payroll Periods ─────────────────────────────────────────────────
   const currentMonth = new Date().toISOString().slice(0, 7);
   const currentYear = new Date().getFullYear();
   await prisma.payrollPeriod.upsert({
@@ -540,12 +657,10 @@ async function seedTenant(tenantId, tenantCode, hash) {
     },
   });
 
-  // ── Attendance Sample ──────────────────────────────────────────────
   const today = new Date();
   const dateStr = today.toISOString().slice(0, 10);
-  for (const emp of employeesData.slice(0, 3)) {
-    const employee = await prisma.employee.findFirst({ where: { employeeNumber: emp.employeeNumber, tenantId } });
-    if (!employee) continue;
+  const seededEmployees = await prisma.employee.findMany({ where: { tenantId } });
+  for (const employee of seededEmployees.slice(0, 3)) {
     await prisma.attendance.create({
       data: {
         employeeId: employee.id,
@@ -563,8 +678,8 @@ async function main() {
   const hash = await bcrypt.hash(process.env.SEED_DEFAULT_PASSWORD || 'admin123', 10);
 
   const tenantsData = [
-    { id: 'tenant-default', code: 'DEFAULT', name: 'Default LGU' },
-    { id: 'tenant-tarlac', code: 'TARLAC', name: 'Tarlac City LGU' },
+    { id: 'tenant-default', code: 'DEFAULT', name: 'Default LGU', lguLevel: 'PROVINCIAL' },
+    { id: 'tenant-solana', code: 'SOLANA', name: 'Municipality of Solana', lguLevel: 'MUNICIPAL' },
   ];
 
   for (const t of tenantsData) {
@@ -576,7 +691,7 @@ async function main() {
   }
 
   for (const t of tenantsData) {
-    await seedTenant(t.id, t.code, hash);
+    await seedTenant(t.id, t.code, t.lguLevel, hash);
   }
 
   console.log('Seed completed successfully');

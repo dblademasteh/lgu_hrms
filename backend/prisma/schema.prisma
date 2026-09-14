@@ -16,6 +16,7 @@ model Tenant {
   code      String   @unique
   name      String
   domain    String?  @unique
+  lguLevel  LguLevel @default(PROVINCIAL)
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now()) @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @db.Timestamptz(6)
@@ -112,6 +113,7 @@ model Department {
   parentId  String?
   level     Int      @default(0)
   unitType  DepartmentUnitType @default(DEPARTMENT)
+  lguOfficeCategory LguOfficeCategory?
   isMandatory Boolean @default(false)
   isOptional Boolean @default(false)
   isHrmOffice Boolean @default(false)
@@ -871,6 +873,19 @@ enum DepartmentUnitType {
   DEPARTMENT
   DIVISION
   SECTION
+}
+
+enum LguLevel {
+  PROVINCIAL
+  CITY
+  MUNICIPAL
+}
+
+enum LguOfficeCategory {
+  EXECUTIVE
+  LEGISLATIVE
+  LINE_OFFICE
+  SUPPORT_OFFICE
 }
 
 enum EmploymentStatus {
