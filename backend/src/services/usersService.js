@@ -66,29 +66,37 @@ export const usersService = {
     await this.assertDepartmentExists(departmentId, req.tenantId);
     const plain = randomPassword();
     const passwordHash = await bcrypt.hash(plain, 12);
-    const stamped = stampTenant(req, { username, role, departmentId, displayName, email, contactNumber, externalId, passwordHash, passwordChangedAt: new Date() });
-    const user = await userRepository.create(req, stamped);
+    const stamped = stampTenant(req, { username, role, departmentId, displayName, email, contactNumber, passwordHash, passwordChangedAt: new Date() });
+    const link = externalId ? { linkedEmployee: { connect: { employeeNumber: externalId } } } : {};
+    const user = await userRepository.create(req, { ...stamped, ...link });
     const { passwordHash: _ph, pinHash: _pin, ...safe } = user;
     return { ...safe, temporaryPassword: plain };
   },
 
   async update(req, id, data) {
     const { passwordHash, pinHash, tenantId, ...rest } = data;
-    if ('externalId' in rest) await this.assertLinkable(rest.externalId, id);
+    if ('externalId' in rest) {
+      const ext = rest.externalId?.trim();
+      await this.assertLinkable(ext, id);
+      rest.linkedEmployee = ext
+        ? { connect: { employeeNumber: ext } }
+        : { disconnect: true };
+      delete rest.externalId;
+    }
     if ('role' in rest) await this.assertRoleExists(rest.role, req.tenantId);
     if ('departmentId' in rest) await this.assertDepartmentExists(rest.departmentId, req.tenantId);
     const existing = await prisma.user.findFirst({ where: withTenant(req, { id }) });
     if (!existing) { const e = new Error('User not found'); e.status = 404; throw e; }
-    const user = await userRepository.update(id, rest);
+    const user = await userRepository.update(req, id, rest);
     const { passwordHash: _ph, pinHash: _pin, ...safe } = user;
     return safe;
   },
 
-  async remove(id) {
-    return userRepository.delete(id);
+  async remove(req, id) {
+    return userRepository.delete(req, id);
   },
 
-  async setStatus(id, status) {
-    return userRepository.update(id, { status });
+  async setStatus(req, id, status) {
+    return userRepository.update(req, id, { status });
   }
 };

@@ -14,7 +14,7 @@ export const usersController = {
     res.json(user);
   },
   async remove(req, res) {
-    await usersService.remove(req.params.id);
+    await usersService.remove(req, req.params.id);
     res.json({ message: 'User deleted' });
   }
 };

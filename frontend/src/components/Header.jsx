@@ -285,6 +285,7 @@ export default function Header({ onToggleSidebar }) {
                           }}
                           disabled={switchingRole}
                         >
+                          <option value="SUPER_ADMIN">SUPER_ADMIN</option>
                           <option value="ADMIN">ADMIN</option>
                           <option value="HR_MANAGER">HR_MANAGER</option>
                           <option value="PAYROLL_OFFICER">PAYROLL_OFFICER</option>

@@ -3,7 +3,7 @@ import { NavLink, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Users, Building2, FileBadge, Banknote, CalendarDays, Clock,
   ShieldCheck, BarChart3, UserCog, Landmark, Settings as SettingsIcon, Fingerprint, ShieldAlert, HelpCircle,
-  Search, ChevronDown
+  Search, ChevronDown, Database
 } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore.js';
 import { useSidebarStyle } from '../sidebarStyle.js';
@@ -11,11 +11,23 @@ import { ROLE_RANK, ROLE_BADGE_TONES, useUserCapabilities } from '../config/perm
 
 /**
  * Minimal role = least-privileged role that may see the item.
- * Hierarchy (low → high): EMPLOYEE < AUDITOR < DEPARTMENT_HEAD < PAYROLL_OFFICER < HR_MANAGER < ADMIN.
- * Items without `roles` are visible to every authenticated user.
+ * Hierarchy (low → high): EMPLOYEE < AUDITOR < DEPARTMENT_HEAD < PAYROLL_OFFICER < HR_MANAGER < ADMIN < SUPER_ADMIN.
+ * SUPER_ADMIN sees all groups. Items without `roles` are visible to every authenticated user.
  */
 
+const isSuperAdmin = (role) => role === 'SUPER_ADMIN';
+
 const groups = [
+  {
+    label: 'Platform',
+    roles: ['SUPER_ADMIN'],
+    items: [
+      { name: 'Platform Dashboard', path: '/platform', icon: LayoutDashboard },
+      { name: 'Tenants', path: '/platform/tenants', icon: Building2 },
+      { name: 'Database Tools', path: '/platform/database', icon: Database },
+      { name: 'Register LGU', path: '/tenant-register', icon: Landmark },
+    ]
+  },
   {
     label: 'Workforce',
     items: [
@@ -80,6 +92,7 @@ const groups = [
 ];
 
 export function canSee(role, item, capabilities) {
+  if (isSuperAdmin(role)) return true;
   if (item.roles) {
     const rank = ROLE_RANK[role] ?? -1;
     if (item.roles.some(r => rank >= (ROLE_RANK[r] ?? 99))) return true;
@@ -99,6 +112,15 @@ export function filterVisible(items, role, capabilities) {
     }
     return true;
   });
+}
+
+export function filterGroups(groups, role, capabilities) {
+  const capsLoaded = Object.keys(capabilities).length > 0;
+  return groups.filter(g => {
+    if (g.roles && !g.roles.includes(role)) return false;
+    const visibleItems = filterVisible(g.items, role, capabilities);
+    return visibleItems.length > 0;
+  }).map(g => ({ ...g, items: filterVisible(g.items, role, capabilities) }));
 }
 
 const GROUP_ICONS = {
@@ -526,9 +548,7 @@ export default function Sidebar({ collapsed }) {
   const role = useAuthStore(s => s.user?.role);
   const style = useSidebarStyle();
   const capabilities = useUserCapabilities();
-  const visibleGroups = groups
-    .map(g => ({ ...g, items: filterVisible(g.items, role, capabilities) }))
-    .filter(g => g.items.length > 0);
+  const visibleGroups = filterGroups(groups, role, capabilities);
 
   if (style === 'dock') {
     return <DockSidebar collapsed={collapsed} visibleGroups={visibleGroups} role={role} />;

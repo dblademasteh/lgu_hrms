@@ -18,6 +18,7 @@ export const ROLE_RANK = {
   PAYROLL_OFFICER: 3,
   HR_MANAGER: 4,
   ADMIN: 5,
+  SUPER_ADMIN: 6,
 };
 
 export const ROLE_BADGE_TONES = {
