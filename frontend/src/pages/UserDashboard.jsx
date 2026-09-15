@@ -31,14 +31,14 @@ export default function UserDashboard() {
   const toast = useToast();
   const role = useAuthStore(s => s.user?.role);
   const capabilities = useUserCapabilities();
-  const canEmployees = can(role, 'ADMIN', 'HR_MANAGER', 'DEPARTMENT_HEAD');
-  const canPayroll = can(role, 'ADMIN', 'HR_MANAGER', 'PAYROLL_OFFICER');
-  const canReports = can(role, 'ADMIN', 'HR_MANAGER', 'PAYROLL_OFFICER', 'AUDITOR');
-  const canLeave = can(role, 'ADMIN', 'HR_MANAGER', 'DEPARTMENT_HEAD');
-  const canAudit = can(role, 'ADMIN', 'AUDITOR');
-  const canRsp = can(role, 'ADMIN', 'HR_MANAGER');
-  const canPerformance = can(role, 'ADMIN', 'HR_MANAGER', 'DEPARTMENT_HEAD');
-  const canAttendance = can(role, 'ADMIN', 'HR_MANAGER', 'DEPARTMENT_HEAD');
+  const canEmployees = can(role, 'ADMIN', 'HR_MANAGER', 'DEPARTMENT_HEAD', 'SUPER_ADMIN');
+  const canPayroll = can(role, 'ADMIN', 'HR_MANAGER', 'PAYROLL_OFFICER', 'SUPER_ADMIN');
+  const canReports = can(role, 'ADMIN', 'HR_MANAGER', 'PAYROLL_OFFICER', 'AUDITOR', 'SUPER_ADMIN');
+  const canLeave = can(role, 'ADMIN', 'HR_MANAGER', 'DEPARTMENT_HEAD', 'SUPER_ADMIN');
+  const canAudit = can(role, 'ADMIN', 'AUDITOR', 'SUPER_ADMIN');
+  const canRsp = can(role, 'ADMIN', 'HR_MANAGER', 'SUPER_ADMIN');
+  const canPerformance = can(role, 'ADMIN', 'HR_MANAGER', 'DEPARTMENT_HEAD', 'SUPER_ADMIN');
+  const canAttendance = can(role, 'ADMIN', 'HR_MANAGER', 'DEPARTMENT_HEAD', 'SUPER_ADMIN');
   const canEss = !!capabilities.ess;
   const canAttendancePortal = !!capabilities.attendancePortal;
 
@@ -503,7 +503,7 @@ export default function UserDashboard() {
             {canAttendance && <Link to="/attendance" className="rounded-lg border border-line px-3 py-2 hover:border-accent hover:text-accent transition">Attendance</Link>}
             {canReports && <Link to="/reports" className="rounded-lg border border-line px-3 py-2 hover:border-accent hover:text-accent transition">Reports</Link>}
             {canAudit && <Link to="/audit" className="rounded-lg border border-line px-3 py-2 hover:border-accent hover:text-accent transition">Audit Trail</Link>}
-            <Link to="/ess" className="rounded-lg border border-line px-3 py-2 hover:border-accent hover:text-accent transition">Self-Service</Link>
+            {role !== 'SUPER_ADMIN' && <Link to="/ess" className="rounded-lg border border-line px-3 py-2 hover:border-accent hover:text-accent transition">Self-Service</Link>}
             <Link to="/learning" className="rounded-lg border border-line px-3 py-2 hover:border-accent hover:text-accent transition">Learning</Link>
             <Link to="/help" className="rounded-lg border border-line px-3 py-2 hover:border-accent hover:text-accent transition">Help</Link>
           </div>
