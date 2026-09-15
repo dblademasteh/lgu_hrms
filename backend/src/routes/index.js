@@ -45,17 +45,15 @@ router.use('/integrations', integrationsRouter);
 router.use('/integrations/requests', integrationRequestsRouter);
 // Public biometric punch - no JWT required
 router.use('/attendance/public-punch', publicPunchRouter);
-// Public tenant list for login picker
-router.use('/tenants', async (req, res, next) => {
-  if (req.method === 'GET') {
-    try {
-      const tenants = await tenantRepository.list();
-      return res.json(tenants);
-    } catch (e) {
-      return next(e);
-    }
+// Public tenant list for login picker (exact /tenants only; deeper GETs
+// like /tenants/:id fall through to the authenticated router below).
+router.get('/tenants', async (req, res, next) => {
+  try {
+    const tenants = await tenantRepository.list();
+    return res.json(tenants);
+  } catch (e) {
+    return next(e);
   }
-  next();
 });
 router.use('/', requireAuth);
 router.use('/', tenantContext);

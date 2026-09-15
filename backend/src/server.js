@@ -10,6 +10,12 @@ await initSentry();
 
 const app = express();
 
+// Real client IPs behind proxies: "1" = trust the first hop (nginx), or a
+// comma-separated subnet list e.g. "loopback, 10.0.0.0/8". Required for the
+// on-premise login allowlist to see the actual caller address.
+const trustProxy = process.env.TRUST_PROXY;
+if (trustProxy) app.set('trust proxy', /^\d+$/.test(trustProxy) ? Number(trustProxy) : trustProxy.split(',').map(s => s.trim()).filter(Boolean));
+
 app.use(helmet());
 // Same-origin in prod (nginx proxies /api); allow the configured web origin
 // plus localhost for developers. Never reflect arbitrary origins.

@@ -18,6 +18,10 @@ model Tenant {
   domain    String?  @unique
   lguLevel  LguLevel @default(PROVINCIAL)
   isActive  Boolean  @default(true)
+  // On-premise enforcement: source IP/CIDR allowlist for session-establishing
+  // auth (login/login-pin/refresh). Empty = use global ALLOWED_IPS env;
+  // both empty = no restriction.
+  allowedIps String[]  @default([])
   createdAt DateTime @default(now()) @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @db.Timestamptz(6)
   users       User[]

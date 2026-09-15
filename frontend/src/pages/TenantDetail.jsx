@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Building2, Globe, Users, Activity, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, Building2, Globe, Users, Activity, ShieldCheck, Network, Save } from 'lucide-react';
 import Layout from '../components/Layout.jsx';
 import { useToast } from '../components/Toast.jsx';
 import { tenantsApi } from '../api/tenants.js';
@@ -16,20 +16,37 @@ export default function TenantDetail() {
   const toast = useToast();
   const [tenant, setTenant] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [ipsText, setIpsText] = useState('');
+  const [savingIps, setSavingIps] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    tenantsApi.list()
-      .then(list => {
+    tenantsApi.get(id)
+      .then(t => {
         if (cancelled) return;
-        const found = list.find(t => t.id === id);
-        setTenant(found || null);
+        setTenant(t);
+        setIpsText((t.allowedIps || []).join('\n'));
       })
       .catch(() => toast('Failed to load tenant', 'error'))
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [id, toast]);
+
+  const saveAllowedIps = async () => {
+    const list = ipsText.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+    setSavingIps(true);
+    try {
+      const updated = await tenantsApi.update(id, { allowedIps: list });
+      setTenant(prev => ({ ...prev, ...updated }));
+      setIpsText((updated.allowedIps || []).join('\n'));
+      toast('On-premise access list updated', 'success');
+    } catch (e) {
+      toast(e?.response?.data?.error?.message || 'Failed to update access list', 'error');
+    } finally {
+      setSavingIps(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -123,6 +140,49 @@ export default function TenantDetail() {
           <div>
             <p className="mono-label text-[10px] uppercase text-muted mb-1">Status</p>
             <p className="text-sm text-ink">{tenant.isActive === false ? 'Inactive' : 'Active'}</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="card p-6">
+        <div className="flex items-start justify-between gap-4 mb-3">
+          <div>
+            <h2 className="font-display font-semibold text-ink flex items-center gap-2">
+              <Network size={18} className="text-accent" />
+              On-Premise Access
+            </h2>
+            <p className="text-sm text-muted mt-1">
+              Logins, PIN logins and token refreshes are only accepted from these
+              networks. Leave empty to fall back to the global <code className="text-ink">ALLOWED_IPS</code> env.
+            </p>
+          </div>
+          <span className={`badge ${(tenant.allowedIps || []).length ? 'badge-success' : 'badge-warning'}`}>
+            {(tenant.allowedIps || []).length ? 'Restricted' : 'Open'}
+          </span>
+        </div>
+        <div>
+          <p className="mono-label text-[10px] uppercase text-muted mb-1">Allowed CIDRs (one per line)</p>
+          <textarea
+            value={ipsText}
+            onChange={e => setIpsText(e.target.value)}
+            rows={5}
+            placeholder={'192.168.1.0/24\n203.0.113.0/24'}
+            className="input w-full font-mono text-sm"
+            spellCheck={false}
+          />
+          <div className="mt-3 flex items-center justify-between gap-4">
+            <p className="text-xs text-muted">
+              Your source IP on this request: <code className="text-ink">{tenant.clientIp || '—'}</code>
+            </p>
+            <button
+              type="button"
+              className="btn btn-primary gap-2"
+              onClick={saveAllowedIps}
+              disabled={savingIps}
+            >
+              <Save size={16} />
+              {savingIps ? 'Saving…' : 'Save Allowlist'}
+            </button>
           </div>
         </div>
       </div>

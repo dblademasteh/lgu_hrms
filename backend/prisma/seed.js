@@ -678,14 +678,20 @@ async function main() {
   const hash = await bcrypt.hash(process.env.SEED_DEFAULT_PASSWORD || 'admin123', 10);
 
   const tenantsData = [
-    { id: 'tenant-default', code: 'DEFAULT', name: 'Default LGU', lguLevel: 'PROVINCIAL' },
-    { id: 'tenant-solana', code: 'SOLANA', name: 'Municipality of Solana', lguLevel: 'MUNICIPAL' },
+    {
+      id: 'tenant-default', code: 'DEFAULT', name: 'Default LGU', lguLevel: 'PROVINCIAL',
+      allowedIps: ['127.0.0.1/32', '::1/128', '10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16'],
+    },
+    {
+      id: 'tenant-solana', code: 'SOLANA', name: 'Municipality of Solana', lguLevel: 'MUNICIPAL',
+      allowedIps: ['127.0.0.1/32', '::1/128', '10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16'],
+    },
   ];
 
   for (const t of tenantsData) {
     await prisma.tenant.upsert({
       where: { code: t.code },
-      update: {},
+      update: { allowedIps: t.allowedIps },
       create: t,
     });
   }
