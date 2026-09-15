@@ -107,6 +107,12 @@ npx prisma generate
 node prisma/seed.js
 ```
 
+> Recent migrations added for RSP & payroll CSC compliance:
+> - `20260915240000_add_employee_government_ids` — SSS/PhilHealth/Pag-IBIG/TIN
+> - `20260915220000_payroll_csc_compliance` — overtime, leave monetization
+> - `20260915230000_perf_spms_compliance` — IPCR/SPMS
+> - `20260915160000_leave_credit_unique_constraint`
+
 > **Windows note:** Prisma client generation is blocked while the backend watch process runs (file locks). Stop the backend dev server first, then `npx prisma generate`, then restart it.
 
 Running the Prisma Studio DB inspector: `cd backend && npx prisma studio`.
