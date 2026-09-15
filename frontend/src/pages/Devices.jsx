@@ -46,7 +46,7 @@ export default function Devices() {
     setLoading(true);
     try {
       const data = await biometricDevicesApi.list();
-      setDevices(data || []);
+      setDevices(Array.isArray(data) ? data : []);
     } catch (e) {
       toast('Failed to load devices', 'error');
     } finally {
