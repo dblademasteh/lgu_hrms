@@ -18,7 +18,9 @@ export default function AttendancePortal() {
 
   // Public kiosk mode state
   const [kioskEmployeeNumber, setKioskEmployeeNumber] = useState('');
-  const [kioskTenantCode, setKioskTenantCode] = useState('default');
+  const [kioskTenantCode, setKioskTenantCode] = useState('DEFAULT');
+  const [kioskPunchKey, setKioskPunchKey] = useState('');
+  const [kioskDeviceId, setKioskDeviceId] = useState('');
   const [kioskMode, setKioskMode] = useState(false);
 
   // Biometric enrollment state
@@ -90,7 +92,13 @@ export default function AttendancePortal() {
     }
     setPunching(true);
     try {
-      const res = await biometricApi.publicPunch(kioskEmployeeNumber.trim(), type, kioskTenantCode.trim() || undefined);
+      const res = await biometricApi.publicPunch(
+        kioskEmployeeNumber.trim(),
+        type,
+        kioskTenantCode.trim() || undefined,
+        kioskPunchKey.trim() || undefined,
+        kioskDeviceId.trim() || undefined,
+      );
       const data = res.data;
       toast(data?.message || `${type === 'IN' ? 'Punched in' : 'Punched out'} successfully`, 'success');
       setToday(data?.record || null);
@@ -186,7 +194,7 @@ export default function AttendancePortal() {
         <div className="card p-6 mb-6 border-accent/30">
           <h2 className="font-display font-semibold text-ink mb-4">Public Biometric Punch</h2>
           <p className="text-sm text-muted mb-4">Use this for biometric device integration or public kiosk. No login required.</p>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-4">
             <div>
               <label className="block text-sm font-medium text-ink mb-1">Employee Number</label>
               <input
@@ -202,9 +210,29 @@ export default function AttendancePortal() {
                 className="input"
                 value={kioskTenantCode}
                 onChange={e => setKioskTenantCode(e.target.value)}
-                placeholder="default"
+                placeholder="DEFAULT"
               />
             </div>
+            <div>
+              <label className="block text-sm font-medium text-ink mb-1">Punch Key</label>
+              <input
+                className="input"
+                type="password"
+                value={kioskPunchKey}
+                onChange={e => setKioskPunchKey(e.target.value)}
+                placeholder="Optional device secret"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-ink mb-1">Device ID</label>
+              <input
+                className="input"
+                value={kioskDeviceId}
+                onChange={e => setKioskDeviceId(e.target.value)}
+                placeholder="e.g. biometric-unit-02"
+              />
+            </div>
+          </div>
             <div className="flex items-end gap-2">
               <button
                 className="btn btn-primary gap-2"
@@ -223,7 +251,6 @@ export default function AttendancePortal() {
                 Punch Out
               </button>
             </div>
-          </div>
         </div>
       )}
 

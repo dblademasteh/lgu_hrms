@@ -2,6 +2,8 @@ import { attendanceService } from '../services/attendanceService.js';
 import { prisma } from '../lib/prisma.js';
 import { requireRole } from '../middleware/rbac.js';
 import { withTenant } from '../middleware/tenant.js';
+import { manilaDateKey, dateKeyToUtc, endOfDateKeyExclusive } from '../lib/time.js';
+import crypto from 'node:crypto';
 
 export const attendanceController = {
   async list(req, res, next) {
@@ -59,7 +61,9 @@ export const attendanceController = {
         return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Employee linkage not found' }});
       }
 
-      const employee = await prisma.employee.findUnique({ where: { employeeNumber: user.externalId }});
+      const employee = await prisma.employee.findFirst({
+        where: withTenant(req, { employeeNumber: user.externalId }),
+      });
       if (!employee) {
         return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Employee not found' }});
       }
@@ -77,7 +81,9 @@ export const attendanceController = {
       if (!user?.externalId) {
         return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Employee linkage not found' }});
       }
-      const employee = await prisma.employee.findUnique({ where: { employeeNumber: user.externalId }});
+      const employee = await prisma.employee.findFirst({
+        where: withTenant(req, { employeeNumber: user.externalId }),
+      });
       if (!employee) {
         return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Employee not found' }});
       }
@@ -102,15 +108,16 @@ export const attendanceController = {
       }
 
       const today = new Date();
-      const todayStr = today.toISOString().slice(0, 10);
-      const startOfDay = new Date(`${todayStr}T00:00:00.000Z`);
-      const endOfDay = new Date(`${todayStr}T23:59:59.999Z`);
+      const todayKey = manilaDateKey(today);
+      const startOfDay = dateKeyToUtc(todayKey);
+      const endOfDay = endOfDateKeyExclusive(todayKey);
 
       const record = await prisma.attendance.findFirst({
         where: withTenant(req, {
           employeeId: employee.id,
-          date: { gte: startOfDay, lte: endOfDay }
-        })
+          date: { gte: startOfDay, lt: endOfDay }
+        }),
+        orderBy: { timeIn: 'asc' },
       });
 
       res.json({ record });
@@ -120,14 +127,27 @@ export const attendanceController = {
   // Public biometric punch - no JWT required, uses employeeNumber
   async punchBiometricPublic(req, res, next) {
     try {
-      const { employeeNumber, punchType, tenantCode, deviceId } = req.body;
+      const { employeeNumber, punchType, tenantCode, deviceId, punchKey } = req.body;
       if (!employeeNumber || !punchType || (punchType !== 'IN' && punchType !== 'OUT')) {
         return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'employeeNumber and punchType (IN|OUT) are required' }});
       }
 
+      // When the server is configured with a punch key, kiosks must present it.
+      const expectedKey = process.env.BIOMETRIC_PUNCH_KEY;
+      if (expectedKey) {
+        const supplied = typeof punchKey === 'string' ? punchKey : '';
+        const a = Buffer.from(supplied);
+        const b = Buffer.from(expectedKey);
+        if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
+          return res.status(401).json({ error: { code: 'BAD_PUNCH_KEY', message: 'Invalid or missing punch key' }});
+        }
+      }
+
       let tenantId = req.tenantId || null;
       if (!tenantId && tenantCode) {
-        const tenant = await prisma.tenant.findUnique({ where: { code: tenantCode } });
+        const tenant = await prisma.tenant.findFirst({
+          where: { code: { equals: tenantCode, mode: 'insensitive' } },
+        });
         if (!tenant) {
           return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Tenant not found' }});
         }

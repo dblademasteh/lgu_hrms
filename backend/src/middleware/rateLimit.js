@@ -50,3 +50,10 @@ export const apiLimiter = rateLimit({
   max: 600,
   message: 'Too many requests — slow down',
 });
+
+/** Tighter bucket for the unauthenticated public punch kiosk. */
+export const punchLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 120,
+  message: 'Too many punch attempts — slow down',
+});

@@ -1,14 +1,9 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
+import { manilaMinutes } from '../lib/time.js';
 
 const ZERO = new Prisma.Decimal(0);
-const WORK_START = 8 * 60 + 0; // 08:00 Asia/Manila
-const MANILA_OFFSET_MS = 8 * 60 * 60 * 1000;
-
-function manilaMinutes(dt) {
-  const shifted = new Date(dt.getTime() + MANILA_OFFSET_MS);
-  return shifted.getUTCHours() * 60 + shifted.getUTCMinutes();
-}
+const WORK_START = 8 * 60; // 08:00 Asia/Manila fallback when no rule is set
 
 function round2(d) {
   return d.toDecimalPlaces(2);
@@ -74,10 +69,12 @@ export async function computeRun(req, period) {
     select: { employeeId: true, timeIn: true },
   });
   const lateDaysByEmployee = new Map();
+  const rule0 = attendanceRules[0];
+  const scheduledStart = rule0?.workStartMins ?? WORK_START;
   for (const a of attendances) {
     if (!a.timeIn) continue;
-    const lateMins = manilaMinutes(a.timeIn) - WORK_START;
-    if (lateMins > (attendanceRules[0]?.tardinessMin ?? 0)) {
+    const lateMins = manilaMinutes(a.timeIn) - scheduledStart;
+    if (lateMins > (rule0?.tardinessMin ?? 0)) {
       lateDaysByEmployee.set(a.employeeId, (lateDaysByEmployee.get(a.employeeId) ?? 0) + 1);
     }
   }

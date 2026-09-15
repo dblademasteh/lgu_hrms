@@ -2,13 +2,14 @@ import { Router } from 'express';
 import { attendanceController } from '../controllers/attendanceController.js';
 import { validate } from '../middleware/validate.js';
 import { requireRole } from '../middleware/rbac.js';
+import { punchLimiter } from '../middleware/rateLimit.js';
 import { createAttendanceSchema, updateAttendanceSchema, deleteAttendanceSchema, bulkImportAttendanceSchema, punchBiometricSchema, punchBiometricPublicSchema } from '../shared/contracts/attendance.js';
 
 // NOTE: requireAuth + auditLog are mounted globally in routes/index.js.
 const router = Router();
 
-router.get('/', attendanceController.list);
-router.post('/', validate(createAttendanceSchema), attendanceController.create);
+router.get('/', requireRole('ADMIN', 'HR_MANAGER', 'DEPARTMENT_HEAD'), attendanceController.list);
+router.post('/', validate(createAttendanceSchema), requireRole('ADMIN', 'HR_MANAGER', 'DEPARTMENT_HEAD'), attendanceController.create);
 router.patch('/:id', validate(updateAttendanceSchema), requireRole('ADMIN', 'HR_MANAGER', 'DEPARTMENT_HEAD'), attendanceController.update);
 router.delete('/:id', validate(deleteAttendanceSchema), requireRole('ADMIN', 'HR_MANAGER'), attendanceController.remove);
 router.post('/import', validate(bulkImportAttendanceSchema), requireRole('ADMIN', 'HR_MANAGER'), attendanceController.bulkImport);
@@ -20,7 +21,7 @@ router.post('/punch', validate(punchBiometricSchema), attendanceController.punch
 
 // Public biometric punch endpoint - no JWT required
 const publicPunchRouter = Router();
-publicPunchRouter.post('/punch', validate(punchBiometricPublicSchema), attendanceController.punchBiometricPublic);
+publicPunchRouter.post('/punch', punchLimiter, validate(punchBiometricPublicSchema), attendanceController.punchBiometricPublic);
 
 export default router;
 export { publicPunchRouter };

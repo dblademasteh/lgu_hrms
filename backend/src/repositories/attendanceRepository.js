@@ -3,6 +3,9 @@ import { withTenant, stampTenant } from '../middleware/tenant.js';
 import { getDepartmentScope } from '../middleware/departmentScope.js';
 
 export const attendanceRepository = {
+  async get(req, id) {
+    return prisma.attendance.findFirst({ where: withTenant(req, { id }) });
+  },
   async findAll(req, date) {
     const baseWhere = date ? { date: { gte: new Date(`${date}T00:00:00Z`), lt: new Date(`${date}T23:59:59Z`) } } : {};
     const where = withTenant(req, baseWhere);
