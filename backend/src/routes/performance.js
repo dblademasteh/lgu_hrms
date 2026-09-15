@@ -17,19 +17,20 @@ const router = Router();
 
 router.use(requireRole('ADMIN', 'HR_MANAGER'));
 
+// Competency catalog — registered BEFORE the `/:id` review routes so
+// `/competencies` is not captured by the `:id` param (route shadowing).
+router.get('/competencies', performanceController.listCompetencies);
+router.post('/competencies', validate(createCompetencySchema), performanceController.createCompetency);
+router.get('/competencies/:id', validate(competencyIdSchema), performanceController.getCompetency);
+router.patch('/competencies/:id', validate(updateCompetencySchema), performanceController.updateCompetency);
+router.delete('/competencies/:id', validate(competencyIdSchema), requireRole('ADMIN'), performanceController.deleteCompetency);
+
 // Performance reviews
 router.get('/', performanceController.list);
 router.get('/:id', validate(performanceIdSchema), performanceController.get);
 router.post('/', validate(createPerformanceSchema), performanceController.create);
 router.patch('/:id', validate(updatePerformanceSchema), performanceController.update);
 router.delete('/:id', validate(performanceIdSchema), requireRole('ADMIN'), performanceController.remove);
-
-// Competency catalog
-router.get('/competencies', performanceController.listCompetencies);
-router.post('/competencies', validate(createCompetencySchema), performanceController.createCompetency);
-router.get('/competencies/:id', validate(competencyIdSchema), performanceController.getCompetency);
-router.patch('/competencies/:id', validate(updateCompetencySchema), performanceController.updateCompetency);
-router.delete('/competencies/:id', validate(competencyIdSchema), requireRole('ADMIN'), performanceController.deleteCompetency);
 
 // Review competencies (matrix items)
 router.get('/:id/competencies', validate(performanceIdSchema), performanceController.listReviewCompetencies);
