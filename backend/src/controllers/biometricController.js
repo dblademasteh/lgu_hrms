@@ -48,6 +48,14 @@ export const biometricController = {
 
   async list(req, res, next) {
     try {
+      const { employeeId } = req.query || {};
+      if (employeeId) {
+        if (!['ADMIN', 'SUPER_ADMIN'].includes(req.user?.role)) {
+          return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'Insufficient role' } });
+        }
+        const credentials = await biometricService.listForEmployee(req, employeeId);
+        return res.json({ credentials, employeeId });
+      }
       const user = await prisma.user.findUnique({ where: { ...withTenant(req), id: req.user.id } });
       if (!user?.externalId) {
         return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Employee linkage not found' }});
@@ -56,7 +64,6 @@ export const biometricController = {
       if (!employee) {
         return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Employee not found' }});
       }
-
       const credentials = await biometricService.listForEmployee(req, employee.id);
       res.json({ credentials });
     } catch (e) {

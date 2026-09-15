@@ -15,5 +15,7 @@ export const verifyBiometricSchema = {
 };
 
 export const listBiometricSchema = {
-  query: z.object({}),
+  query: z.object({
+    employeeId: z.string().min(1).optional(),
+  }),
 };

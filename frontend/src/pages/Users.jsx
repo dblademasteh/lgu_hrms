@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Save, X, Edit, UserCheck, Shield, Building2, Settings, Copy, Trash2 } from 'lucide-react';
+import { Plus, Save, X, Edit, UserCheck, Shield, Building2, Settings, Copy, Trash2, Fingerprint } from 'lucide-react';
 import Layout from '../components/Layout.jsx';
 import Modal from '../components/Modal.jsx';
 import ConfirmDialog from '../components/ConfirmDialog.jsx';
@@ -10,6 +10,7 @@ import { departmentsApi } from '../api/departments.js';
 import { databaseApi } from '../api/database.js';
 import { rolesApi } from '../api/roles.js';
 import { listEmployees } from '../api/employees.js';
+import { biometricApi } from '../api/biometric.js';
 import { badgeTone } from '../data/mock.js';
 import { ROLE_BADGE_TONES, useUserCapabilities } from '../config/permissions.js';
 
@@ -30,6 +31,8 @@ export default function Users() {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(emptyForm);
+  const [bioStatus, setBioStatus] = useState(null); // { credentials: [], employeeId }
+  const [bioLoading, setBioLoading] = useState(false);
   const [confirm, setConfirm] = useState(null);
   const [roles, setRoles] = useState([]);
   const [rolesLoading, setRolesLoading] = useState(true);
@@ -107,6 +110,20 @@ export default function Users() {
     rolesApi.capabilities().then(r => setCaps(r.data?.capabilities || [])).catch(()=>{});
     rolesApi.permissions().then(r => { const roles = r.data?.roles || []; setMatrixRoles(roles); syncMatrix(roles); }).catch(()=>{});
   }, [myRole]);
+
+  useEffect(() => {
+    if (!form.externalId) {
+      setBioStatus(null);
+      return;
+    }
+    let cancelled = false;
+    setBioLoading(true);
+    biometricApi.getEmployeeCredentials(form.externalId)
+      .then(r => { if (!cancelled) setBioStatus(r); })
+      .catch(() => { if (!cancelled) setBioStatus({ credentials: [] }); })
+      .finally(() => { if (!cancelled) setBioLoading(false); });
+    return () => { cancelled = true; };
+  }, [form.externalId]);
 
   const openAdd = () => { setEditing(null); setForm(emptyForm); setFormOpen(true); };
   const openEdit = u => {
@@ -485,6 +502,38 @@ export default function Users() {
               ))}
             </select>
             <p className="text-xs text-muted mt-1">Links this account to an employee record so they can use the ESS portal (payslips, leave filing, attendance).</p>
+            {form.externalId && (
+              <div className="mt-2 p-3 bg-bg rounded-lg border border-line">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-ink flex items-center gap-1.5">
+                    <Fingerprint size={13} className="text-accent" />
+                    Biometric login
+                  </span>
+                  {bioLoading ? (
+                    <span className="text-xs text-muted">Checking…</span>
+                  ) : bioStatus?.credentials?.length ? (
+                    <span className="badge badge-success">Ready</span>
+                  ) : (
+                    <span className="badge">Not enrolled</span>
+                  )}
+                </div>
+                {!bioLoading && bioStatus?.credentials?.length > 0 && (
+                  <ul className="mt-2 space-y-1">
+                    {bioStatus.credentials.map(c => (
+                      <li key={c.id} className="text-xs text-muted flex items-center gap-1.5">
+                        <Fingerprint size={12} className="text-accent" />
+                        {c.deviceName || 'Default device'} · enrolled {new Date(c.enrolledAt).toLocaleDateString()}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {!bioLoading && !bioStatus?.credentials?.length && (
+                  <p className="text-xs text-muted mt-1.5">
+                    Employee must enroll via the Attendance Portal after logging in. For ZK terminal access, set the employee's user ID on the device to <span className="font-mono text-ink">{form.externalId}</span>.
+                  </p>
+                )}
+              </div>
+            )}
           </div>
         </form>
       </Modal>
