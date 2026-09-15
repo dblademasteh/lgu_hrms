@@ -114,6 +114,7 @@ export const attendanceService = {
       timeOut: normalizeTimeField(timeOut, date),
       hours: hours ?? null,
       remark,
+      source: 'MANUAL',
     });
   },
 
@@ -204,6 +205,7 @@ export const attendanceService = {
               timeOut,
               hours: record.hours ?? null,
               remark,
+              source: 'IMPORT',
             }),
           });
           results.push({ status: 'created', id: created.id, employeeNumber: record.employeeNumber });
@@ -245,6 +247,7 @@ export const attendanceService = {
           date: startOfDay,
           timeIn: now,
           remark: ruleRemark,
+          source: 'PUNCH',
         }),
         include: PUNCH_WITH_EMPLOYEE,
       });
@@ -266,10 +269,50 @@ export const attendanceService = {
     const hours = computePunchHours(new Date(scoped.timeIn), now, rule);
     const record = await prisma.attendance.update({
       where: { id: open.id },
-      data: { timeOut: now, hours, remark: 'Completed' },
+      data: { timeOut: now, hours, remark: 'Completed', source: 'PUNCH' },
       include: PUNCH_WITH_EMPLOYEE,
     });
     return { message: 'Punched out successfully', record };
+  },
+
+  // Ingest a punch event pulled from a ZK biometric terminal. IN/OUT is
+  // inferred from row state on the same Asia/Manila calendar day as the
+  // kiosk punch; `ref` records provenance as "DEVICE:<deviceId>:<logId>".
+  async devicePunch(req, employeeId, at, ref) {
+    const todayKey = manilaDateKey(at);
+    const startOfDay = dateKeyToUtc(todayKey);
+    const endOfDay = endOfDateKeyExclusive(todayKey);
+
+    const todays = await prisma.attendance.findMany({
+      where: withTenant(req, { employeeId, date: { gte: startOfDay, lt: endOfDay } }),
+      orderBy: { timeIn: 'asc' },
+    });
+
+    const open = todays.find((r) => r.timeIn && !r.timeOut);
+
+    if (open) {
+      const scoped = await prisma.attendance.findFirst({ where: withTenant(req, { id: open.id }) });
+      if (!scoped) throw new Error('Cross-tenant access');
+      const rule = await getActiveRule(req);
+      const hours = computePunchHours(new Date(scoped.timeIn), at, rule);
+      return prisma.attendance.update({
+        where: { id: scoped.id },
+        data: { timeOut: at, hours, remark: 'Completed', source: 'DEVICE', deviceRef: ref ?? null },
+      });
+    }
+
+    const leaveRemark = await autoMarkLeave(req, employeeId, startOfDay);
+    const ruleRemark = leaveRemark || (await computeRemarkFromRules(req, at, null, 0)) || 'Punched in';
+    return prisma.attendance.create({
+      data: stampTenant(req, {
+        employeeId,
+        date: startOfDay,
+        timeIn: at,
+        remark: ruleRemark,
+        source: 'DEVICE',
+        deviceRef: ref ?? null,
+      }),
+    });
   },
 
   // Get attendance for specific employee (self-service)

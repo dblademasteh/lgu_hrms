@@ -74,6 +74,7 @@ model Tenant {
   apiKeys ApiKey[]
   webhooks WebhookSubscription[]
   externalSystems ExternalSystem[]
+  biometricDevices BiometricDevice[]
 }
 
 model User {
@@ -471,11 +472,59 @@ model Attendance {
   timeOut    DateTime? @db.Timestamptz(6)
   hours      Float?
   remark     String?
+  // Provenance: MANUAL | IMPORT | PUNCH | DEVICE. deviceRef is
+  // "DEVICE:<deviceId>:<deviceLogId>" for rows written by the biometric sync.
+  source     String?  @default("MANUAL")
+  deviceRef  String?
   createdAt  DateTime @default(now()) @db.Timestamptz(6)
   employee   Employee @relation(fields: [employeeId], references: [id])
   tenant      Tenant?   @relation(fields: [tenantId], references: [id])
 
   @@index([tenantId, employeeId, date])
+}
+
+model BiometricDevice {
+  id             String    @id @default(uuid())
+  tenantId       String?
+  name           String
+  model          String?
+  // ZK_TCP = backend pulls via the ZK protocol (port 4370). ADMS push is a
+  // planned follow-up for models that push /iclock/cdata HTTP events.
+  protocol       String    @default("ZK_TCP")
+  host           String
+  port           Int       @default(4370)
+  serial         String?
+  active         Boolean   @default(true)
+  pollIntervalMs Int       @default(30000)
+  lastConnectedAt DateTime? @db.Timestamptz(6)
+  lastSyncAt     DateTime? @db.Timestamptz(6)
+  lastError      String?
+  createdAt      DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime  @updatedAt @db.Timestamptz(6)
+  logs           BiometricDeviceLog[]
+  tenant         Tenant?   @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, active])
+}
+
+model BiometricDeviceLog {
+  id           String   @id @default(uuid())
+  tenantId     String?
+  deviceId     String
+  // Device-side record index. Dedupes repeated pulls (idempotent sync).
+  deviceLogId  String
+  userId       String
+  punchedAt    DateTime @db.Timestamptz(6)
+  verification String?
+  // Linked Employee id when userId matched an employeeNumber, else null.
+  employeeId   String?
+  // True when the event created/updated an Attendance row.
+  applied      Boolean  @default(false)
+  createdAt    DateTime @default(now()) @db.Timestamptz(6)
+  device       BiometricDevice @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@unique([deviceId, deviceLogId])
+  @@index([tenantId, deviceId, punchedAt])
 }
 
 model Appointment {

@@ -5,6 +5,7 @@ import routes from './routes/index.js';
 import { apiLimiter } from './middleware/rateLimit.js';
 import { prisma } from './lib/prisma.js';
 import { initSentry, captureError } from './lib/sentry.js';
+import { startBiometricPoller, stopBiometricPoller } from './services/deviceSyncService.js';
 
 await initSentry();
 
@@ -56,6 +57,11 @@ const PORT = process.env.PORT || 4000;
 const server = app.listen(PORT, async () => {
   console.log(`LGU HRMS Backend running on http://localhost:${PORT}`);
 
+  // Biometric terminal poller (ZK pull). Enable with BIOMETRIC_POLLER=1.
+  if (process.env.BIOMETRIC_POLLER === '1') {
+    startBiometricPoller();
+  }
+
   // Run pending Prisma migrations on startup in production.
   // Skipped in development to avoid interfering with `prisma migrate dev`.
   if (process.env.NODE_ENV === 'production' || process.env.RUN_MIGRATIONS_ON_STARTUP === 'true') {
@@ -83,6 +89,7 @@ const server = app.listen(PORT, async () => {
 // Graceful shutdown: drain connections, then exit.
 const shutdown = (signal) => {
   console.log(`\n${signal} received: shutting down gracefully...`);
+  stopBiometricPoller();
   server.close(async () => {
     console.log('HTTP server closed');
     try {
