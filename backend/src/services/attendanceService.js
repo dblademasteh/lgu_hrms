@@ -44,6 +44,11 @@ const DEFAULT_WORK_END = 17 * 60;
 const DEFAULT_LUNCH_START = 12 * 60;
 const DEFAULT_LUNCH_END = 13 * 60;
 
+// Punch responses carry the employee's name so a lobby kiosk can confirm who punched.
+const PUNCH_WITH_EMPLOYEE = {
+  employee: { select: { firstName: true, lastName: true, employeeNumber: true } },
+};
+
 async function getActiveRule(req) {
   return prisma.attendanceRule.findFirst({
     where: withTenant(req, { active: true }),
@@ -222,6 +227,7 @@ export const attendanceService = {
     const todays = await prisma.attendance.findMany({
       where: withTenant(req, { employeeId, date: { gte: startOfDay, lt: endOfDay } }),
       orderBy: { timeIn: 'asc' },
+      include: PUNCH_WITH_EMPLOYEE,
     });
 
     const open = todays.find((r) => r.timeIn && !r.timeOut);
@@ -240,6 +246,7 @@ export const attendanceService = {
           timeIn: now,
           remark: ruleRemark,
         }),
+        include: PUNCH_WITH_EMPLOYEE,
       });
       return { message: 'Punched in successfully', record };
     }
@@ -260,6 +267,7 @@ export const attendanceService = {
     const record = await prisma.attendance.update({
       where: { id: open.id },
       data: { timeOut: now, hours, remark: 'Completed' },
+      include: PUNCH_WITH_EMPLOYEE,
     });
     return { message: 'Punched out successfully', record };
   },
