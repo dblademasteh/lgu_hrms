@@ -80,6 +80,7 @@ const groups = [
     label: 'Administration',
     items: [
       { name: 'Users & Roles', path: '/users', icon: UserCog, roles: ['ADMIN', 'SUPER_ADMIN'], capability: 'manageUsersAndRoles' },
+      { name: 'Biometric Devices', path: '/biometric-devices', icon: Fingerprint, roles: ['ADMIN'] },
       { name: 'Settings', path: '/settings', icon: SettingsIcon },
     ]
   },
