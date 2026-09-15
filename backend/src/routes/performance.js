@@ -2,10 +2,15 @@ import { Router } from 'express';
 import { performanceController } from '../controllers/performanceController.js';
 import { validate } from '../middleware/validate.js';
 import { requireRole } from '../middleware/rbac.js';
+import { requirePermission } from '../middleware/permission.js';
 import {
   createPerformanceSchema,
   updatePerformanceSchema,
   performanceIdSchema,
+  createTargetSchema,
+  updateTargetSchema,
+  targetIdSchema,
+  computeRatingSchema,
   createCompetencySchema,
   updateCompetencySchema,
   competencyIdSchema,
@@ -15,14 +20,11 @@ import {
 
 const router = Router();
 
-router.use(requireRole('ADMIN', 'HR_MANAGER'));
-
-// Competency catalog — registered BEFORE the `/:id` review routes so
-// `/competencies` is not captured by the `:id` param (route shadowing).
+// Competency catalog
 router.get('/competencies', performanceController.listCompetencies);
-router.post('/competencies', validate(createCompetencySchema), performanceController.createCompetency);
+router.post('/competencies', validate(createCompetencySchema), requirePermission('manageUsersAndRoles'), performanceController.createCompetency);
 router.get('/competencies/:id', validate(competencyIdSchema), performanceController.getCompetency);
-router.patch('/competencies/:id', validate(updateCompetencySchema), performanceController.updateCompetency);
+router.patch('/competencies/:id', validate(updateCompetencySchema), requirePermission('manageUsersAndRoles'), performanceController.updateCompetency);
 router.delete('/competencies/:id', validate(competencyIdSchema), requireRole('ADMIN'), performanceController.deleteCompetency);
 
 // Performance reviews
@@ -32,7 +34,16 @@ router.post('/', validate(createPerformanceSchema), performanceController.create
 router.patch('/:id', validate(updatePerformanceSchema), performanceController.update);
 router.delete('/:id', validate(performanceIdSchema), requireRole('ADMIN'), performanceController.remove);
 
-// Review competencies (matrix items)
+// Rating computation
+router.post('/:id/compute', validate(computeRatingSchema), performanceController.compute);
+
+// Review targets
+router.get('/:id/targets', validate(performanceIdSchema), performanceController.listTargets);
+router.post('/:id/targets', validate(createTargetSchema), performanceController.addTarget);
+router.patch('/:id/targets/:targetId', validate(updateTargetSchema), performanceController.updateTarget);
+router.delete('/:id/targets/:targetId', validate(targetIdSchema), performanceController.removeTarget);
+
+// Review competencies
 router.get('/:id/competencies', validate(performanceIdSchema), performanceController.listReviewCompetencies);
 router.post('/:id/competencies', validate(performanceIdSchema), validate(createReviewCompetencySchema), performanceController.addReviewCompetency);
 router.patch('/:id/competencies/:itemId', validate(performanceIdSchema), validate(updateReviewCompetencySchema), performanceController.updateReviewCompetency);

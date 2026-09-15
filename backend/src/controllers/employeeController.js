@@ -1,4 +1,4 @@
-import { listEmployees, getEmployee, createEmployee, updateEmployee, deleteEmployee } from '../services/employeeService.js';
+import { listEmployees, getEmployee, createEmployee, updateEmployee, deleteEmployee, bulkUpsertEmployees } from '../services/employeeService.js';
 
 export async function listEmployeesHandler(req, res, next) {
   try {
@@ -43,6 +43,15 @@ export async function deleteEmployeeHandler(req, res, next) {
   try {
     await deleteEmployee(req, req.params.id);
     res.status(204).end();
+  } catch (e) {
+    next(e);
+  }
+}
+
+export async function bulkEmployeesHandler(req, res, next) {
+  try {
+    const result = await bulkUpsertEmployees(req, req.body);
+    res.json(result);
   } catch (e) {
     next(e);
   }

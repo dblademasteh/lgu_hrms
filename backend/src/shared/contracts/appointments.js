@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 const dateField = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Expected YYYY-MM-DD');
 const appointmentType = z.enum(['PERMANENT', 'TEMPORARY', 'CASUAL', 'CONTRACTUAL', 'JOB_ORDER', 'COS', 'COTERMINOUS']);
+const appointmentStatus = z.enum(['PENDING', 'APPROVED', 'VERIFIED', 'ISSUED', 'EFFECTIVE', 'ENDED', 'SEPARATED']);
 
 export const createAppointmentSchema = {
   body: z.object({
@@ -10,7 +11,7 @@ export const createAppointmentSchema = {
     itemNo: z.string().min(1).max(60),
     startDate: dateField,
     endDate: dateField.optional().nullable(),
-    status: z.enum(['ACTIVE', 'ENDED']).default('ACTIVE'),
+    status: appointmentStatus.default('PENDING'),
   }),
 };
 
@@ -22,7 +23,7 @@ export const updateAppointmentSchema = {
       itemNo: z.string().min(1).max(60),
       startDate: dateField,
       endDate: dateField.optional().nullable(),
-      status: z.enum(['ACTIVE', 'ENDED']),
+      status: appointmentStatus,
     })
     .partial(),
 };

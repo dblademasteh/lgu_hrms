@@ -1,6 +1,6 @@
 import { pullZkAttendance } from '../lib/zkteco.js';
 import { prisma } from '../lib/prisma.js';
-import { withTenant, stampTenant } from '../middleware/tenant.js';
+import { withTenant } from '../middleware/tenant.js';
 import { captureError } from '../lib/sentry.js';
 import { attendanceService } from './attendanceService.js';
 
@@ -13,16 +13,20 @@ function virtualReq(tenantId) {
 /**
  * Ingest normalized device logs into BiometricDeviceLog (deduped by
  * [deviceId, deviceLogId]) and apply each matched event through the same
- * punch state machine as the kiosk. Idempotent: re-ingesting the same logs is
- * a no-op that only bumps `duplicates`.
+ * punch state machine as the kiosk.
+ *
+ * Idempotent: logs already applied are skipped on re-ingest. Logs that FAILED
+ * to apply are left `applied:false` so the next sync retries them — a transient
+ * punch error (e.g. a state conflict) never permanently drops an event. The
+ * failure is captured but the rest of the batch still processes.
  */
 export async function ingestLogs(req, deviceId, logs) {
-  const reserved = new Set(
-    (await prisma.biometricDeviceLog.findMany({
-      where: { deviceId },
-      select: { deviceLogId: true },
-    })).map((l) => l.deviceLogId),
-  );
+  const existingRows = await prisma.biometricDeviceLog.findMany({
+    where: { deviceId },
+    select: { id: true, deviceLogId: true, applied: true, employeeId: true },
+  });
+  const existingByKey = new Map(existingRows.map((l) => [l.deviceLogId, l]));
+  const appliedKeys = new Set(existingRows.filter((l) => l.applied).map((l) => l.deviceLogId));
 
   const employees = new Map();
   const getEmployee = async (userId) => {
@@ -43,27 +47,41 @@ export async function ingestLogs(req, deviceId, logs) {
     matched: 0,
     unmatched: 0,
     applied: 0,
+    failed: 0,
   };
 
   for (const log of logs) {
     const key = log.deviceLogId || `${log.punchedAt.getTime()}-${log.userId}`;
-    if (reserved.has(key)) {
+    const existing = existingByKey.get(key);
+
+    if (appliedKeys.has(key) || existing?.applied) {
       stats.duplicates += 1;
       continue;
     }
+    if (existing && !existing.employeeId) {
+      // Previously recorded as unmatched (device userId maps to no employee).
+      // A config gap, not a transient error — count once, don't recreate rows.
+      stats.unmatched += 1;
+      continue;
+    }
+
     const employee = await getEmployee(log.userId);
-    const row = await prisma.biometricDeviceLog.create({
-      data: stampTenant(req, {
-        deviceId,
-        deviceLogId: key,
-        userId: log.userId,
-        punchedAt: log.punchedAt,
-        verification: log.verification ?? null,
-        employeeId: employee?.id ?? null,
-      }),
-    });
-    reserved.add(key);
-    stats.newLogs += 1;
+    let row = existing;
+    if (!row) {
+      row = await prisma.biometricDeviceLog.create({
+        data: {
+          tenantId: req.tenantId,
+          deviceId,
+          deviceLogId: key,
+          userId: log.userId,
+          punchedAt: log.punchedAt,
+          verification: log.verification ?? null,
+          employeeId: employee?.id ?? null,
+        },
+      });
+      existingByKey.set(key, row);
+      stats.newLogs += 1;
+    }
 
     if (!employee) {
       stats.unmatched += 1;
@@ -71,17 +89,18 @@ export async function ingestLogs(req, deviceId, logs) {
     }
     stats.matched += 1;
 
-    let applied = true;
     try {
       await attendanceService.devicePunch(req, employee.id, log.punchedAt, `DEVICE:${deviceId}:${key}`);
-    } catch (e) {
-      applied = false;
-      captureError(e, req);
-      throw e;
-    }
-    if (applied) {
-      await prisma.biometricDeviceLog.update({ where: { id: row.id }, data: { applied: true } });
+      await prisma.biometricDeviceLog.update({
+        where: { id: row.id },
+        data: { applied: true, employeeId: employee.id },
+      });
+      row.applied = true;
       stats.applied += 1;
+    } catch (e) {
+      // Transient failure — leave the row on retry state; keep processing.
+      stats.failed += 1;
+      captureError(e, req);
     }
   }
 

@@ -5,6 +5,7 @@ export async function listApplicants({ page=1, limit=50, search, status }){
 }
 export async function createApplicant(payload){ const { data } = await api.post('/recruitment/applicants', payload); return data; }
 export async function updateApplicant(id, payload){ const { data } = await api.patch(`/recruitment/applicants/${id}`, payload); return data; }
+export async function hireApplicant(id){ const { data } = await api.post(`/recruitment/applicants/${id}/hire`); return data; }
 export async function listEligibilities({ page=1, limit=50, employeeId }){
   const { data } = await api.get('/recruitment/eligibilities', { params:{ page, limit, employeeId } });
   return data;

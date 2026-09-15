@@ -5,6 +5,7 @@ import Modal from '../components/Modal.jsx';
 import ConfirmDialog from '../components/ConfirmDialog.jsx';
 import { useToast } from '../components/Toast.jsx';
 import { leaveApi } from '../api/leave.js';
+import { listEmployees } from '../api/employees.js';
 import { badgeTone } from '../data/mock.js';
 
 const LEAVE_TYPES = [
@@ -109,11 +110,11 @@ export default function Leave() {
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [showNewModal, setShowNewModal] = useState(false);
-  const [monetizeRate, setMonetizeRate] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(true);
   const [showCredits, setShowCredits] = useState(false);
+  const [employeeOptions, setEmployeeOptions] = useState([]);
 
   const [form, setForm] = useState({
     employeeId: '',
@@ -137,6 +138,12 @@ export default function Leave() {
       .then(r => setRequests(r.data))
       .catch(() => toast('Failed to load leave requests', 'error'))
       .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    listEmployees({ limit: 200 })
+      .then(r => setEmployeeOptions(r.items ?? []))
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -166,13 +173,10 @@ export default function Leave() {
     if (!request) return;
     try {
       if (action === 'Monetized') {
-        const rate = parseFloat(monetizeRate);
-        if (!rate || rate <= 0) return toast('Enter a valid rate per day', 'error');
-        const r = await leaveApi.monetize(request.id, { monetizedAmount: rate, note: note || undefined });
+        const r = await leaveApi.monetize(request.id, { note: note || undefined });
         setRequests(rs => rs.map(x => x.id === request.id ? r.data : x));
         setSelected(r.data);
         setNote('');
-        setMonetizeRate('');
         toast('Leave monetized.', 'success');
         return;
       }
@@ -361,12 +365,7 @@ export default function Leave() {
               if (!actions) return null;
               if (selected.status === 'APPROVED' && selected.isTerminal && !selected.monetized) {
                 return (
-                  <button type="button" className="btn btn-primary w-full h-8 text-xs gap-1.5" onClick={() => {
-                    if (!monetizeRate || parseFloat(monetizeRate) <= 0) {
-                      return toast('Enter a valid rate per day', 'error');
-                    }
-                    setConfirm({ type: 'Monetized' });
-                  }}>
+                  <button type="button" className="btn btn-primary w-full h-8 text-xs gap-1.5" onClick={() => setConfirm({ type: 'Monetized' })}>
                     Monetize
                   </button>
                 );
@@ -467,18 +466,9 @@ export default function Leave() {
                 </dl>
 
                 {selected.status === 'APPROVED' && selected.isTerminal && !selected.monetized && (
-                  <div>
-                    <label htmlFor={`${formId}-mon-rate`} className="block text-xs text-muted mb-0.5">Monetize unused leave</label>
-                    <input
-                      id={`${formId}-mon-rate`}
-                      className="input mb-2 text-sm"
-                      type="number"
-                      step="0.01"
-                      placeholder="Rate per day"
-                      value={monetizeRate}
-                      onChange={e => setMonetizeRate(e.target.value)}
-                    />
-                  </div>
+                  <p className="text-xs text-muted mb-2">
+                    Monetization is computed automatically (CSC MC 2 s.2016): unused days × salary / 22 × 0.0481927.
+                  </p>
                 )}
 
                 {(selected.status === 'PENDING' || selected.status === 'RECOMMENDED') && (
@@ -551,19 +541,23 @@ export default function Leave() {
       >
         <form id={formId} onSubmit={submitNew} className="space-y-2.5" noValidate>
           <div>
-            <label htmlFor={`${formId}-emp`} className="block text-xs font-medium text-ink mb-0.5">Employee ID *</label>
-            <input
+            <label htmlFor={`${formId}-emp`} className="block text-xs font-medium text-ink mb-0.5">Employee *</label>
+            <select
               id={`${formId}-emp`}
-              className={`input ${errors.employeeId ? 'input-error' : ''}`}
+              className={`select ${errors.employeeId ? 'border-error' : ''}`}
               value={form.employeeId}
               onChange={e => {
                 setForm(f => ({ ...f, employeeId: e.target.value }));
-                if (errors.employeeId) setErrors(e => ({ ...e, employeeId: undefined }));
+                if (errors.employeeId) setErrors(er => ({ ...er, employeeId: undefined }));
               }}
-              placeholder="e.g. EMP-DEFAULT-0001"
               aria-invalid={!!errors.employeeId}
               aria-describedby={errors.employeeId ? `${formId}-emp-error` : undefined}
-            />
+            >
+              <option value="">— select employee —</option>
+              {employeeOptions.map(emp => (
+                <option key={emp.id} value={emp.id}>{emp.employeeNumber} · {emp.firstName} {emp.lastName}</option>
+              ))}
+            </select>
             {errors.employeeId && (
               <p id={`${formId}-emp-error`} className="text-error text-xs mt-0.5">{errors.employeeId}</p>
             )}

@@ -120,6 +120,7 @@ export const payrollService = {
       ledger: [],
       itemIds: [],
       amortizationIds: dueAmortizations.map(a => a.id),
+      vlDebits: [], // { employeeId, year, days } — tardiness charged to VL credits
     };
     let balance = new Prisma.Decimal(0);
     for (const item of run.items) {
@@ -138,15 +139,24 @@ export const payrollService = {
       for (const line of lines) {
         const amount = new Prisma.Decimal(line.employeeShare).neg();
         balance = balance.add(amount);
+        // Negative shares (overtime credits) become PAY entries; everything
+        // else nets out as a DEDUCTION.
         posting.ledger.push({
           tenantId: req.tenantId ?? null,
           runId: run.id,
           employeeId: item.employeeId,
-          type: 'DEDUCTION',
+          type: amount.greaterThan(0) ? 'PAY' : 'DEDUCTION',
           amount,
           balance,
           reference: line.code,
         });
+        if (line.code.startsWith('ATTD') && Number(line.quantity ?? 0) > 0) {
+          posting.vlDebits.push({
+            employeeId: item.employeeId,
+            year: period.fiscalYear,
+            days: Number(line.quantity),
+          });
+        }
       }
     }
     return payrollRepository.postRun(req, run, posting);
@@ -165,7 +175,7 @@ const esc = value => String(value ?? '')
 
 const fmtDate = d => (d ? new Date(d).toISOString().slice(0, 10) : '');
 
-function renderPayslipHtml(item) {
+export function renderPayslipHtml(item) {
   const emp = item.employee ?? {};
   const pos = emp.position ?? {};
   const dept = emp.department ?? {};
@@ -173,8 +183,13 @@ function renderPayslipHtml(item) {
   const lines = item.deductionLines ?? [];
   const net = MONEY(item.netPay);
   const deductions = MONEY(item.deductions);
-  const rowsHtml = lines.length
-    ? lines.map(l => `<tr><td>${esc(l.code)}</td><td>${esc(l.description ?? '')}</td><td class="num">${MONEY(l.employeeShare).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td></tr>`).join('')
+  const credits = lines.filter(l => MONEY(l.employeeShare) < 0);
+  const debits = lines.filter(l => MONEY(l.employeeShare) > 0);
+  const creditsHtml = credits.length
+    ? credits.map(l => `<tr><td>${esc(l.code)}</td><td>${esc(l.description ?? '')}</td><td class="num">${Math.abs(MONEY(l.employeeShare)).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td></tr>`).join('')
+    : '';
+  const rowsHtml = debits.length
+    ? debits.map(l => `<tr><td>${esc(l.code)}</td><td>${esc(l.description ?? '')}</td><td class="num">${MONEY(l.employeeShare).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td></tr>`).join('')
     : '<tr><td colspan="3" class="muted">No deductions for this run.</td></tr>';
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><title>Payslip · ${esc(emp.employeeNumber)}</title><style>
@@ -206,8 +221,12 @@ function renderPayslipHtml(item) {
       <tr><td>Basic pay</td><td class="muted">monthly</td><td class="num">${MONEY(item.basicPay).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td></tr>
       <tr><td>Allowances</td><td></td><td class="num">${MONEY(item.allowances).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td></tr>
     </tbody>
+    ${creditsHtml ? `<tbody>
+      <tr><th colspan="2">Additions (${credits.length})</th><th class="num">${credits.reduce((s, l) => s + Math.abs(MONEY(l.employeeShare)), 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</th></tr>
+      ${creditsHtml}
+    </tbody>` : ''}    
     <tbody>
-      <tr><th colspan="2">Deductions (${esc(lines.length)})</th><th class="num">${deductions.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</th></tr>
+      <tr><th colspan="2">Deductions (${debits.length})</th><th class="num">${deductions.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</th></tr>
       ${rowsHtml}
     </tbody>
     <tfoot>

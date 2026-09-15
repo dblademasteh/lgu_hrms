@@ -6,7 +6,9 @@ import { vacancyApi } from '../api/vacancy.js';
 import { listApplicants } from '../api/recruitment.js';
 import { bonusApi } from '../api/bonus.js';
 import { loansApi } from '../api/loans.js';
-import { notifications as fallbackNotifications } from '../data/mock.js';
+import { getEssLeaveRequests } from '../api/ess.js';
+import { useAuthStore } from '../stores/authStore.js';
+const fallbackNotifications = [];
 
 const READ_KEY = 'lgu-notif-read';
 const DISMISSED_KEY = 'lgu-notif-dismissed';
@@ -62,121 +64,145 @@ export function useNotifications() {
     let cancelled = false;
     (async () => {
       try {
-        const [leaveRes, runsRes, apptRes, vacancyRes, applicantRes, bonusRes, loanRes] = await Promise.allSettled([
-          leaveApi.listRequests(),
-          payrollApi.listRuns({ limit: 5, summary: true }),
-          appointmentsApi.list(),
-          vacancyApi.list({ status: 'OPEN' }),
-          listApplicants({ status: 'NEW' }),
-          bonusApi.list(),
-          loansApi.list(),
-        ]);
+        const role = useAuthStore.getState().user?.role;
+        const isSelfService = role === 'EMPLOYEE';
+        let built = [];
+        let atLeastOneFulfilled = false;
+
+        if (isSelfService) {
+          // Employees only see their own ESS context — no admin list endpoints.
+          const [essResult] = await Promise.allSettled([getEssLeaveRequests()]);
+          atLeastOneFulfilled = essResult.status === 'fulfilled';
+          if (atLeastOneFulfilled) {
+            const reqs = Array.isArray(essResult.value) ? essResult.value : [];
+            for (const r of reqs.filter(x => x?.status === 'PENDING').slice(0, 10)) {
+              built.push({
+                id: `ess-leave-${r.id}`,
+                title: 'Leave request filed',
+                body: `${String(r.type ?? '').replace(/_/g, ' ')} from ${String(r.fromDate ?? '').slice(0, 10)} to ${String(r.toDate ?? '').slice(0, 10)} — awaiting approval.`,
+                time: timeAgo(r.createdAt),
+                path: '/ess',
+              });
+            }
+          }
+        } else {
+          const [leaveRes, runsRes, apptRes, vacancyRes, applicantRes, bonusRes, loanRes] = await Promise.allSettled([
+            leaveApi.listRequests(),
+            payrollApi.listRuns({ limit: 5, summary: true }),
+            appointmentsApi.list(),
+            vacancyApi.list({ status: 'OPEN' }),
+            listApplicants({ status: 'NEW' }),
+            bonusApi.list(),
+            loansApi.list(),
+          ]);
+          atLeastOneFulfilled = [leaveRes, runsRes, apptRes, vacancyRes, applicantRes, bonusRes, loanRes].some(r => r.status === 'fulfilled');
+          if (cancelled) return;
+
+          // Existing sources: leave, payroll, appointments
+          if (leaveRes.status === 'fulfilled') {
+            const reqs = Array.isArray(leaveRes.value?.data) ? leaveRes.value.data : [];
+            for (const r of reqs.filter(x => x?.status === 'PENDING').slice(0, 10)) {
+              const emp = r.employee ?? {};
+              const name = `${emp.firstName ?? ''} ${emp.lastName ?? ''}`.trim() || emp.employeeNumber || 'An employee';
+              built.push({
+                id: `leave-${r.id}`,
+                title: 'Leave request pending',
+                body: `${name} filed ${r.type} ${String(r.fromDate ?? '').slice(0, 10)} → ${String(r.toDate ?? '').slice(0, 10)}.`,
+                time: timeAgo(r.createdAt),
+                path: '/leave',
+              });
+            }
+          }
+          if (runsRes.status === 'fulfilled') {
+            const payload = runsRes.value?.data ?? {};
+            const runs = Array.isArray(payload) ? payload : payload.items ?? [];
+            for (const run of runs.filter(x => x?.status === 'DRAFT').slice(0, 5)) {
+              built.push({
+                id: `payroll-${run.id}`,
+                title: 'Payroll run ready for review',
+                body: `${run.period?.name ?? 'A run'} · ${run._count?.items ?? run.items?.length ?? 0} item(s) awaiting approval.`,
+                time: timeAgo(run.createdAt),
+                path: '/payroll',
+              });
+            }
+          }
+          if (apptRes.status === 'fulfilled') {
+            const list = Array.isArray(apptRes.value?.data) ? apptRes.value.data : [];
+            for (const a of list.filter(x => /temporary|casual|contractual/i.test(x?.type ?? '')).slice(0, 5)) {
+              built.push({
+                id: `appt-${a.id}`,
+                title: 'Non-permanent appointment',
+                body: `${a.name ?? a.employee?.firstName ?? 'An appointee'} (${a.type}) — review renewal.`,
+                time: timeAgo(a.createdAt),
+                path: '/appointments',
+              });
+            }
+          }
+
+          // New source: vacancies
+          if (vacancyRes.status === 'fulfilled') {
+            const vacancies = Array.isArray(vacancyRes.value?.data?.items) ? vacancyRes.value.data.items : [];
+            for (const v of vacancies.filter(x => x?.status === 'OPEN').slice(0, 5)) {
+              const deptName = v.department?.name || v.departmentId || 'An open position';
+              built.push({
+                id: `vacancy-${v.id}`,
+                title: 'New vacancy published',
+                body: `${v.title} in ${deptName} - review plantilla alignment.`,
+                time: timeAgo(v.createdAt),
+                path: '/vacancy',
+              });
+            }
+          }
+
+          // New source: applicants
+          if (applicantRes.status === 'fulfilled') {
+            const applicants = Array.isArray(applicantRes.value?.items) ? applicantRes.value.items : [];
+            for (const a of applicants.filter(x => x?.status === 'NEW').slice(0, 5)) {
+              const posTitle = a.position?.title || a.appliedPositionId || 'an opening';
+              built.push({
+                id: `applicant-${a.id}`,
+                title: 'New applicant applied',
+                body: `${a.firstName} ${a.lastName} applied for ${posTitle}.`,
+                time: timeAgo(a.createdAt),
+                path: '/recruitment',
+              });
+            }
+          }
+
+          // New source: bonuses
+          if (bonusRes.status === 'fulfilled') {
+            const bonuses = Array.isArray(bonusRes.value?.data) ? bonusRes.value.data : [];
+            for (const b of bonuses.filter(x => x?.status === 'PENDING').slice(0, 5)) {
+              const emp = b.employee ?? {};
+              const name = `${emp.firstName ?? ''} ${emp.lastName ?? ''}`.trim() || emp.employeeNumber || 'An employee';
+              built.push({
+                id: `bonus-${b.id}`,
+                title: 'Bonus request pending approval',
+                body: `${name}: ${b.amount} for ${b.type?.replace('_', ' ').toLowerCase() || 'bonus'}.`,
+                time: timeAgo(b.createdAt),
+                path: '/payroll',
+              });
+            }
+          }
+
+          // New source: loans
+          if (loanRes.status === 'fulfilled') {
+            const loans = Array.isArray(loanRes.value?.data) ? loanRes.value.data : [];
+            for (const l of loans.filter(x => x?.status === 'PENDING').slice(0, 5)) {
+              const emp = l.employee ?? {};
+              const name = `${emp.firstName ?? ''} ${emp.lastName ?? ''}`.trim() || emp.employeeNumber || 'An employee';
+              built.push({
+                id: `loan-${l.id}`,
+                title: 'Loan request pending approval',
+                body: `${name}: ₱${Number(l.amount).toLocaleString()} (${l.type}) pending processing.`,
+                time: timeAgo(l.createdAt),
+                path: '/payroll',
+              });
+            }
+          }
+        }
+
         if (cancelled) return;
-        const built = [];
-        
-        // Existing sources: leave, payroll, appointments
-        if (leaveRes.status === 'fulfilled') {
-          const reqs = Array.isArray(leaveRes.value?.data) ? leaveRes.value.data : [];
-          for (const r of reqs.filter(x => x?.status === 'PENDING').slice(0, 10)) {
-            const emp = r.employee ?? {};
-            const name = `${emp.firstName ?? ''} ${emp.lastName ?? ''}`.trim() || emp.employeeNumber || 'An employee';
-            built.push({
-              id: `leave-${r.id}`,
-              title: 'Leave request pending',
-              body: `${name} filed ${r.type} ${String(r.fromDate ?? '').slice(0, 10)} → ${String(r.toDate ?? '').slice(0, 10)}.`,
-              time: timeAgo(r.createdAt),
-              path: '/leave',
-            });
-          }
-        }
-        if (runsRes.status === 'fulfilled') {
-          const payload = runsRes.value?.data ?? {};
-          const runs = Array.isArray(payload) ? payload : payload.items ?? [];
-          for (const run of runs.filter(x => x?.status === 'DRAFT').slice(0, 5)) {
-            built.push({
-              id: `payroll-${run.id}`,
-              title: 'Payroll run ready for review',
-              body: `${run.period?.name ?? 'A run'} · ${run._count?.items ?? run.items?.length ?? 0} item(s) awaiting approval.`,
-              time: timeAgo(run.createdAt),
-              path: '/payroll',
-            });
-          }
-        }
-        if (apptRes.status === 'fulfilled') {
-          const list = Array.isArray(apptRes.value?.data) ? apptRes.value.data : [];
-          for (const a of list.filter(x => /temporary|casual|contractual/i.test(x?.type ?? '')).slice(0, 5)) {
-            built.push({
-              id: `appt-${a.id}`,
-              title: 'Non-permanent appointment',
-              body: `${a.name ?? a.employee?.firstName ?? 'An appointee'} (${a.type}) — review renewal.`,
-              time: timeAgo(a.createdAt),
-              path: '/appointments',
-            });
-          }
-        }
-        
-        // New source: vacancies
-        if (vacancyRes.status === 'fulfilled') {
-          const vacancies = Array.isArray(vacancyRes.value?.data?.items) ? vacancyRes.value.data.items : [];
-          for (const v of vacancies.filter(x => x?.status === 'OPEN').slice(0, 5)) {
-            const deptName = v.department?.name || v.departmentId || 'An open position';
-            built.push({
-              id: `vacancy-${v.id}`,
-              title: 'New vacancy published',
-              body: `${v.title} in ${deptName} - review plantilla alignment.`,
-              time: timeAgo(v.createdAt),
-              path: '/vacancy',
-            });
-          }
-        }
-        
-        // New source: applicants
-        if (applicantRes.status === 'fulfilled') {
-          const applicants = Array.isArray(applicantRes.value?.items) ? applicantRes.value.items : [];
-          for (const a of applicants.filter(x => x?.status === 'NEW').slice(0, 5)) {
-            const posTitle = a.position?.title || a.appliedPositionId || 'an opening';
-            built.push({
-              id: `applicant-${a.id}`,
-              title: 'New applicant applied',
-              body: `${a.firstName} ${a.lastName} applied for ${posTitle}.`,
-              time: timeAgo(a.createdAt),
-              path: '/recruitment',
-            });
-          }
-        }
-        
-        // New source: bonuses
-        if (bonusRes.status === 'fulfilled') {
-          const bonuses = Array.isArray(bonusRes.value?.data) ? bonusRes.value.data : [];
-          for (const b of bonuses.filter(x => x?.status === 'PENDING').slice(0, 5)) {
-            const emp = b.employee ?? {};
-            const name = `${emp.firstName ?? ''} ${emp.lastName ?? ''}`.trim() || emp.employeeNumber || 'An employee';
-            built.push({
-              id: `bonus-${b.id}`,
-              title: 'Bonus request pending approval',
-              body: `${name}: ${b.amount} for ${b.type?.replace('_', ' ').toLowerCase() || 'bonus'}.`,
-              time: timeAgo(b.createdAt),
-              path: '/payroll',
-            });
-          }
-        }
-        
-        // New source: loans
-        if (loanRes.status === 'fulfilled') {
-          const loans = Array.isArray(loanRes.value?.data) ? loanRes.value.data : [];
-          for (const l of loans.filter(x => x?.status === 'PENDING').slice(0, 5)) {
-            const emp = l.employee ?? {};
-            const name = `${emp.firstName ?? ''} ${emp.lastName ?? ''}`.trim() || emp.employeeNumber || 'An employee';
-            built.push({
-              id: `loan-${l.id}`,
-              title: 'Loan request pending approval',
-              body: `${name}: ₱${Number(l.amount).toLocaleString()} (${l.type}) pending processing.`,
-              time: timeAgo(l.createdAt),
-              path: '/payroll',
-            });
-          }
-        }
-        
         const read = loadIds(READ_KEY);
         const dismissed = loadIds(DISMISSED_KEY);
         const withState = built
@@ -185,13 +211,15 @@ export function useNotifications() {
         if (withState.length > 0) {
           setItems(withState);
           setLive(true);
-        } else if (built.length === 0) {
-          // All sources failed or empty — show the static fallback rows.
-          setItems(fallbackNotifications.map(n => ({ ...n, path: '/audit', unread: n.unread && !read.has(`mock-${n.id}`), id: `mock-${n.id}` })));
-          setLive(false);
-        } else {
+        } else if (atLeastOneFulfilled) {
+          // Live sources worked but produced nothing — show an empty feed,
+          // not static mock rows (mocks would be misleading for employees).
           setItems([]);
           setLive(true);
+        } else {
+          // Every source failed (offline/dev) — show the static fallback rows.
+          setItems(fallbackNotifications.map(n => ({ ...n, path: '/audit', unread: n.unread && !read.has(`mock-${n.id}`), id: `mock-${n.id}` })));
+          setLive(false);
         }
       } finally {
         if (!cancelled) setLoading(false);

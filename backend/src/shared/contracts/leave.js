@@ -55,8 +55,9 @@ export const updateLeaveRequestSchema = {
 
 export const monetizeLeaveSchema = {
   params: idParam,
+  // No client-sent amount/rate — the monetization value is always computed
+  // server-side (CSC MC No. 2 s. 2016: unused days × S/22 × constant factor).
   body: z.object({
-    monetizedAmount: z.number().positive(),
     note: z.string().max(500).optional().nullable(),
   }),
 };

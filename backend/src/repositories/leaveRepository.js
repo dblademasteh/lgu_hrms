@@ -15,6 +15,13 @@ export const leaveRepository = {
   async createRequest(req, data) {
     return prisma.leaveRequest.create({ data: stampTenant(req, data) });
   },
+  async findRequestsByEmployee(req, employeeId) {
+    return prisma.leaveRequest.findMany({
+      where: withTenant(req, { employeeId }),
+      include: { employee: { select: { id: true, employeeNumber: true, firstName: true, lastName: true } } },
+      orderBy: { createdAt: 'desc' }
+    });
+  },
   async findRequest(req, id) {
     return prisma.leaveRequest.findFirst({
       where: { ...withTenant(req), id },
@@ -41,19 +48,19 @@ export const leaveRepository = {
     const where = withTenant(req, { employeeId, type, year });
     return prisma.leaveCredit.findFirst({ where });
   },
-  async upsertLeaveCredit(req, employeeId, type, year, balance) {
-    const tenantCode = req.tenantId === 'tenant-default' ? 'DEFAULT' : req.tenantId;
-    const where = withTenant(req, { employeeId, type, year });
-    return prisma.leaveCredit.upsert({
-      where: { id: `${employeeId}-${type}-${year}-${tenantCode}` },
-      update: { balance },
-      create: { employeeId, type, year, balance, ...stampTenant(req, {}) },
-    });
-  },
   async createLeaveCredit(req, employeeId, type, year, balance) {
-    return prisma.leaveCredit.create({
-      data: { employeeId, type, year, balance, ...stampTenant(req, {}) },
-    });
+    try {
+      return await prisma.leaveCredit.create({
+        data: { employeeId, type, year, balance, ...stampTenant(req, {}) },
+      });
+    } catch (e) {
+      if (e?.code === 'P2002') {
+        return prisma.leaveCredit.findFirst({
+          where: { ...withTenant(req), employeeId, type, year },
+        });
+      }
+      throw e;
+    }
   },
   async updateRequestStatus(req, id, data) {
     return prisma.leaveRequest.update({ where: { id }, data });

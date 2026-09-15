@@ -50,6 +50,27 @@ export async function deleteCompetency(id) {
   await api.delete(`/performance/competencies/${id}`);
 }
 
+// Targets
+export async function listTargets(reviewId) {
+  const { data } = await api.get(`/performance/${reviewId}/targets`);
+  return data;
+}
+export async function addTarget(reviewId, payload) {
+  const { data } = await api.post(`/performance/${reviewId}/targets`, payload);
+  return data;
+}
+export async function updateTarget(reviewId, targetId, payload) {
+  const { data } = await api.patch(`/performance/${reviewId}/targets/${targetId}`, payload);
+  return data;
+}
+export async function removeTarget(reviewId, targetId) {
+  await api.delete(`/performance/${reviewId}/targets/${targetId}`);
+}
+export async function computeReview(reviewId) {
+  const { data } = await api.post(`/performance/${reviewId}/compute`);
+  return data;
+}
+
 // Review competencies (matrix items)
 export async function listReviewCompetencies(reviewId) {
   const { data } = await api.get(`/performance/${reviewId}/competencies`);

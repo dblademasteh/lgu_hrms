@@ -9,7 +9,7 @@ const pages = [
   { label: 'Payroll', path: '/payroll', icon: BarChart3 },
   { label: 'Leave & Appointments', path: '/leave', icon: Calendar },
   { label: 'Attendance (DTR)', path: '/attendance', icon: Clock },
-  { label: 'Biometric Attendance', path: '/biometric', icon: Fingerprint },
+  { label: 'Biometric Devices', path: '/biometric-devices', icon: Fingerprint },
   { label: 'Appointments', path: '/appointments', icon: FileText },
   { label: 'Plantilla', path: '/plantilla', icon: FileText },
   { label: 'Vacancy', path: '/vacancy', icon: FileText },

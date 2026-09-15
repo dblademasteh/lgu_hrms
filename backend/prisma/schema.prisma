@@ -75,6 +75,7 @@ model Tenant {
   webhooks WebhookSubscription[]
   externalSystems ExternalSystem[]
   biometricDevices BiometricDevice[]
+  overtimeRequests OvertimeRequest[]
 }
 
 model User {
@@ -169,6 +170,10 @@ model Employee {
   address          String
   contactNumber    String?
   email            String?
+  sssNumber        String?
+  philhealthNumber String?
+  pagibigNumber    String?
+  tinNumber        String?
   status           EmploymentStatus @default(ACTIVE)
   monthlySalary    Decimal   @default(0) @db.Decimal(12,2)
   departmentId     String
@@ -199,6 +204,7 @@ model Employee {
   disqualifications Disqualification[]
   tenant      Tenant?   @relation(fields: [tenantId], references: [id])
   biometricCredentials BiometricCredential[]
+  overtimeRequests OvertimeRequest[]
 
   @@index([tenantId])
   @@index([tenantId, status])
@@ -326,6 +332,9 @@ model PayrollDeductionLine {
   description String?
   employeeShare Decimal @db.Decimal(12,2) @default(0)
   employerShare Decimal @db.Decimal(12,2) @default(0)
+  // Units for ATTD lines (VL days charged) and OT lines (approved hours);
+  // used by POST to settle leave credits idempotently.
+  quantity    Decimal? @db.Decimal(8,2)
   payrollItem PayrollItem @relation(fields: [payrollItemId], references: [id])
   tenant      Tenant?   @relation(fields: [tenantId], references: [id])
 
@@ -438,6 +447,7 @@ model LeaveRequest {
   monetized Boolean @default(false)
   monetizedAt DateTime? @db.Timestamptz(6)
   monetizedAmount Decimal? @db.Decimal(12,2)
+  monetizedDays Float?
   recommendedBy String?
   recommendedAt DateTime? @db.Timestamptz(6)
   approvedBy  String?
@@ -461,6 +471,8 @@ model LeaveCredit {
   createdAt  DateTime @default(now()) @db.Timestamptz(6)
   employee   Employee @relation(fields: [employeeId], references: [id])
   tenant      Tenant?   @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, employeeId, type, year])
 }
 
 model Attendance {
@@ -557,21 +569,67 @@ model Appointment {
 }
 
 model PerformanceReview {
-  id          String   @id @default(uuid())
-  tenantId    String?
-  employeeId  String
-  reviewYear  Int
-  reviewType  String
-  rating      Float?
-  comments    String?
-  status      ReviewStatus @default(DRAFT)
-  reviewedBy  String?
-  reviewedAt  DateTime? @db.Timestamptz(6)
-  createdAt   DateTime @default(now()) @db.Timestamptz(6)
-  updatedAt   DateTime @updatedAt @db.Timestamptz(6)
-  employee    Employee @relation(fields: [employeeId], references: [id])
-  tenant      Tenant?   @relation(fields: [tenantId], references: [id])
-  competencies PerformanceCompetency[]
+  id              String   @id @default(uuid())
+  tenantId        String?
+  employeeId      String
+  reviewYear      Int
+  reviewType      String
+  periodStart     DateTime? @db.Timestamptz(6)
+  periodEnd       DateTime? @db.Timestamptz(6)
+  planningDate    DateTime? @db.Timestamptz(6)
+  coreWeight      Decimal  @default(50) @db.Decimal(5,2)
+  strategicWeight Decimal  @default(30) @db.Decimal(5,2)
+  supportWeight   Decimal  @default(20) @db.Decimal(5,2)
+  competencyWeight Decimal @default(30) @db.Decimal(5,2)
+  rating          Decimal? @db.Decimal(3,2)
+  adjectivalRating AdjectivalRating?
+  officeRatingCap Decimal? @db.Decimal(3,2)
+  comments        String?
+  status          ReviewStatus @default(PLANNING)
+  reviewedBy      String?
+  reviewedAt      DateTime? @db.Timestamptz(6)
+  approvedBy      String?
+  approvedAt      DateTime? @db.Timestamptz(6)
+  createdAt       DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime @updatedAt @db.Timestamptz(6)
+  employee        Employee @relation(fields: [employeeId], references: [id])
+  tenant          Tenant?   @relation(fields: [tenantId], references: [id])
+  parentReviewId  String?
+  parentReview    PerformanceReview? @relation("ReviewCascade", fields: [parentReviewId], references: [id])
+  childReviews    PerformanceReview[] @relation("ReviewCascade")
+  targets         PerformanceTarget[]
+  competencies    PerformanceCompetency[]
+
+  @@index([tenantId, reviewYear, status])
+}
+
+model PerformanceTarget {
+  id                  String   @id @default(uuid())
+  tenantId            String?
+  reviewId            String
+  kra                 String
+  successIndicator    String
+  outputGroup         OutputGroup @default(CORE)
+  weight              Decimal  @db.Decimal(5,2)
+  targetQuantity      Decimal? @db.Decimal(12,2)
+  targetUnit          String?
+  q1Actual           String?
+  q2Actual           String?
+  q3Actual           String?
+  q4Actual           String?
+  annualActual       String?
+  qualityScore       Decimal? @db.Decimal(3,2)
+  efficiencyScore    Decimal? @db.Decimal(3,2)
+  timelinessScore    Decimal? @db.Decimal(3,2)
+  averageScore       Decimal? @db.Decimal(3,2)
+  actualPercent      Decimal? @db.Decimal(5,2)
+  meansOfVerification String?
+  remarks            String?
+  createdAt          DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt          DateTime @updatedAt @db.Timestamptz(6)
+  review             PerformanceReview @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, reviewId])
 }
 
 model PlantillaItem {
@@ -888,10 +946,26 @@ enum VacancyStatus {
 }
 
 enum ReviewStatus {
-  DRAFT
-  SUBMITTED
+  PLANNING
+  MONITORING
+  REVIEW
   APPROVED
   REJECTED
+  CANCELLED
+}
+
+enum OutputGroup {
+  CORE
+  STRATEGIC
+  SUPPORT
+}
+
+enum AdjectivalRating {
+  OUTSTANDING
+  VERY_SATISFACTORY
+  SATISFACTORY
+  UNSATISFACTORY
+  POOR
 }
 
 model Role {
@@ -1074,11 +1148,13 @@ model BiometricCredential {
 model Competency {
   id          String @id @default(uuid())
   tenantId    String?
-  code        String @unique
+  code        String
   name        String
   description String?
   tenant      Tenant?   @relation(fields: [tenantId], references: [id])
   reviewItems PerformanceCompetency[]
+
+  @@unique([tenantId, code])
 }
 
 model PerformanceCompetency {
@@ -1086,8 +1162,9 @@ model PerformanceCompetency {
   tenantId   String?
   reviewId   String
   competencyId String
-  score      Float
-  maxScore   Float
+  score      Decimal? @db.Decimal(3,2)
+  maxScore   Decimal  @default(5) @db.Decimal(3,2)
+  weight     Decimal  @default(10) @db.Decimal(5,2)
   comments   String?
   createdAt  DateTime @default(now()) @db.Timestamptz(6)
   updatedAt  DateTime @updatedAt @db.Timestamptz(6)
@@ -1096,6 +1173,7 @@ model PerformanceCompetency {
   tenant     Tenant?   @relation(fields: [tenantId], references: [id])
 
   @@unique([reviewId, competencyId])
+  @@index([tenantId, reviewId])
 }
 
 model IDP {
@@ -1182,6 +1260,43 @@ model SyncRequest {
 
   @@index([tenantId])
   @@index([status])
+}
+
+enum OvertimeType {
+  WORKDAY
+  REST_DAY
+  HOLIDAY
+}
+
+enum OvertimeStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// Overtime services (CSC-DBM JC No. 2 s. 2015): authorized extra hours beyond
+// the 40-hour week. Pay = hours x HR x 1.25 (regular day) / 1.5 (rest/holiday),
+// HR = monthlySalary / (22 workdays * 8 hours). Min 2 hours, on-time only.
+// Approved entries feed the payroll engine; rejected/pending are excluded.
+model OvertimeRequest {
+  id         String        @id @default(uuid())
+  tenantId   String?
+  employeeId String
+  date       DateTime      @db.Date
+  startMins  Int           @default(0)
+  endMins    Int           @default(0)
+  hours      Decimal       @db.Decimal(12,2)
+  type       OvertimeType  @default(WORKDAY)
+  status     OvertimeStatus @default(PENDING)
+  approvedBy String?
+  approvedAt DateTime?     @db.Timestamptz(6)
+  notes      String?
+  createdAt  DateTime      @default(now()) @db.Timestamptz(6)
+  employee   Employee      @relation(fields: [employeeId], references: [id])
+  tenant     Tenant?       @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, status])
+  @@index([tenantId, employeeId, date])
 }
 
 

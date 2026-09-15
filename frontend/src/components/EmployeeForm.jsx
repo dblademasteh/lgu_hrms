@@ -296,8 +296,8 @@ export default function EmployeeForm({ formId, initial, submitLabel = 'Save', on
               ))}
             </div>
             <div>
-              <button type="button" className="btn btn-primary gap-2 text-sm" disabled={sectionBusy} onClick={() => addRecord(section)}>
-                <Plus size={16} />
+              <button type="button" className="btn btn-primary gap-2 text-xs h-9" disabled={sectionBusy} onClick={() => addRecord(section)}>
+                <Plus size={14} />
                 Add entry
               </button>
             </div>
@@ -446,6 +446,25 @@ export default function EmployeeForm({ formId, initial, submitLabel = 'Save', on
           <div>
             <label htmlFor="e-contact" className="block text-xs font-medium text-ink mb-0.5">Contact No.</label>
             <input id="e-contact" className="input" value={form.contactNumber ?? ''} onChange={e => set('contactNumber', e.target.value)} placeholder="0917-000-0000" />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+            <div>
+              <label htmlFor="e-sss" className="block text-xs font-medium text-ink mb-0.5">SSS No.</label>
+              <input id="e-sss" className="input font-mono" value={form.sssNumber ?? ''} onChange={e => set('sssNumber', e.target.value)} placeholder="12-XXXXXXX-0" />
+            </div>
+            <div>
+              <label htmlFor="e-ph" className="block text-xs font-medium text-ink mb-0.5">PhilHealth No.</label>
+              <input id="e-ph" className="input font-mono" value={form.philhealthNumber ?? ''} onChange={e => set('philhealthNumber', e.target.value)} />
+            </div>
+            <div>
+              <label htmlFor="e-pagibig" className="block text-xs font-medium text-ink mb-0.5">Pag-IBIG No.</label>
+              <input id="e-pagibig" className="input font-mono" value={form.pagibigNumber ?? ''} onChange={e => set('pagibigNumber', e.target.value)} />
+            </div>
+            <div>
+              <label htmlFor="e-tin" className="block text-xs font-medium text-ink mb-0.5">TIN No.</label>
+              <input id="e-tin" className="input font-mono" value={form.tinNumber ?? ''} onChange={e => set('tinNumber', e.target.value)} />
+            </div>
           </div>
         </form>
       </div>

@@ -20,7 +20,9 @@ const TYPES = [
   { value: 'COTERMINOUS', label: 'Coterminous' },
 ];
 
-const emptyForm = { employeeId: '', type: 'PERMANENT', itemNo: '', start: '', end: '', status: 'ACTIVE' };
+const emptyForm = { employeeId: '', type: 'PERMANENT', itemNo: '', startDate: '', endDate: '', status: 'PENDING' };
+
+const STATUS_OPTIONS = ['PENDING', 'APPROVED', 'VERIFIED', 'ISSUED', 'EFFECTIVE', 'ENDED'];
 
 export default function Appointments() {
   const toast = useToast();
@@ -41,7 +43,7 @@ export default function Appointments() {
 
   const submit = async e => {
     e.preventDefault();
-    if (!form.employeeId || !form.itemNo.trim() || !form.start) {
+    if (!form.employeeId || !form.itemNo.trim() || !form.startDate) {
       toast('Select an employee, plantilla item no. and start date.', 'error');
       return;
     }
@@ -52,7 +54,7 @@ export default function Appointments() {
       toast(`Appointment recorded.`, 'success');
       setForm(emptyForm);
       setOpen(false);
-    } catch { toast('Failed to record appointment', 'error'); }
+    } catch (err) { toast(err?.response?.data?.error?.message || 'Failed to record appointment', 'error'); }
     finally { setSubmitting(false); }
   };
 
@@ -155,7 +157,7 @@ export default function Appointments() {
                     <td className="font-mono">{a.itemNo}</td>
                     <td className="font-mono">{start}</td>
                     <td className="font-mono">{end || '—'}</td>
-                    <td><span className={`badge ${statusBadge}`}>{a.status || 'ACTIVE'}</span></td>
+                    <td><span className={`badge ${statusBadge}`}>{a.status || 'PENDING'}</span></td>
                     <td>
                       <button
                         type="button"
@@ -246,8 +248,8 @@ export default function Appointments() {
                 id="a-start"
                 type="date"
                 className="input"
-                value={form.start}
-                onChange={e => setForm(f => ({ ...f, start: e.target.value }))}
+                value={form.startDate}
+                onChange={e => setForm(f => ({ ...f, startDate: e.target.value }))}
                 required
               />
             </div>
@@ -259,8 +261,8 @@ export default function Appointments() {
                 id="a-end"
                 type="date"
                 className="input"
-                value={form.end}
-                onChange={e => setForm(f => ({ ...f, end: e.target.value }))}
+                value={form.endDate}
+                onChange={e => setForm(f => ({ ...f, endDate: e.target.value }))}
               />
             </div>
             <div>
@@ -271,8 +273,9 @@ export default function Appointments() {
                 value={form.status}
                 onChange={e => setForm(f => ({ ...f, status: e.target.value }))}
               >
-                <option value="ACTIVE">Active</option>
-                <option value="ENDED">Ended</option>
+                {STATUS_OPTIONS.map(s => (
+                  <option key={s} value={s}>{s[0] + s.slice(1).toLowerCase()}</option>
+                ))}
               </select>
             </div>
           </div>

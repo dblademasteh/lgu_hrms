@@ -1,12 +1,40 @@
 import { z } from 'zod';
 
 const dateField = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Expected YYYY-MM-DD');
+
+// Reject out-of-range clock components (e.g. "25:99" would silently roll into
+// the next day via manilaTimeOnDate if left unchecked). Works for both the
+// bare HH:MM form and the ISO-8601 datetime form.
+function validClock(isoOrHm) {
+  const timePart = isoOrHm.includes('T') ? isoOrHm.split('T')[1] : isoOrHm;
+  const m = timePart.match(/^(\d{1,2}):(\d{2})/);
+  if (!m) return true;
+  const hour = Number(m[1]);
+  const minute = Number(m[2]);
+  return hour <= 23 && minute <= 59;
+}
+
 // ISO-8601 datetime or a bare HH:MM(:ss) local time (interpreted on the record
 // date in Asia/Manila by the service).
-const timeField = z.string().regex(
-  /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,3})?)?(Z|[+-]\d{2}:?\d{2})?|\d{1,2}:\d{2}(:\d{2})?)$/,
-  'Expected ISO-8601 datetime or HH:MM',
-);
+const timeField = z
+  .string()
+  .regex(
+    /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,3})?)?(Z|[+-]\d{2}:?\d{2})?|\d{1,2}:\d{2}(:\d{2})?)$/,
+    'Expected ISO-8601 datetime or HH:MM',
+  )
+  .refine(validClock, 'Invalid hour/minute');
+
+export const listAttendanceSchema = {
+  query: z.object({
+    date: dateField.optional(),
+  }),
+};
+
+export const myAttendanceSchema = {
+  query: z.object({
+    month: z.string().regex(/^\d{4}-\d{2}$/, 'Expected YYYY-MM').optional(),
+  }),
+};
 
 export const createAttendanceSchema = {
   body: z.object({

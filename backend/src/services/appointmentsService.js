@@ -25,7 +25,7 @@ export const appointmentsService = {
       itemNumber: data.itemNo,
       startDate: toUtcDate(data.startDate),
       endDate: data.endDate ? toUtcDate(data.endDate) : null,
-      status: data.status ?? 'ACTIVE',
+      status: data.status ?? 'PENDING',
       name: `${employee.firstName} ${employee.lastName}`.trim(),
       position: employee.position?.title ?? null,
       dept: employee.department?.code ?? null,

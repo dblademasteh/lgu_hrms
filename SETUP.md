@@ -1,171 +1,235 @@
-# HRMS + IMS Setup Guide
+# LGU HRMS — Initial Setup Guide
 
-Complete setup instructions for the LGU HRMS and IMS systems, including database initialization, development servers, and cross-system integration.
+Self-contained setup for the **lgu_hrms** workspace: multi-tenant Human Resource Management System (HRMS) for LGUs, with payroll, leave, attendance, biometric device sync, ESS portal, and a standalone attendance kiosk.
+
+## Architecture at a glance
+
+| Service | Tech | Port | Notes |
+|---------|------|------|-------|
+| Backend | Express 5 (ESM) + Prisma + PostgreSQL 16 | 4000 | `node --watch src/server.js` in dev |
+| Frontend | React 19 + Vite 5 + Tailwind 4 | 5173 | Vite dev server, proxies `/api` → :4000 |
+| Kiosk | Separate login-less React + Vite app | 5176 | Lobby attendance terminal; builds to `kiosk/dist` |
+| Database | postgres:16 (docker compose) | 5432 | Shared-schema multi-tenant |
+
+---
 
 ## Prerequisites
 
-- Node.js 18+
-- Docker Desktop
-- Git
+- **Node.js 18+** (dev uses `node --watch`, so 18.11+; Node 20 LTS recommended)
+- **Docker Desktop** (for the PostgreSQL 16 container)
+- **Git**
 
 ---
 
-## 1. Clone both projects
+## 1. Clone and install dependencies
 
 ```bash
-git clone <hrms-repo-url> lgu_hrms
-git clone <ims-repo-url> lgu_ims
-```
-
----
-
-## 2. Start databases with Docker
-
-**HRMS database** (port 5432):
-```bash
-cd lgu_hrms
-docker compose up -d db
-```
-
-**IMS database** (port 5433):
-```bash
-cd lgu_ims
-docker compose up -d db
-```
-
-Verify they are running:
-```bash
-docker ps
-```
-
-You should see `lguhrms-db` and `lguims-db`.
-
----
-
-## 3. Setup HRMS
-
-```bash
+git clone <repo-url> lgu_hrms
 cd lgu_hrms
 
-# Install dependencies
-npm install
-
-# Configure environment
-cd backend
-cp .env.example .env   # if .env.example exists
-# Edit .env and set DATABASE_URL
-
-# Run Prisma migrations
-npx prisma migrate dev
-
-# Seed the database
-node prisma/seed.js
-
-# Start backend (port 4000)
-npm run dev
-
-# In another terminal, start frontend (port 5173)
-cd ../frontend
-npm install
-npm run dev
+# Backend + frontend + kiosk
+cd backend && npm install && cd ..
+cd frontend && npm install && cd ..
+cd kiosk   && npm install && cd ..
 ```
 
-Access HRMS at: **http://localhost:5173**
-
-Default seed credentials are in `backend/prisma/seed.js` or the README.
+> Missing packages from a branch pull (`Cannot find package 'x'...`) is usually just an un-run `npm install` — reinstall after every `git pull`.
 
 ---
 
-## 4. Setup IMS
+## 2. Create environment files
+
+**Root `.env`** (for docker compose — must contain `POSTGRES_PASSWORD` or compose will refuse to start):
+
+```env
+POSTGRES_PASSWORD=postgres
+POSTGRES_DB=lgu_hrms
+```
+
+**`backend/.env`** (copy of `backend/.env.example`):
+
+```env
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/lgu_hrms?schema=public"
+JWT_SECRET="some-long-random-hex-32-bytes"        # openssl rand -hex 32
+JWT_REFRESH_SECRET="some-other-long-random-hex"   # openssl rand -hex 32
+POSTGRES_PASSWORD="postgres"
+POSTGRES_DB="lgu_hrms"
+WEB_ORIGIN="http://localhost"
+VITE_API_BASE="/api/v1"
+WEB_PORT=80
+SEED_DEFAULT_PASSWORD="admin123"
+PORT=4000
+NODE_ENV=development
+ALLOWED_IPS=""
+TRUST_PROXY="1"
+BIOMETRIC_PUNCH_KEY=""        # optional shared kiosk secret (see §8)
+BIOMETRIC_POLLER="0"          # 1 = poll ZK terminals automatically
+BIOMETRIC_POLL_MS="30000"
+SENTRY_DSN=""                 # optional error tracking
+SENTRY_TRACES_SAMPLE_RATE="1.0"
+```
+
+**`frontend/.env`** (optional, copy of `frontend/.env.example`): `VITE_SENTRY_DSN` etc. — all empty = no-op sentry, safe to skip.
+
+**`kiosk/.env`** (optional): `VITE_API_BASE="/api/v1"` (defaults to same-origin; dev proxy to :4000 is already wired in `kiosk/vite.config.js`).
+
+Never commit real secrets — `.env*` is gitignored.
+
+---
+
+## 3. Start the database
 
 ```bash
-cd lgu_ims
+# dev override publishes 5432 to the host so local node/prod servers can connect
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d db
+```
 
-# Install dependencies
-npm install
+> `docker-compose.yml` is production-shaped: services publish no host ports by default (proxy/container networking only) and require `POSTGRES_PASSWORD`/`JWT_SECRET`/`JWT_REFRESH_SECRET`. The `docker-compose.dev.yml` override re-adds host port publishing, source mounts and watch mode for local development — always pass both files. For the base (no host ports) just drop the `-f` override: `docker compose up -d db`.
 
-# If using Docker, database is already running on port 5433
-# Prisma should already be configured in .env
+Verify: `docker ps` → the `db` container should be `Up` and `healthy`.
 
-# Run Prisma migrations
+**A dead DB container is the #1 cause of 500s on login.** Fix: `docker compose up -d db`.
+
+---
+
+## 4. Migrate, generate, seed
+
+```bash
 cd backend
+
+# Apply pending schema migrations (creates the DB if needed)
 npx prisma migrate dev
 
-# Seed the database
-node prisma/seed.js
+# Regenerate the Prisma client
+npx prisma generate
 
-# Start backend (port 4001)
+# Seed multi-tenant demo data (idempotent — safe to re-run)
+node prisma/seed.js
+```
+
+> **Windows note:** Prisma client generation is blocked while the backend watch process runs (file locks). Stop the backend dev server first, then `npx prisma generate`, then restart it.
+
+Running the Prisma Studio DB inspector: `cd backend && npx prisma studio`.
+
+---
+
+## 5. Start the dev servers
+
+```bash
+# Terminal 1 — Backend  (http://localhost:4000)
+cd backend
 npm run dev
 
-# In another terminal, start frontend (port 5174)
-cd ../frontend
-npm install
+# Terminal 2 — Frontend (http://localhost:5173)
+cd frontend
+npm run dev
+
+# Terminal 3 — Kiosk    (http://localhost:5176, optional)
+cd kiosk
 npm run dev
 ```
 
-Access IMS at: **http://localhost:5174**
+Open **http://localhost:5173**.
 
-Default IMS demo accounts (from README):
-- `admin` / `LguIms2026!`
-- `warehouse` / `LguIms2026!`
-- `custodian` / `LguIms2026!`
-- `auditor` / `LguIms2026!`
+Run exactly one instance of each — duplicate watchers hold file locks on Windows and mask hot-reload.
 
 ---
 
-## 5. Configure HRMS → IMS Integration
+## 6. Seed accounts
 
-1. Open HRMS: **http://localhost:5173**
-2. Log in as admin
-3. Go to **Settings → Integrations**
-4. Click **Create API Key**
-   - Name: `IMS Integration`
-   - Scopes: `employees:read`
-5. **Copy the raw key** — it is shown only once
+Default password: **`admin123`** (override with `SEED_DEFAULT_PASSWORD` in `backend/.env`).
 
----
+The seed creates two tenants — **DEFAULT** (Default LGU) and **SOLANA** (Municipality of Solana) — each with the same account pattern (`<role>-<tenant-code-lowercase>`):
 
-## 6. Configure IMS to pull from HRMS
+| Username (DEFAULT tenant) | Role |
+|---------------------------|------|
+| `admin-default` | ADMIN |
+| `hr_manager-default` | HR_MANAGER |
+| `payroll_officer-default` | PAYROLL_OFFICER |
+| `department_head-default` | DEPARTMENT_HEAD |
+| `auditor-default` | AUDITOR |
+| `employee-default` | EMPLOYEE (ESS self-service) |
 
-1. Open IMS: **http://localhost:5174**
-2. Log in as `admin`
-3. Go to **Settings → Integrations**
-4. In the **Outbound: HRMS Integration** container:
-   - HRMS Base URL: `http://localhost:4000`
-   - HRMS API Key: paste the key from step 5
-   - Default IMS role for new users: select appropriate role
-   - Default password for new users: optional
-5. Click **Pull employees from HRMS**
+Same accounts with `-solana` for the SOLANA tenant. All default to `admin123`.
 
-This will:
-- Call HRMS `/api/v1/integrations/employees`
-- Create IMS users for new employees
-- Update existing users (name, email, active state)
-- Never copy passwords — users sign in with HRMS credentials
+Platform account (no tenant — sees all tenants, tenant management, database tools):
+
+| Username | Role |
+|----------|------|
+| `superadmin` | SUPER_ADMIN |
+
+All default to `admin123`.
 
 ---
 
-## 7. Configure IMS Inbound API Keys (optional)
+## 7. Verify everything works
 
-If external systems need to call IMS APIs:
+```
+GET http://localhost:4000/api/v1/health   → {"status":"ok",...}
+GET http://localhost:5173                 → HRMS login page
+GET http://localhost:5176                 → kiosk confirmation screen
+```
 
-1. In IMS **Settings → Integrations**
-2. In the **Inbound: API Keys** container:
-   - Enter a name (e.g., `HRIS Sync`)
-   - Ensure "Integration key" is checked
-   - Set expiry days (optional)
-   - Click **Generate**
-3. **Copy the key** — shown only once
-4. External systems send it as: `X-API-Key: <prefix>.<raw>`
+Release gates before committing:
+
+```bash
+cd frontend && npm run build        # Vite production build must pass
+cd backend  && node --check src/server.js   # + node --check src/routes/*.js
+# color lint (no hardcoded colors; `slate-` false-positives inside -translate-* are OK):
+Get-ChildItem frontend/src -Recurse -Include *.jsx,*.js | Select-String -Pattern '#[0-9a-fA-F]{3,8}\b|slate-|gray-|bg-white|text-white'
+```
 
 ---
 
-## 8. Quick start with batch files
+## 8. Optional subsystems
 
-Double-click to start all services:
+### Biometric device sync (ZK TCP)
+1. Register devices in the app: **Biometric Devices** page (ADMIN).
+2. Set `BIOMETRIC_POLLER=1` in `backend/.env` to run the automatic pull loop (default every 30s). Devices must be reachable on port 4370.
+3. Pulls are de-duplicated on `[deviceId, deviceLogId]` and replayed through the same attendance state machine as manual punches.
 
-- **HRMS only**: `C:\Users\itcub\Desktop\Projects\lgu_hrms\start-dev.bat`
-- **IMS only**: `C:\Users\itcub\Desktop\Projects\lgu_ims\start-dev.bat`
+Workflow + architecture: `docs/DEVICES.md` and `docs/ATTENDANCE.md`.
+
+### Attendance kiosk
+- Dev: `cd kiosk && npm run dev` → :5176.
+- Production build: `cd kiosk && npm run build` → `kiosk/dist`, served under `/kiosk/`.
+- Optionally protect the public punch endpoint with a shared key: set `BIOMETRIC_PUNCH_KEY`; kiosks send it per session as `punchKey`.
+
+Workflow + deploy chart: `docs/KIOSK.md`.
+
+### On-premise login restriction
+- Session-establishing auth (`/auth/login`, `/login-pin`, `/refresh`) is gated by the caller IP matching the tenant's CIDR `allowedIps` allowlist (managed on the platform Tenant page; fallback global `ALLOWED_IPS` env).
+- Set `TRUST_PROXY=1` (or `loopback, 10.0.0.0/8`) so `req.ip` is the real client behind nginx.
+- Empty allowlist = open. Local seed tenants already include loopback + RFC1918 ranges.
+
+### Sentry error tracking (optional)
+- Backend: set `SENTRY_DSN` (+ `SENTRY_TRACES_SAMPLE_RATE`).
+- Frontend: set `VITE_SENTRY_DSN` (+ org/project/auth token for source-map upload in prod builds).
+- No DSN/token = full no-op; never commit real DSNs.
+
+---
+
+## 9. Multi-tenancy quick notes
+
+- Shared-schema, row-level `tenantId` on business tables; JWT carries the tenant.
+- Tenant resolution: `backend/src/middleware/tenant.js` (`tenantContext`, `withTenant`/`stampTenant`).
+- SUPER_ADMIN can override tenant per-request (`X-Tenant-Id` header / the Header tenant-switcher).
+- Tenant provisioning details: `src/docs/TENANT_PROVISIONING.md`.
+
+---
+
+## 10. Production Docker stack
+
+The base compose is production-shaped:
+
+```bash
+# Root .env must provide: POSTGRES_PASSWORD, JWT_SECRET, JWT_REFRESH_SECRET (+ optional WEB_ORIGIN, WEB_PORT, SEED_DEFAULT_PASSWORD, DB_CONTAINER)
+docker compose up --build
+```
+
+- `api` = backend container; runs `prisma migrate deploy` on startup in production and fails fast if migrations fail.
+- `web` = frontend nginx container on `${WEB_PORT:-80}`.
+- DB never publishes its port in prod (dev override re-adds it).
 
 ---
 
@@ -173,156 +237,20 @@ Double-click to start all services:
 
 | Issue | Solution |
 |-------|----------|
-| HRMS 500 on login | `docker ps` → ensure `lguhrms-db` is running |
-| IMS 500 on login | `docker ps` → ensure `lguims-db` is running |
-| Port already in use | Kill process on that port: `netstat -ano \| findstr :PORT` then `taskkill /F /PID <pid>` |
-| Prisma generate fails on Windows | Stop backend watch process, then run `npx prisma generate` |
-| IMS login fails after seed | Check `docker exec lguims-db psql -U lguims -d lgu_ims -c "SELECT * FROM \"User\";"` |
+| 500 on login | DB container dead → `docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d db` |
+| `POSTGRES_PASSWORD: Set ... in the environment` | Create root `.env` with `POSTGRES_PASSWORD` |
+| `Cannot find package 'x'` after pull | `npm install` (frontend/backend/kiosk) |
+| `prisma generate` hangs/fails on Windows | Stop the backend watch process first, then run it |
+| Port 4000/5173/5176 already in use | `netstat -ano \| findstr :PORT` then `taskkill /F /PID <pid>` |
+| Bare `400 {"details":[]}` on new query validation | Express 5 `req.query` assignment — the schema must use `defineProperty` (see `backend/src/middleware/validate.js`) |
+| Kiosk / biometric features 500 | Missing deps: ensure `npm install` ran in `backend` (`zkteco-js` is a dynamic import — fails only when used) |
 
 ---
 
-## 9. Production infrastructure recommendations
+## Related docs
 
-These are not required for development, but are recommended for production deployments to avoid crashes, corruption, and data loss.
-
-### 9.1 Connection pooling with PgBouncer
-
-PostgreSQL has a connection limit (default 100). Under load, the app can exhaust connections and cause 500 errors. PgBouncer sits between the app and PostgreSQL and pools connections.
-
-**docker-compose.yml additions:**
-```yaml
-services:
-  pgbouncer:
-    image: pgbouncer/pgbouncer:latest
-    ports:
-      - "5432:5432"
-    environment:
-      - DATABASES_HOST=db
-      - DATABASES_PORT=5432
-      - DATABASES_USER=${POSTGRES_USER:-postgres}
-      - DATABASES_DBNAME=${POSTGRES_DB:-lgu_hrms}
-      - PGPASSWORD=${POSTGRES_PASSWORD}
-      - POOL_MODE=transaction
-      - MAX_CLIENT_CONN=1000
-      - DEFAULT_POOL_SIZE=25
-      - RESERVE_POOL_SIZE=5
-      - MAX_DB_CONNECTIONS=100
-    depends_on:
-      - db
-    volumes:
-      - ./pgbouncer/pgbouncer.ini:/etc/pgbouncer/pgbouncer.ini:ro
-```
-
-**backend/.env:**
-```env
-DATABASE_URL=postgresql://postgres:postgres@localhost:5432/lgu_hrms?connection_limit=10
-```
-
-Point the backend to PgBouncer (`localhost:5432`) instead of the DB container directly.
-
-### 9.2 Point-in-time recovery (PITR)
-
-Enable WAL archiving so you can restore to any point in time, not just the last backup.
-
-**docker-compose.yml additions for the db service:**
-```yaml
-services:
-  db:
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-      - ./backups:/backups
-    command: >
-      postgres
-      -c wal_level=replica
-      -c archive_mode=on
-      -c archive_command='cp %p /backups/wal/%f'
-      -c archive_timeout=300
-      -c max_wal_senders=5
-      -c wal_keep_size=1GB
-```
-
-Create the WAL directory:
-```bash
-mkdir -p backups/wal
-```
-
-**Restore procedure:**
-```bash
-# 1. Stop the app
-# 2. Restore base backup
-pg_restore -U postgres -d lgu_hrms < base_backup.sql
-
-# 3. Replay WAL files
-pg_waldump /backups/wal/ | psql -U postgres -d lgu_hrms
-```
-
-### 9.3 Automated backups
-
-Add a cron job or CI pipeline to run daily:
-
-```bash
-# Daily at 2 AM
-0 2 * * * cd /path/to/lgu_hrms && docker compose exec db pg_dump -U postgres lgu_hrms | gzip > backups/lgu_hrms_$(date +\%Y\%m\%d).sql.gz
-```
-
-Keep at least 7 days of backups. Copy to offsite storage weekly.
-
-### 9.4 Monitoring alerts
-
-Monitor these metrics and alert on thresholds:
-
-| Metric | Warning | Critical |
-|--------|---------|----------|
-| Database size | > 80% disk | > 95% disk |
-| Connection count | > 70% of max_connections | > 90% of max_connections |
-| Slow queries (>1s) | > 10 per minute | > 50 per minute |
-| Replication lag | > 30s | > 5min |
-| Dead tuples | > 10,000 | > 100,000 |
-
-Example check script (run via cron):
-```bash
-#!/bin/bash
-THRESHOLD=80
-USAGE=$(docker exec lguhrms-db psql -U postgres -d lgu_hrms -tAc "SELECT ROUND(pg_database_size('lgu_hrms')::numeric / (SELECT setting::numeric FROM pg_settings WHERE name = 'data_directory' ) * 100)" 2>/dev/null || echo 0)
-if [ "$USAGE" -gt "$THRESHOLD" ]; then
-  echo "ALERT: Database disk usage at ${USAGE}%" | mail -s "DB Disk Alert" ops@example.com
-fi
-```
-
-### 9.5 Maintenance schedule
-
-| Task | Frequency | How |
-|------|-----------|-----|
-| VACUUM | Weekly | `POST /database/maintenance/vacuum` or `VACUUM (VERBOSE, ANALYZE);` |
-| ANALYZE | Weekly | `POST /database/maintenance/analyze` or `ANALYZE;` |
-| REINDEX | Monthly | `POST /database/maintenance/reindex` or `REINDEX CONCURRENTLY;` |
-| Test restore | Monthly | Restore a backup to staging and verify |
-| Review slow queries | Weekly | `GET /database/slow-queries` or `SELECT * FROM pg_stat_statements` |
-
-The Super Admin Database Tools page at `/platform/database` provides one-click access to all maintenance operations.
-
-### 9.6 Production startup behavior
-
-The backend now:
-- Runs `npx prisma migrate deploy` on startup in production (set `RUN_MIGRATIONS_ON_STARTUP=true` to enable in dev)
-- Handles `SIGTERM`/`SIGINT` for graceful shutdown: closes HTTP server, disconnects Prisma, then exits
-- Fails fast in production if migrations fail, preventing stale schema from serving traffic
-
-**Environment variables:**
-```env
-NODE_ENV=production
-RUN_MIGRATIONS_ON_STARTUP=true  # optional, default: true in production
-```
-
----
-
-## Architecture summary
-
-```
-HRMS (localhost:4000/5173)          IMS (localhost:4001/5174)
-┌─────────────────────────┐         ┌─────────────────────────┐
-│ Employee data center    │←────HRMS│ Pulls employees         │
-│ API keys for outbound   │  API    │ API keys for inbound    │
-│ Webhooks + External sys │         │ Integration security     │
-└─────────────────────────┘         └─────────────────────────┘
-```
+- `AGENTS.MD` — agent/development conventions, command reference
+- `src/docs/DESIGN.md` — design tokens + UI conventions
+- `docs/ATTENDANCE.md`, `docs/DEVICES.md`, `docs/KIOSK.md` — attendance + biometric subsystems
+- `src/docs/TENANT_PROVISIONING.md` — multi-tenant onboarding
+- `README.md` — product overview

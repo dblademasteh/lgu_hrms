@@ -10,6 +10,7 @@ export const performanceController = {
         employeeId: req.query.employeeId,
         reviewYear: req.query.reviewYear,
         status: req.query.status,
+        reviewType: req.query.reviewType,
       });
       res.json(data);
     } catch (e) { next(e); }
@@ -39,6 +40,42 @@ export const performanceController = {
   async remove(req, res, next) {
     try {
       await performanceService.deletePerformanceReview(req, req.params.id);
+      res.status(204).send();
+    } catch (e) { next(e); }
+  },
+
+  async compute(req, res, next) {
+    try {
+      const review = await performanceService.computeReview(req, req.params.id);
+      res.json(review);
+    } catch (e) { next(e); }
+  },
+
+  // Target handlers
+  async listTargets(req, res, next) {
+    try {
+      const targets = await performanceService.listTargets(req, req.params.id);
+      res.json(targets);
+    } catch (e) { next(e); }
+  },
+
+  async addTarget(req, res, next) {
+    try {
+      const target = await performanceService.addTarget(req, req.params.id, req.body);
+      res.status(201).json(target);
+    } catch (e) { next(e); }
+  },
+
+  async updateTarget(req, res, next) {
+    try {
+      const target = await performanceService.updateTarget(req, req.params.id, req.params.targetId, req.body);
+      res.json(target);
+    } catch (e) { next(e); }
+  },
+
+  async removeTarget(req, res, next) {
+    try {
+      await performanceService.removeTarget(req, req.params.id, req.params.targetId);
       res.status(204).send();
     } catch (e) { next(e); }
   },

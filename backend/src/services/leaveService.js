@@ -245,7 +245,6 @@ export const leaveService = {
   async monetize(req, id, data) {
     const existing = await leaveRepository.findRequest(req, id);
     if (!existing) throw new AppError('Leave request not found', 404, 'NOT_FOUND');
-    if (!existing.isTerminal) throw new AppError('Only terminal leave can be monetized', 400, 'INVALID_STATE');
     if (existing.status !== 'APPROVED') throw new AppError('Terminal leave must be approved before monetization', 400, 'INVALID_STATE');
     if (existing.monetized) throw new AppError('Leave already monetized', 409, 'CONFLICT');
 
@@ -253,19 +252,59 @@ export const leaveService = {
       throw new AppError('Only vacation and sick leave can be monetized', 400, 'INVALID_TYPE');
     }
 
-    const currentYear = existing.fromDate.getUTCFullYear();
+    // CSC MC No. 2 s. 2016 / DBM BC 2016-2: constant factor =
+    // 12 / (365 - (104 rest days + 12 holidays)) = 12 / 249 ≈ 0.0481927.
+    // Rate is ALWAYS the monthly salary (S/22 per day), computed server-side —
+    // never a client-sent amount.
+    const CONSTANT_FACTOR = 0.048192771084337;
+    const employee = await prisma.employee.findFirst({
+      where: { ...withTenant(req), id: existing.employeeId },
+    });
+    if (!employee) throw new AppError('Employee record missing', 400, 'INVALID_STATE');
+    const monthlySalary = Number(employee.monthlySalary ?? 0) || 0;
+    if (monthlySalary <= 0) {
+      throw new AppError('Employee has no monthly salary — cannot monetize', 400, 'INVALID_STATE');
+    }
+    const dayRate = monthlySalary / 22;
+
     await prisma.$transaction(async (tx) => {
+      const year = existing.fromDate.getUTCFullYear();
       const credit = await tx.leaveCredit.findFirst({
-        where: { tenantId: req.tenantId, employeeId: existing.employeeId, type: existing.type, year: currentYear },
+        where: { tenantId: req.tenantId, employeeId: existing.employeeId, type: existing.type, year },
       });
       if (!credit) throw new AppError('Leave credit missing', 400, 'INVALID_STATE');
-      const unused = Math.max(0, Number(credit.balance) - existing.days);
-      const amount = Number((unused * (data.monetizedAmount || 0)).toFixed(2));
+
+      let unused;
+      if (existing.isTerminal) {
+        // Terminal leave: the remaining balance is the monetizable amount.
+        unused = Math.max(0, Number(credit.balance));
+      } else {
+        // Non-terminal: at most 30 days a year, once a year (409 on re-monetize),
+        // and 5 VL days must be retained (CSC MC No. 2 s. 2016).
+        const minRetain = existing.type === 'VACATION' ? 5 : 0;
+        const monetizable = Math.min(VL_CAP, Number(credit.balance) - minRetain);
+        unused = Math.min(existing.days, Math.max(0, monetizable));
+        const alreadyMonetized = await tx.leaveRequest.count({
+          where: {
+            tenantId: req.tenantId,
+            employeeId: existing.employeeId,
+            monetized: true,
+            toDate: { gte: new Date(Date.UTC(year, 0, 1)) },
+          },
+        });
+        if (alreadyMonetized > 0) {
+          throw new AppError('Leave can only be monetized once per calendar year', 409, 'MONETIZE_ONCE_PER_YEAR');
+        }
+      }
+
+      // CSC MC No. 2 s. 2016 formula: monetized = unused days × S/22 × constant factor.
+      const amount = Math.round(unused * dayRate * CONSTANT_FACTOR * 100) / 100;
       await leaveRepository.updateRequestStatus(req, id, {
         status: 'APPROVED',
         monetized: true,
         monetizedAt: new Date(),
         monetizedAmount: amount,
+        monetizedDays: unused,
         decisionNote: data.note ?? existing.decisionNote,
       });
     });
@@ -307,7 +346,6 @@ async function reconcileCredits(req, employeeId) {
     if (monthsAccrued <= 0) continue;
     let balance = Number((rule.accrualPerMonth * monthsAccrued).toFixed(2));
     if (rule.maxCarryOver && balance > rule.maxCarryOver) balance = rule.maxCarryOver;
-    const existing = await leaveRepository.findLeaveCredit(req, employeeId, rule.leaveType, year);
-    if (!existing) await leaveRepository.createLeaveCredit(req, employeeId, rule.leaveType, year, balance);
+    await leaveRepository.createLeaveCredit(req, employeeId, rule.leaveType, year, balance);
   }
 }

@@ -4,6 +4,7 @@ const router = Router();
 router.get('/applicants', ctrl.listApplicantsHandler);
 router.post('/applicants', ctrl.createApplicantHandler);
 router.patch('/applicants/:id', ctrl.updateApplicantHandler);
+router.post('/applicants/:id/hire', ctrl.hireApplicantHandler);
 router.get('/eligibilities', ctrl.listEligibilitiesHandler);
 router.post('/eligibilities', ctrl.createEligibilityHandler);
 export default router;

@@ -14,6 +14,10 @@ export const createEmployeeSchema = {
     address: z.string().min(1).max(500),
     contactNumber: z.string().max(30).optional().nullable(),
     email: z.string().email().optional().nullable(),
+    sssNumber: z.string().max(30).optional().nullable(),
+    philhealthNumber: z.string().max(30).optional().nullable(),
+    pagibigNumber: z.string().max(30).optional().nullable(),
+    tinNumber: z.string().max(30).optional().nullable(),
     status: z.enum(['ACTIVE', 'INACTIVE', 'RESIGNED', 'RETIRED']).default('ACTIVE'),
     departmentId: z.string().min(1),
     positionId: z.string().min(1),
@@ -29,4 +33,8 @@ export const updateEmployeeSchema = {
 
 export const employeeIdSchema = {
   params: z.object({ id: z.string().min(1) }),
+};
+
+export const bulkEmployeesSchema = {
+  body: z.array(createEmployeeSchema.body).min(1).max(1000),
 };

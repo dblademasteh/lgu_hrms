@@ -1,4 +1,5 @@
 import { biometricService } from '../services/biometricService.js';
+import { attendanceService } from '../services/attendanceService.js';
 import { prisma } from '../lib/prisma.js';
 import { withTenant } from '../middleware/tenant.js';
 
@@ -36,7 +37,7 @@ export const biometricController = {
       const result = await biometricService.verify(req, credentialId, assertion);
       
       if (punchType) {
-        const attendanceResult = await require('../services/attendanceService.js').attendanceService.biometricPunch(req, result.employeeId, punchType);
+        const attendanceResult = await attendanceService.biometricPunch(req, result.employeeId, punchType);
         return res.json({ ...attendanceResult, verified: true, employee: result });
       }
 

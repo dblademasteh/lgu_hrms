@@ -1,32 +1,24 @@
-import React, { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { Plus, Save, X, Trash2, Edit } from 'lucide-react';
+import React, { useEffect, useState, useMemo } from 'react';
 import Layout from '../components/Layout.jsx';
-import { badgeTone } from '../data/mock.js';
-import EmployeeForm from '../components/EmployeeForm.jsx';
 import Modal from '../components/Modal.jsx';
 import ConfirmDialog from '../components/ConfirmDialog.jsx';
-import EmployeeProfileModal from '../components/EmployeeProfileModal.jsx';
-import { listEmployees, createEmployee, updateEmployee, deleteEmployee } from '../api/employees.js';
-import { departmentsApi } from '../api/departments.js';
+import EmployeeForm from '../components/EmployeeForm.jsx';
+import DetailPane from '../components/DetailPane.jsx';
 import { useToast } from '../components/Toast.jsx';
+import { listEmployees, createEmployee, updateEmployee, deleteEmployee } from '../api/employees.js';
+import { Plus, Search, Users, UserCheck, UserX, Filter } from 'lucide-react';
+import { badgeTone } from '../data/mock.js';
 
 const initialsOf = name => (name ?? '').split(' ').filter(Boolean).map(p => p[0]).slice(0, 2).join('') || '—';
 
-const blankEmployee = { employeeNumber: '', firstName: '', lastName: '', middleName: '', birthDate: '', gender: '', civilStatus: '', address: '', contactNumber: '', email: '', status: 'ACTIVE', departmentId: '', positionId: '', hiredDate: '', monthlySalary: '' };
+const blankEmployee = { employeeNumber: '', firstName: '', lastName: '', middleName: '', birthDate: '', gender: '', civilStatus: '', address: '', contactNumber: '', email: '', sssNumber: '', philhealthNumber: '', pagibigNumber: '', tinNumber: '', status: 'ACTIVE', departmentId: '', positionId: '', hiredDate: '', monthlySalary: '' };
 
 function mapEmployee(e) {
   const fullName = `${e.lastName}, ${e.firstName}${e.middleName ? ' ' + e.middleName : ''}`;
-  const toDateInput = v => (v ? String(v).slice(0, 10) : '');
-  const peso = n => (n === null || n === undefined || n === '' ? '' : `₱ ${Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`);
   return {
     id: e.id,
     employeeNumber: e.employeeNumber,
     no: e.employeeNumber,
-    itemNo: e.itemNo ?? e.position?.itemNo ?? '',
-    firstName: e.firstName,
-    lastName: e.lastName,
-    middleName: e.middleName ?? '',
     fullName,
     name: fullName,
     position: e.position?.title ?? '',
@@ -34,389 +26,226 @@ function mapEmployee(e) {
     dept: e.department?.code ?? '',
     status: e.status,
     sg: e.position?.salaryGrade ? `SG ${e.position.salaryGrade}` : '',
-    step: e.position?.step ?? e.step ?? '',
-    appointmentType: e.appointmentType ?? e.position?.appointmentType ?? '',
-    hired: e.hiredDate?.slice(0, 10),
+    hired: e.hiredDate ? String(e.hiredDate).slice(0,10) : '',
     email: e.email ?? '',
     contact: e.contactNumber ?? '',
-    // Raw fields the edit form needs (date inputs want YYYY-MM-DD).
-    // Seed rows store gender/civilStatus as 'Male'/'Single'; the API contract
-    // requires MALE/SINGLE so normalize here to keep the selects + validation happy.
-    departmentId: e.departmentId ?? '',
-    positionId: e.positionId ?? '',
-    birthDate: toDateInput(e.birthDate),
-    hiredDate: toDateInput(e.hiredDate),
-    gender: (e.gender ?? '').toUpperCase(),
-    civilStatus: (e.civilStatus ?? '').toUpperCase(),
-    address: e.address ?? '',
-    contactNumber: e.contactNumber ?? '',
-    monthlySalary: e.monthlySalary ?? '',
-    monthly: peso(e.monthlySalary),
-    raw: e
+    salary: e.monthlySalary ?? '',
+    raw: e,
   };
 }
 
 export default function Employees() {
   const toast = useToast();
   const [rows, setRows] = useState([]);
-  const [formOpen, setFormOpen] = useState(false);
-  const [editing, setEditing] = useState(null);
-  const [confirmDel, setConfirmDel] = useState(null);
   const [loading, setLoading] = useState(true);
-  
-  // Employee profile modal state
-  const [profileModalOpen, setProfileModalOpen] = useState(false);
-  const [profileEmployee, setProfileEmployee] = useState(null);
-  
-  // Server-side filtering
-  const [searchParams, setSearchParams] = useSearchParams();
-  const [search, setSearch] = useState(searchParams.get('q') || '');
-  const [searchQuery, setSearchQuery] = useState(searchParams.get('q') || '');
-  const [filterDept, setFilterDept] = useState(searchParams.get('dept') || '');
-  const [filterStatus, setFilterStatus] = useState(searchParams.get('status') || '');
-  const [filterSg, setFilterSg] = useState(searchParams.get('sg') || '');
-  const [filterAppt, setFilterAppt] = useState(searchParams.get('appt') || '');
-  const [departments, setDepartments] = useState([]);
-  
-  // Pagination state
-  const [page, setPage] = useState(parseInt(searchParams.get('page') || '1', 10));
-  const [total, setTotal] = useState(0);
-  const pageSize = 50;
-  
-  // Error state
-  const [error, setError] = useState(null);
-  
-  // Bumped whenever a CSC section entry is added/removed in the edit modal,
-  // so the detail pane refetches its relation tabs.
-  const [sectionsVersion, setSectionsVersion] = useState(0);
+  const [filters, setFilters] = useState({ search: '', dept: 'all', status: 'all' });
+  const [page, setPage] = useState(1);
+  const pageSize = 20;
+  const [selection, setSelection] = useState(new Set());
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [form, setForm] = useState(blankEmployee);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [detailEmp, setDetailEmp] = useState(null);
+  const [confirmDel, setConfirmDel] = useState(null);
 
-  const load = async (params) => {
-    setLoading(true);
-    setError(null);
+  const load = async () => {
     try {
-      const data = await listEmployees({ 
-        page: params.page || 1, 
-        limit: params.limit || pageSize, 
-        search: params.search,
-        departmentId: params.departmentId,
-        status: params.status,
-        salaryGrade: params.salaryGrade,
-        appointmentType: params.appointmentType
-      });
-      const items = data?.items || data || [];
-      const totalRecords = data?.total || items.length;
-      const mapped = items.map(mapEmployee);
-      setRows(mapped);
-      setTotal(totalRecords);
-    } catch (e) {
-      setError(e?.response?.data?.error?.message || e.message || 'Failed to load employees');
-      toast('Failed to load employees: ' + (e?.response?.data?.error?.message || e.message), 'error');
-    } finally {
-      setLoading(false);
-    }
+      setLoading(true);
+      const data = await listEmployees({ page: 1, limit: 500 });
+      setRows((data.items ?? []).map(mapEmployee));
+    } catch { toast('Failed to load employees','error'); }
+    finally { setLoading(false); }
   };
+  useEffect(() => { load(); }, []);
 
-  // Load departments for filter dropdown
-  useEffect(() => {
-    departmentsApi.list()
-      .then(r => setDepartments(r.data || r || []))
-      .catch(() => []);
-  }, []);
+  const stats = useMemo(() => {
+    const total = rows.length;
+    const active = rows.filter(r=>r.status==='ACTIVE').length;
+    const inactive = total - active;
+    return { total, active, inactive };
+  }, [rows]);
 
-  // Debounced search
-  useEffect(() => {
-    const t = setTimeout(() => setSearchQuery(search.trim()), 350);
-    return () => clearTimeout(t);
-  }, [search]);
+  const departments = useMemo(() => {
+    const map = new Map();
+    rows.forEach(r => { if (r.dept && !map.has(r.dept)) map.set(r.dept, r.department); });
+    return [...map.entries()];
+  }, [rows]);
 
-  // Sync filters to URL
-  useEffect(() => {
-    const params = new URLSearchParams();
-    if (searchQuery) params.set('q', searchQuery);
-    if (filterDept) params.set('dept', filterDept);
-    if (filterStatus) params.set('status', filterStatus);
-    if (filterSg) params.set('sg', filterSg);
-    if (filterAppt) params.set('appt', filterAppt);
-    if (page > 1) params.set('page', String(page));
-    setSearchParams(params, { replace: true });
-  }, [searchQuery, filterDept, filterStatus, filterSg, filterAppt, page]);
-  
-  // Refetch when filters change
-  useEffect(() => {
-    load({
-      page,
-      search: searchQuery || undefined,
-      departmentId: filterDept || undefined,
-      status: filterStatus || undefined,
-      salaryGrade: filterSg || undefined,
-      appointmentType: filterAppt || undefined
+  const filtered = useMemo(() => {
+    return rows.filter(r => {
+      const q = filters.search.toLowerCase();
+      const matchesQ = !q || [r.fullName, r.no, r.position].some(v => (v ?? '').toLowerCase().includes(q));
+      const matchesDept = filters.dept === 'all' || r.dept === filters.dept;
+      const matchesStatus = filters.status === 'all' || r.status === filters.status;
+      return matchesQ && matchesDept && matchesStatus;
     });
-  }, [searchQuery, filterDept, filterStatus, filterSg, filterAppt, page]);
-  
-  // Initial load
-  useEffect(() => {
-    load({ page: 1 });
-  }, []);
+  }, [rows, filters]);
 
-  const openProfile = (employee) => {
-    setProfileEmployee(employee);
-    setProfileModalOpen(true);
+  const paged = useMemo(() => {
+    const start = (page-1)*pageSize;
+    return filtered.slice(start, start+pageSize);
+  }, [filtered, page]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length/pageSize));
+
+  const openAdd = () => { setEditing(null); setForm(blankEmployee); setModalOpen(true); };
+  const openEdit = emp => {
+    setEditing(emp);
+    const e = emp.raw ?? emp;
+    setForm({
+      id: e.id, employeeNumber: e.employeeNumber||'', firstName: e.firstName||'', lastName: e.lastName||'', middleName: e.middleName||'',
+      birthDate: (e.birthDate??'').slice(0,10), gender:(e.gender??'').toUpperCase(), civilStatus:(e.civilStatus??'').toUpperCase(),
+      address:e.address||'', contactNumber:e.contactNumber||'', email:e.email||'', sssNumber:e.sssNumber||'', philhealthNumber:e.philhealthNumber||'',
+      pagibigNumber:e.pagibigNumber||'', tinNumber:e.tinNumber||'', status:e.status||'ACTIVE', departmentId:e.departmentId||'',
+      positionId:e.positionId||'', hiredDate:(e.hiredDate??'').slice(0,10), monthlySalary:e.monthlySalary??''
+    });
+    setModalOpen(true);
   };
-
-  const closeProfile = () => {
-    setProfileModalOpen(false);
-    setProfileEmployee(null);
-  };
-
-  const openAdd = () => { setEditing(null); setFormOpen(true); };
-  const openEdit = e => { setEditing(e); setFormOpen(true); };
-
-  // The edit form writes back raw fields (birthDate/hiredDate as YYYY-MM-DD,
-  // departmentId/positionId). Strip the mapped display fields so Zod doesn't choke.
-  const EDITABLE_FIELDS = ['employeeNumber', 'firstName', 'lastName', 'middleName', 'birthDate', 'gender', 'civilStatus', 'address', 'contactNumber', 'email', 'status', 'departmentId', 'positionId', 'hiredDate', 'monthlySalary'];
-  const toPayload = emp => Object.fromEntries(
-    EDITABLE_FIELDS.filter(k => emp[k] !== undefined && !(k === 'monthlySalary' && emp[k] === '')).map(k => [k, emp[k] === '' && !['employeeNumber', 'firstName', 'lastName', 'birthDate', 'gender', 'civilStatus', 'address', 'departmentId', 'positionId', 'hiredDate'].includes(k) ? null : emp[k]])
-  );
-
-  const submit = async emp => {
+  const save = async () => {
     try {
-      if (editing) {
-        await updateEmployee(editing.id, toPayload(emp));
-        toast(`Employee ${emp.lastName} updated.`, 'success');
-      } else {
-        await createEmployee(toPayload(emp));
-        toast(`Employee ${emp.lastName} added.`, 'success');
-      }
-      setFormOpen(false);
-      setEditing(null);
-      await load(searchQuery);
-    } catch (e) {
-      const details = e?.response?.data?.error?.details?.map(d => `${d.path}: ${d.message}`).join('; ');
-      const msg = details || e?.response?.data?.error?.message;
-      toast(msg || 'Save failed', 'error');
-    }
+      if (editing) { await updateEmployee(editing.id, form); toast('Employee updated','success'); }
+      else { await createEmployee(form); toast('Employee created','success'); }
+      setModalOpen(false); load();
+    } catch(e){ toast(e?.response?.data?.error?.message||'Save failed','error'); }
   };
-
   const remove = async emp => {
-    try {
-      await deleteEmployee(emp.id);
-      setRows(l => l.filter(r => r.id !== emp.id));
-      // If the deleted employee's profile is open, close it
-      if (profileEmployee?.id === emp.id) {
-        closeProfile();
-      }
-      toast(`Employee ${emp.name} deleted.`, 'info');
-    } catch (e) {
-      const msg = e?.response?.data?.error?.message;
-      toast(msg || 'Delete failed', 'error');
-    }
+    try { await deleteEmployee(emp.id); setRows(l=>l.filter(r=>r.id!==emp.id)); toast('Employee deleted','info'); }
+    catch(e){ toast(e?.response?.data?.error?.message||'Delete failed','error'); }
+  };
+
+  const exportCSV = () => {
+    const data = selection.size ? rows.filter(r=>selection.has(r.id)) : filtered;
+    const headers = ['employeeNumber','lastName','firstName','middleName','birthDate','gender','civilStatus','address','contactNumber','email','sssNumber','philhealthNumber','pagibigNumber','tinNumber','status','departmentId','positionId','hiredDate','monthlySalary'];
+    const lines = [headers.join(',')];
+    data.forEach(r=>{ const e=r.raw; lines.push(headers.map(h=>`"${String(e[h]??'').replace(/"/g,'""')}"`).join(',')); });
+    const blob = new Blob([lines.join('\n')],{type:'text/csv'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='employees.csv'; a.click(); URL.revokeObjectURL(url);
+    toast(`Exported ${data.length} employees`,'success');
   };
 
   return (
-    <Layout maxWidth="max-w-7xl">
-      <div className="flex flex-col gap-3 mb-4">
-        <div className="flex items-end justify-between gap-4">
-          <div className="min-w-0">
-            <h1 className="font-display text-xl font-semibold text-ink">Employees 201 File</h1>
-            <p className="text-xs text-muted mt-0.5 truncate">CSC-compliant personnel master</p>
+    <Layout title="Employees 201 File">
+      <div className="space-y-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="card p-4 flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-accent/10 text-accent flex items-center justify-center"><Users/></div>
+            <div><div className="text-xs text-muted uppercase tracking-wide">Total</div><div className="text-xl font-semibold">{stats.total}</div></div>
           </div>
-          <button type="button" className="btn btn-primary gap-1.5 h-9 px-3 text-sm" onClick={openAdd}>
-            <Plus size={14} /> Add
-          </button>
+          <div className="card p-4 flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-success/10 text-success flex items-center justify-center"><UserCheck/></div>
+            <div><div className="text-xs text-muted uppercase tracking-wide">Active</div><div className="text-xl font-semibold">{stats.active}</div></div>
+          </div>
+          <div className="card p-4 flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-warning/10 text-warning flex items-center justify-center"><UserX/></div>
+            <div><div className="text-xs text-muted uppercase tracking-wide">Inactive</div><div className="text-xl font-semibold">{stats.inactive}</div></div>
+          </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <input
-            type="search"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Search no, name, position…"
-            className="input h-9 flex-1 min-w-[220px]"
-            aria-label="Search employees"
-          />
-          <select
-            value={filterDept}
-            onChange={e => { setFilterDept(e.target.value); setPage(1); }}
-            className="select h-9 w-[170px]"
-            aria-label="Filter by department"
-          >
-            <option value="">All depts</option>
-            {departments.map(d => <option key={d.id} value={d.id}>{d.code}</option>)}
-          </select>
-          <select
-            value={filterSg}
-            onChange={e => { setFilterSg(e.target.value); setPage(1); }}
-            className="select h-9 w-[110px]"
-            aria-label="Filter by SG"
-          >
-            <option value="">All SG</option>
-            {Array.from({length:33},(_,i)=>i+1).map(n=><option key={n} value={n}>SG {n}</option>)}
-          </select>
-          <select
-            value={filterAppt}
-            onChange={e => { setFilterAppt(e.target.value); setPage(1); }}
-            className="select h-9 w-[150px]"
-            aria-label="Filter by appointment type"
-          >
-            <option value="">All appointments</option>
-            <option value="REGULAR">Regular</option>
-            <option value="COT">Contractual</option>
-            <option value="CASUAL">Casual</option>
-            <option value="PROVISIONAL">Provisional</option>
-          </select>
-          <select
-            value={filterStatus}
-            onChange={e => { setFilterStatus(e.target.value); setPage(1); }}
-            className="select h-9 w-[120px]"
-            aria-label="Filter by status"
-          >
-            <option value="">All status</option>
-            <option value="ACTIVE">Active</option>
-            <option value="INACTIVE">Inactive</option>
-          </select>
-        </div>
-      </div>
-      
-      <div className="grid grid-cols-1 gap-4">
-        <div className="min-w-0">
-          <div className="card p-3 h-full flex flex-col min-h-0">
-            {error && (
-              <div className="text-xs text-error px-3 py-2 border-b border-line">{error}</div>
-            )}
-            <div className="overflow-auto flex-1 min-h-0">
-              <table className="data-table text-sm">
-                <thead className="sticky top-0 bg-bg/95 backdrop-blur">
-                  <tr className="text-[11px] uppercase tracking-wide text-muted">
-                    <th className="text-left w-[90px]">No.</th>
-                    <th className="text-left min-w-[180px]">Name</th>
-                    <th className="text-left hidden lg:table-cell w-[120px]">Item</th>
-                    <th className="text-left hidden md:table-cell">Position</th>
-                    <th className="text-left hidden sm:table-cell w-[80px]">Dept</th>
-                    <th className="text-left hidden xl:table-cell w-[90px]">SG/Step</th>
-                    <th className="text-left hidden xl:table-cell w-[120px]">Appointment Type</th>
-                    <th className="text-left w-[80px]">Status</th>
-                    <th className="text-right hidden md:table-cell w-[110px]">Monthly</th>
-                    <th className="text-right w-20">Actions</th>
+
+        <div className="card p-4">
+          <div className="flex flex-wrap items-center gap-3 mb-4">
+            <div className="relative flex-1 min-w-[280px]">
+              <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
+              <input className="input pl-10 h-11" placeholder="Search name, number, position..." value={filters.search} onChange={e=>{setFilters(f=>({...f,search:e.target.value})); setPage(1);}} />
+            </div>
+            <div className="flex items-center gap-2">
+              <Filter size={16} className="text-muted"/>
+              <select className="input h-11 w-44" value={filters.dept} onChange={e=>{setFilters(f=>({...f,dept:e.target.value})); setPage(1);}}>
+                <option value="all">All Departments</option>
+                {departments.map(([c,n])=><option key={c} value={c}>{n||c}</option>)}
+              </select>
+              <select className="input h-11 w-40" value={filters.status} onChange={e=>{setFilters(f=>({...f,status:e.target.value})); setPage(1);}}>
+                <option value="all">All Status</option>
+                {['ACTIVE','INACTIVE','RESIGNED','RETIRED'].map(s=><option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+            <button className="btn btn-primary h-11 px-4" onClick={openAdd}><Plus size={18}/> New Employee</button>
+          </div>
+
+          {selection.size>0 && (
+            <div className="flex items-center gap-3 mb-3 text-sm">
+              <span className="text-muted">{selection.size} selected</span>
+              <button className="btn btn-ghost" onClick={exportCSV}>Export CSV</button>
+            </div>
+          )}
+
+          <div className="overflow-hidden rounded-xl border border-line">
+            <div className="overflow-auto">
+              <table className="data-table w-full">
+                <thead className="bg-surface/70 backdrop-blur">
+                  <tr className="text-left text-xs uppercase tracking-wide text-muted">
+                    <th className="w-12 p-3"><input type="checkbox" className="accent" checked={filtered.length>0 && selection.size===filtered.length} onChange={e=>setSelection(e.target.checked? new Set(filtered.map(r=>r.id)): new Set())}/></th>
+                    <th className="p-3 w-28">Employee No.</th>
+                    <th className="p-3">Name</th>
+                    <th className="p-3">Position</th>
+                    <th className="p-3 w-36">Department</th>
+                    <th className="p-3 w-24">Grade</th>
+                    <th className="p-3 w-32">Hired</th>
+                    <th className="p-3 w-48">Email</th>
+                    <th className="p-3 w-32">Contact</th>
+                    <th className="p-3 w-32">Salary</th>
+                    <th className="p-3 w-28">Status</th>
                   </tr>
                 </thead>
-                <tbody>
-                  {loading
-                    ? Array.from({ length: 8 }).map((_, i) => (
-                        <tr key={i}>
-                          <td><div className="skeleton h-3 w-12" /></td>
-                          <td><div className="skeleton h-3 w-32" /></td>
-                          <td className="hidden lg:table-cell"><div className="skeleton h-3 w-16" /></td>
-                          <td className="hidden md:table-cell"><div className="skeleton h-3 w-24" /></td>
-                          <td className="hidden sm:table-cell"><div className="skeleton h-3 w-10" /></td>
-                          <td className="hidden xl:table-cell"><div className="skeleton h-3 w-12" /></td>
-                          <td className="hidden xl:table-cell"><div className="skeleton h-3 w-16" /></td>
-                          <td><div className="skeleton h-4 w-14 rounded-full" /></td>
-                          <td className="hidden md:table-cell"><div className="skeleton h-3 w-16 ml-auto" /></td>
-                          <td><div className="skeleton h-8 w-20 ml-auto" /></td>
-                        </tr>
-                      ))
-                    : rows.map(e => (
-                        <tr
-                          key={e.id}
-                          data-selectable="true"
-                          onClick={() => openProfile(e)}
-                          className="group cursor-pointer hover:bg-accent/5 transition-colors"
-                        >
-                          <td className="font-mono text-xs">{e.no}</td>
-                          <td>
-                            <div className="flex items-center gap-2">
-                              <div className="w-7 h-7 rounded-md bg-accent/10 text-accent font-display font-bold flex items-center justify-center shrink-0 text-xs" aria-hidden="true">
-                                {initialsOf(e.fullName)}
-                              </div>
-                              <span className="font-medium truncate max-w-[180px]">{e.fullName}</span>
+                <tbody className="divide-y divide-line">
+                  {loading ? Array.from({length:8}).map((_,i)=><tr key={i} className="animate-pulse"><td colSpan={7} className="p-4"><div className="h-4 bg-surface rounded"/></td></tr>)
+                    : paged.map(r=>(
+                      <tr key={r.id} className="hover:bg-surface/60 transition-colors cursor-pointer" onClick={()=>{ setDetailEmp(r); setDetailOpen(true); }}>
+                        <td className="p-3" onClick={e=>e.stopPropagation()}><input type="checkbox" className="accent" checked={selection.has(r.id)} onChange={e=>{const n=new Set(selection); e.target.checked? n.add(r.id): n.delete(r.id); setSelection(n);}}/></td>
+                        <td className="p-3 font-mono text-xs text-muted">{r.no}</td>
+                        <td className="p-3">
+                          <div className="flex items-center gap-3">
+                            <div className="w-9 h-9 rounded-lg bg-accent/10 text-accent font-display font-bold flex items-center justify-center text-sm">{initialsOf(r.fullName)}</div>
+                            <div className="min-w-0">
+                              <div className="font-medium truncate">{r.fullName}</div>
+                              <div className="text-xs text-muted truncate">{r.email}</div>
                             </div>
-                          </td>
-                          <td className="hidden lg:table-cell font-mono text-xs text-muted">{e.itemNo || '—'}</td>
-                          <td className="hidden md:table-cell truncate max-w-[200px]">{e.position}</td>
-                          <td className="hidden sm:table-cell font-mono text-xs text-muted">{e.dept || '—'}</td>
-                          <td className="hidden xl:table-cell font-mono text-xs">{e.sg}{e.step ? `/${e.step}` : ''}</td>
-                          <td className="hidden xl:table-cell text-xs text-muted">{e.appointmentType || '—'}</td>
-                          <td><span className={`badge text-[10px] ${badgeTone(e.status)}`}>{e.status}</span></td>
-                          <td className="hidden md:table-cell font-mono text-xs text-right">{e.monthly || '—'}</td>
-                           <td className="text-right">
-                             <span className="inline-flex gap-1">
-                               <button type="button" className="btn btn-ghost px-2.5 h-8 text-xs min-w-[32px]" onClick={e2 => { e2.stopPropagation(); openEdit(e); }} aria-label="Edit employee" title="Edit">
-                                 <Edit size={14} />
-                               </button>
-                               <button type="button" className="btn btn-ghost px-2.5 h-8 text-xs text-error min-w-[32px]" onClick={e2 => { e2.stopPropagation(); setConfirmDel(e); }} aria-label="Delete employee" title="Delete">
-                                 <Trash2 size={14} />
-                               </button>
-                             </span>
-                           </td>
-                        </tr>
-                      ))}
-                  {!loading && rows.length === 0 && (
-                    <tr><td colSpan={9} className="text-muted text-xs py-10 text-center">No employees match your filters.</td></tr>
-                  )}
+                          </div>
+                        </td>
+                        <td className="p-3 text-sm text-muted truncate max-w-[220px]">{r.position}</td>
+                        <td className="p-3 font-mono text-xs">{r.dept}</td>
+                        <td className="p-3 font-mono text-xs">{r.sg}</td>
+                        <td className="p-3 font-mono text-xs">{r.hired}</td>
+                        <td className="p-3 text-sm text-muted truncate max-w-[200px]">{r.email}</td>
+                        <td className="p-3 font-mono text-xs truncate max-w-[140px]">{r.contact}</td>
+                        <td className="p-3 font-mono text-xs">{r.salary ? `₱${Number(r.salary).toLocaleString()}` : '—'}</td>
+                        <td className="p-3"><span className={`badge ${badgeTone(r.status)} text-xs`}>{r.status}</span></td>
+                      </tr>
+                    ))}
                 </tbody>
               </table>
             </div>
-            
-            <div className="flex items-center justify-between pt-2 mt-2 border-t border-line text-[11px]">
-              <span className="mono-label">{total ? `${(page-1)*pageSize+1}–${Math.min(page*pageSize,total)} of ${total}` : '0 results'}</span>
-              <div className="flex gap-1">
-                <button type="button" className="btn btn-ghost h-9 px-3 text-xs" disabled={page <= 1 || loading} onClick={() => setPage(p => Math.max(1, p - 1))}>Prev</button>
-                <button type="button" className="btn btn-ghost h-9 px-3 text-xs" disabled={page >= Math.ceil(total / pageSize) || loading} onClick={() => setPage(p => Math.min(Math.ceil(total / pageSize), p + 1))}>Next</button>
+            {!loading && filtered.length===0 && (
+              <div className="py-16 text-center">
+                <div className="mx-auto w-12 h-12 rounded-full bg-surface flex items-center justify-center mb-3"><Users className="text-muted"/></div>
+                <div className="font-medium">No employees found</div>
+                <div className="text-sm text-muted mt-1">Try adjusting filters or add a new employee</div>
+                <button className="btn btn-primary mt-4" onClick={openAdd}>Add Employee</button>
+              </div>
+            )}
+          </div>
+
+          {!loading && filtered.length>0 && (
+            <div className="flex items-center justify-between pt-3 text-xs text-muted">
+              <span>{filtered.length} results</span>
+              <div className="flex items-center gap-2">
+                <button className="btn btn-ghost h-9 px-3" disabled={page<=1} onClick={()=>setPage(p=>p-1)}>Previous</button>
+                <span className="px-2">Page {page} of {totalPages}</span>
+                <button className="btn btn-ghost h-9 px-3" disabled={page>=totalPages} onClick={()=>setPage(p=>p+1)}>Next</button>
               </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
 
-      <Modal
-        open={profileModalOpen}
-        onClose={closeProfile}
-        title={profileEmployee ? `Employee Profile · ${profileEmployee.name}` : 'Employee Profile'}
-        size="lg"
-      >
-        <EmployeeProfileModal
-          employee={profileEmployee}
-          onEdit={openEdit}
-          refreshKey={sectionsVersion}
-        />
+      <Modal open={modalOpen} onClose={()=>setModalOpen(false)} title={editing?'Edit Employee':'New Employee'} size="lg">
+        <EmployeeForm formId="emp-form" initial={form} submitLabel={editing?'Update':'Create'} onSubmit={save} />
       </Modal>
 
-      <Modal
-        open={formOpen}
-        onClose={() => { setFormOpen(false); setEditing(null); }}
-        title={editing ? `Edit Employee · ${editing.name}` : 'Add Employee'}
-        size="lg"
-        footer={
-          <>
-            <button type="button" className="btn btn-ghost gap-2" onClick={() => { setFormOpen(false); setEditing(null); }}>
-              <X size={16} />
-              Cancel
-            </button>
-            <button type="submit" form="employee-form" className="btn btn-primary gap-2">
-              <Save size={16} />
-              {editing ? 'Save Changes' : 'Add Employee'}
-            </button>
-          </>
-        }
-      >
-        <EmployeeForm
-          key={editing?.id ?? 'new'}
-          formId="employee-form"
-          initial={editing ?? blankEmployee}
-          submitLabel={editing ? 'Save Changes' : 'Add Employee'}
-          onSubmit={submit}
-          onSectionsChange={() => setSectionsVersion(v => v + 1)}
-        />
+      <Modal open={detailOpen} onClose={()=>setDetailOpen(false)} title="Employee 201 File" size="lg">
+        {detailEmp && <DetailPane employee={detailEmp} onEdit={()=>{setDetailOpen(false); openEdit(detailEmp);}} />}
       </Modal>
 
-      <ConfirmDialog
-        open={!!confirmDel}
-        onClose={() => setConfirmDel(null)}
-        onConfirm={() => remove(confirmDel)}
-        title="Delete employee?"
-        message={`${confirmDel?.name} (${confirmDel?.no}) will be removed from the directory. This is a soft delete and will be recorded in the audit trail.`}
-        confirmLabel="Delete"
-        danger
-      />
+      <ConfirmDialog open={!!confirmDel} onClose={()=>setConfirmDel(null)} onConfirm={()=>{remove(confirmDel); setConfirmDel(null);}} title="Delete employee?" message={`${confirmDel?.name??''} will be removed.`} confirmLabel="Delete" danger />
     </Layout>
   );
 }

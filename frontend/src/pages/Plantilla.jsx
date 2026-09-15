@@ -15,10 +15,12 @@ export default function Plantilla() {
   const [posList, setPosList] = useState([]);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ itemNumber:'', positionId:'', departmentId:'', status:'VACANT' });
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
 
   const load = async () => {
     try {
-      const { data } = await plantillaApi.list();
+      const { data } = await plantillaApi.list({ search: search || undefined, status: statusFilter || undefined });
       setItems(data.items || []);
       const depts = await departmentsApi.list();
       setDeptList(depts.data || []);
@@ -28,7 +30,7 @@ export default function Plantilla() {
       toast('Failed to load data', 'error');
     }
   };
-  useEffect(()=>{ load(); },[]);
+  useEffect(()=>{ load(); },[search, statusFilter]);
 
   const vacantCount = items.filter(i => i.status === 'VACANT').length;
   const filledCount = items.filter(i => i.status === 'FILLED').length;
@@ -64,6 +66,15 @@ export default function Plantilla() {
           <Plus size={18} />
           New Item
         </button>
+      </div>
+      <div className="flex gap-2 mb-4">
+        <input className="input w-64" placeholder="Search item number, position..." value={search} onChange={e=>setSearch(e.target.value)} />
+        <select className="select w-40" value={statusFilter} onChange={e=>setStatusFilter(e.target.value)}>
+          <option value="">All Status</option>
+          <option value="VACANT">Vacant</option>
+          <option value="FILLED">Filled</option>
+          <option value="FROZEN">Frozen</option>
+        </select>
       </div>
 
       {/* Summary Cards */}

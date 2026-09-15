@@ -4,8 +4,10 @@ import Layout from '../components/Layout.jsx';
 import Modal from '../components/Modal.jsx';
 import { useToast } from '../components/Toast.jsx';
 import { badgeTone } from '../data/mock.js';
-import { getEssProfile, getEssPayslips, getEssLeaveRequests, createEssLeaveRequest, getEssAttendance } from '../api/ess.js';
+import { getEssProfile, getEssPayslips, getEssLeaveRequests, createEssLeaveRequest, getEssAttendance, essPayslipPrintUrl } from '../api/ess.js';
 import { useNotifications } from '../hooks/useNotifications.js';
+import { useAuthStore } from '../stores/authStore.js';
+import { manilaDateLabel, manilaTimeLabel, manilaMonthKey } from '../lib/time.js';
 
 const LEAVE_TYPES = [
   { value: 'VACATION', label: 'Vacation Leave' },
@@ -18,6 +20,17 @@ const LEAVE_TYPES = [
   { value: 'COMPENSATORY', label: 'Compensatory Leave' },
 ];
 
+const LEAVE_TYPE_LABELS = {
+  VACATION: 'Vacation',
+  SICK: 'Sick',
+  SPECIAL_PRIVILEGE: 'Special Privilege',
+  SPECIAL_WOMEN: 'Special Women',
+  COMPENSATORY: 'Compensatory',
+  MATERNITY: 'Maternity',
+  PATERNITY: 'Paternity',
+  SOLO_PARENT: 'Solo Parent',
+};
+
 const LEAVE_CREDITS_MAP = {
   VACATION: 'Vacation Leave',
   SICK: 'Sick Leave',
@@ -29,11 +42,6 @@ const LEAVE_CREDITS_MAP = {
   SOLO_PARENT: 'Solo Parent',
 };
 
-function currentMonthKey() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-}
-
 function formatCurrency(n) {
   return '₱' + Number(n || 0).toLocaleString();
 }
@@ -43,18 +51,28 @@ function statusBadge(status) {
   return <span className={`badge ${tone}`}>{status.replace(/_/g, ' ')}</span>;
 }
 
+// Only PENDING + RECOMMENDED reserve days from the balance — APPROVED leaves
+// are already decremented server-side, and CANCELLED/DENIED consume nothing.
+function usedLeaveDays(leaves, type) {
+  return leaves
+    .filter(l => l.type === type && (l.status === 'PENDING' || l.status === 'RECOMMENDED'))
+    .reduce((sum, l) => sum + (l.days || 0), 0);
+}
+
 export default function ESS() {
   const toast = useToast();
   const [profile, setProfile] = useState(null);
   const [payslips, setPayslips] = useState([]);
   const [leaves, setLeaves] = useState([]);
   const [attendance, setAttendance] = useState([]);
-  const [attendanceMonth, setAttendanceMonth] = useState(currentMonthKey());
+  const [attendanceMonth, setAttendanceMonth] = useState(manilaMonthKey());
   const [loading, setLoading] = useState(true);
   const [leaveOpen, setLeaveOpen] = useState(false);
+  const [showAllLeaves, setShowAllLeaves] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [leaveForm, setLeaveForm] = useState({ type: 'VACATION', fromDate: '', toDate: '', reason: '', isHalfDay: false, isLwop: false, isTerminal: false, advanceNoticed: false, documentUrl: '' });
   const { items: notifications } = useNotifications();
+  const role = useAuthStore(s => s.user?.role);
 
   useEffect(() => {
     let cancelled = false;
@@ -112,7 +130,7 @@ export default function ESS() {
   const leaveBalance = (type) => {
     const row = creditMap[type];
     const total = row?.balance ?? 0;
-    const used = leaves.filter(l => l.type === type && l.status !== 'DENIED').length;
+    const used = usedLeaveDays(leaves, type);
     return Math.max(total - used, 0);
   };
 
@@ -187,7 +205,7 @@ export default function ESS() {
                 <span className="text-xs mono-label uppercase text-muted">Leave Balance</span>
               </div>
               <p className="font-display text-2xl font-bold text-ink">
-                {Object.values(LEAVE_CREDITS_MAP).reduce((sum, label) => sum + leaveBalance(label.split(' ')[0].toUpperCase()), 0)}
+                {Object.keys(LEAVE_CREDITS_MAP).reduce((sum, type) => sum + leaveBalance(type), 0)}
               </p>
               <p className="text-xs text-muted">{pendingLeaves} pending request(s)</p>
             </div>
@@ -257,7 +275,7 @@ export default function ESS() {
                 {Object.entries(LEAVE_CREDITS_MAP).map(([type, label]) => {
                   const row = creditMap[type];
                   const total = row?.balance ?? 0;
-                  const used = leaves.filter(l => l.type === type && l.status !== 'DENIED').length;
+                  const used = usedLeaveDays(leaves, type);
                   const balance = Math.max(total - used, 0);
                   return (
                     <div key={type} className="flex items-center justify-between p-2.5 rounded bg-bg/50">
@@ -282,12 +300,18 @@ export default function ESS() {
               ) : (
                 <div className="overflow-x-auto">
                   <table className="data-table w-full">
-                    <thead><tr><th>Period</th><th>Net Pay</th></tr></thead>
+                    <thead><tr><th>Period</th><th>Net Pay</th><th>Actions</th></tr></thead>
                     <tbody>
                       {payslips.map(p => (
                         <tr key={p.id}>
                           <td>{p.run?.period?.name || '—'}</td>
                           <td className="font-mono">{formatCurrency(p.netPay)}</td>
+                          <td>
+                            <button type="button" className="btn btn-ghost btn-sm gap-1" onClick={() => window.open(essPayslipPrintUrl(p.id), '_blank', 'noopener')}>
+                              <FileDown size={14} />
+                              Print
+                            </button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -305,17 +329,25 @@ export default function ESS() {
                 <p className="text-muted text-sm">No leave requests on file.</p>
               ) : (
                 <div className="space-y-2">
-                  {leaves.slice(0, 10).map(l => (
+                  {leaves.slice(0, showAllLeaves ? leaves.length : 10).map(l => (
                     <div key={l.id} className="flex items-center justify-between p-3 rounded bg-bg/50">
                       <div>
-                        <span className="text-sm font-medium text-ink">{l.type.replace(/_/g, ' ')}</span>
+                        <span className="text-sm font-medium text-ink">{LEAVE_TYPE_LABELS[l.type] || l.type.replace(/_/g, ' ')}</span>
                         <span className="text-xs text-muted ml-2">
-                          {new Date(l.fromDate).toLocaleDateString()} – {new Date(l.toDate).toLocaleDateString()}
+                          {manilaDateLabel(l.fromDate)} – {manilaDateLabel(l.toDate)}
                         </span>
+                        {Number(l.days) > 0 && (
+                          <span className="text-xs text-muted ml-2">({l.days} {Number(l.days) !== 1 ? 'days' : 'day'})</span>
+                        )}
                       </div>
                       {statusBadge(l.status)}
                     </div>
                   ))}
+                  {leaves.length > 10 && (
+                    <button type="button" className="btn btn-ghost btn-sm w-full" onClick={() => setShowAllLeaves(s => !s)}>
+                      {showAllLeaves ? 'Show fewer' : `Show all (${leaves.length})`}
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -341,9 +373,9 @@ export default function ESS() {
                     <tbody>
                       {attendance.map(a => (
                         <tr key={a.id}>
-                          <td className="font-mono">{new Date(a.date).toLocaleDateString()}</td>
-                          <td>{a.timeIn ? new Date(a.timeIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}</td>
-                          <td>{a.timeOut ? new Date(a.timeOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}</td>
+                          <td className="font-mono">{manilaDateLabel(a.date)}</td>
+                          <td>{a.timeIn ? manilaTimeLabel(a.timeIn) : '—'}</td>
+                          <td>{a.timeOut ? manilaTimeLabel(a.timeOut) : '—'}</td>
                           <td className="font-mono">{a.hours?.toFixed(1) || '0.0'}h</td>
                         </tr>
                       ))}
@@ -406,10 +438,12 @@ export default function ESS() {
               <input type="checkbox" className="checkbox" checked={leaveForm.isLwop} onChange={e => setLeaveForm(f => ({ ...f, isLwop: e.target.checked }))} />
               LWOP
             </label>
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" className="checkbox" checked={leaveForm.isTerminal} onChange={e => setLeaveForm(f => ({ ...f, isTerminal: e.target.checked }))} />
-              Terminal
-            </label>
+            {role !== 'EMPLOYEE' && (
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" className="checkbox" checked={leaveForm.isTerminal} onChange={e => setLeaveForm(f => ({ ...f, isTerminal: e.target.checked }))} />
+                Terminal
+              </label>
+            )}
             <label className="flex items-center gap-2 text-sm">
               <input type="checkbox" className="checkbox" checked={leaveForm.advanceNoticed} onChange={e => setLeaveForm(f => ({ ...f, advanceNoticed: e.target.checked }))} />
               5-day notice (VL)

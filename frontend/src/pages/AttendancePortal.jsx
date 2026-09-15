@@ -114,7 +114,7 @@ export default function AttendancePortal() {
     setCredentialsLoading(true);
     try {
       const data = await biometricApi.getCredentials();
-      setCredentials(data.data?.credentials || []);
+      setCredentials(data?.credentials || []);
     } catch (e) {
       toast(e.response?.data?.error?.message || 'Failed to load biometric credentials', 'error');
     } finally {

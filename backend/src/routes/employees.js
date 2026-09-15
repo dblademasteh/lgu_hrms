@@ -1,11 +1,14 @@
 import { Router } from 'express';
-import { listEmployeesHandler, getEmployeeHandler, createEmployeeHandler, updateEmployeeHandler, deleteEmployeeHandler } from '../controllers/employeeController.js';
+import { listEmployeesHandler, getEmployeeHandler, createEmployeeHandler, updateEmployeeHandler, deleteEmployeeHandler, bulkEmployeesHandler } from '../controllers/employeeController.js';
 import { requireAuth } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
 import { requirePermission } from '../middleware/permission.js';
-import { createEmployeeSchema, updateEmployeeSchema, employeeIdSchema } from '../shared/contracts/employee.js';
+import { createEmployeeSchema, updateEmployeeSchema, employeeIdSchema, bulkEmployeesSchema } from '../shared/contracts/employee.js';
 
 const router = Router();
+
+// Bulk import endpoint with permissive capability check (employeeRecordsCRUD or manageUsersAndRoles)
+router.post('/bulk', validate(bulkEmployeesSchema), requirePermission('employeeRecordsCRUD', 'manageUsersAndRoles'), bulkEmployeesHandler);
 
 // NOTE: requireAuth + auditLog are mounted globally in routes/index.js;
 // audit middleware writes AuditLog for every mutating request.

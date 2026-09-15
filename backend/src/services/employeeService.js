@@ -1,6 +1,8 @@
 import { findEmployees, findEmployeeById, insertEmployee, patchEmployee, softDeleteEmployee } from '../repositories/employeeRepository.js';
 import { AppError } from '../lib/errors.js';
 import { dispatchWebhooks } from './webhookDispatch.js';
+import { prisma } from '../lib/prisma.js';
+import { stampTenant, withTenant } from '../middleware/tenant.js';
 
 export async function listEmployees(req, params) {
   return findEmployees(req, params);
@@ -72,6 +74,41 @@ export async function deleteEmployee(req, id) {
   }).catch(err => console.error('[webhook] dispatch failed:', err));
   
   return emp;
+}
+
+export async function bulkUpsertEmployees(req, items) {
+  const tenantId = req.tenantId;
+  let created = 0;
+  let updated = 0;
+  const errors = [];
+
+  for (let i = 0; i < items.length; i++) {
+    const raw = items[i];
+    try {
+      const coerced = coerceDates(raw);
+      const stamped = stampTenant(req, coerced);
+      // Ensure tenant-scoped lookup
+      const existing = await prisma.employee.findFirst({
+        where: withTenant(req, { employeeNumber: raw.employeeNumber, deletedAt: null }),
+        select: { id: true },
+      });
+
+      if (existing) {
+        await prisma.employee.update({
+          where: { id: existing.id },
+          data: stamped,
+        });
+        updated += 1;
+      } else {
+        await prisma.employee.create({ data: stamped });
+        created += 1;
+      }
+    } catch (e) {
+      errors.push({ index: i, employeeNumber: raw.employeeNumber || null, error: e.message || String(e) });
+    }
+  }
+
+  return { created, updated, errors };
 }
 
 /** Prisma @db.Date fields expect ISO-8601 DateTimes, not bare YYYY-MM-DD strings. */

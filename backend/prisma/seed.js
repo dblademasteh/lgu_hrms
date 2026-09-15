@@ -354,8 +354,6 @@ async function seedTenant(tenantId, tenantCode, lguLevel, hash) {
     { username: `employee-${tenantCode.toLowerCase()}`, role: 'EMPLOYEE' },
   ];
   for (const u of roleUsers) {
-    const ext = u.role === 'EMPLOYEE' ? `EMP-${tenantCode}-0001` : null;
-    const link = ext ? { linkedEmployee: { connect: { employeeNumber: ext } } } : {};
     await prisma.user.upsert({
       where: { username: u.username },
       update: {
@@ -363,7 +361,6 @@ async function seedTenant(tenantId, tenantCode, lguLevel, hash) {
         passwordChangedAt: new Date(),
         tenant: { connect: { id: tenantId } },
         role: u.role,
-        ...link,
       },
       create: {
         username: u.username,
@@ -372,7 +369,6 @@ async function seedTenant(tenantId, tenantCode, lguLevel, hash) {
         role: u.role,
         department: { connect: { id: deptGovernor.id } },
         tenant: { connect: { id: tenantId } },
-        ...link,
       },
     });
   }
@@ -634,12 +630,21 @@ async function seedTenant(tenantId, tenantCode, lguLevel, hash) {
     });
 
     const leaveTypes = ['VACATION', 'SICK', 'SPECIAL_PRIVILEGE', 'SOLO_PARENT'];
+    const yearNow = new Date().getFullYear();
     for (const lt of leaveTypes) {
-      await prisma.leaveCredit.create({
-        data: { employeeId: employee.id, type: lt, balance: 15, year: new Date().getFullYear(), tenantId },
+      await prisma.leaveCredit.upsert({
+        where: { tenantId_employeeId_type_year: { tenantId, employeeId: employee.id, type: lt, year: yearNow } },
+        update: { balance: 15 },
+        create: { employeeId: employee.id, type: lt, balance: 15, year: yearNow, tenantId },
       });
     }
   }
+
+  // Link employee user to their employee record (deferred from user upsert above)
+  await prisma.user.updateMany({
+    where: { username: `employee-${tenantCode.toLowerCase()}` },
+    data: { externalId: `EMP-${tenantCode}-0001` },
+  });
 
   const currentMonth = new Date().toISOString().slice(0, 7);
   const currentYear = new Date().getFullYear();
@@ -661,18 +666,107 @@ async function seedTenant(tenantId, tenantCode, lguLevel, hash) {
   const dateStr = today.toISOString().slice(0, 10);
   const seededEmployees = await prisma.employee.findMany({ where: { tenantId } });
   for (const employee of seededEmployees.slice(0, 3)) {
-    await prisma.attendance.create({
-      data: {
-        employeeId: employee.id,
-        date: new Date(dateStr),
-        timeIn: new Date(`${dateStr}T08:00:00`),
-        timeOut: new Date(`${dateStr}T17:00:00`),
-        remark: 'On time',
-        tenantId,
-      },
+    const existing = await prisma.attendance.findFirst({
+      where: { tenantId, employeeId: employee.id, date: new Date(dateStr) },
     });
+    if (existing) continue;
+      await prisma.attendance.create({
+        data: {
+          employeeId: employee.id,
+          date: new Date(dateStr),
+          timeIn: new Date(`${dateStr}T08:00:00`),
+          timeOut: new Date(`${dateStr}T17:00:00`),
+          remark: 'On time',
+          tenantId,
+        },
+      });
+    }
+
+    // ── Payroll CSC compliance seed: tardiness, LWOP, overtime ──────────
+    const firstEmp = seededEmployees[0];
+    const secondEmp = seededEmployees[1];
+    const periodStart = new Date(`${currentMonth}-01`);
+    const periodEnd   = new Date(`${currentMonth}-30`);
+
+    // Tardy attendance: 08:15 arrival (15min late) for the first employee.
+    const tardyDate = periodStart;
+    const tardyExisting = await prisma.attendance.findFirst({
+      where: { tenantId, employeeId: firstEmp.id, date: tardyDate },
+    });
+    if (!tardyExisting) {
+      await prisma.attendance.create({
+        data: {
+          employeeId: firstEmp.id,
+          date: tardyDate,
+          timeIn: new Date(`${currentMonth}-01T08:15:00`),
+          timeOut: new Date(`${currentMonth}-01T17:00:00`),
+          remark: 'Late 15 min',
+          tenantId,
+        },
+      });
+    }
+
+    // Approved LWOP (1 day) for the first employee.
+    const lwopDate = periodStart;
+    const lwopExisting = await prisma.leaveRequest.findFirst({
+      where: { tenantId, employeeId: firstEmp.id, isLwop: true },
+    });
+    if (!lwopExisting) {
+      await prisma.leaveRequest.create({
+        data: {
+          employeeId: firstEmp.id,
+          type: 'VACATION',
+          fromDate: lwopDate,
+          toDate: lwopDate,
+          days: 1,
+          status: 'APPROVED',
+          isLwop: true,
+          reason: 'Personal matter',
+          approvedBy: firstEmp.id,
+          approvedAt: new Date(),
+          tenantId,
+        },
+      });
+    }
+
+    // Approved overtime entries (≥2h).
+    const otExisting = await prisma.overtimeRequest.findFirst({ where: { tenantId, employeeId: firstEmp.id } });
+    if (!otExisting) {
+      await prisma.overtimeRequest.create({
+        data: {
+          employeeId: firstEmp.id,
+          date: periodStart,
+          startMins: 1260, // 21:00
+          endMins:   1380, // 23:00
+          hours: 2,
+          type: 'WORKDAY',
+          status: 'APPROVED',
+          approvedBy: firstEmp.id,
+          approvedAt: new Date(),
+          notes: 'OT seed: 2h on 1st',
+          tenantId,
+        },
+      });
+    }
+    const ot2Existing = await prisma.overtimeRequest.findFirst({ where: { tenantId, employeeId: secondEmp.id } });
+    if (!ot2Existing) {
+      await prisma.overtimeRequest.create({
+        data: {
+          employeeId: secondEmp.id,
+          date: periodStart,
+          startMins: 1320, // 22:00
+          endMins:   1500, // 01:00 (next day)
+          hours: 3,
+          type: 'REST_DAY',
+          status: 'APPROVED',
+          approvedBy: secondEmp.id,
+          approvedAt: new Date(),
+          notes: 'OT seed: 3h rest-day',
+          tenantId,
+        },
+      });
+    }
   }
-}
 
 async function main() {
   const hash = await bcrypt.hash(process.env.SEED_DEFAULT_PASSWORD || 'admin123', 10);
@@ -699,6 +793,18 @@ async function main() {
   for (const t of tenantsData) {
     await seedTenant(t.id, t.code, t.lguLevel, hash);
   }
+
+  // ── Platform SUPER_ADMIN (no tenant — sees all) ──────────────────────
+  await prisma.user.upsert({
+    where: { username: 'superadmin' },
+    update: { passwordHash: hash, passwordChangedAt: new Date() },
+    create: {
+      username: 'superadmin',
+      passwordHash: hash,
+      role: 'SUPER_ADMIN',
+      passwordChangedAt: new Date(),
+    },
+  });
 
   console.log('Seed completed successfully');
 }

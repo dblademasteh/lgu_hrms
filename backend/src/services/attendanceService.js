@@ -1,6 +1,7 @@
 import { attendanceRepository } from '../repositories/attendanceRepository.js';
 import { prisma } from '../lib/prisma.js';
-import { withTenant, stampTenant } from '../middleware/tenant.js';
+import { withTenant } from '../middleware/tenant.js';
+import { AppError } from '../lib/errors.js';
 import {
   manilaDateKey,
   dateKeyToUtc,
@@ -23,17 +24,20 @@ function isFutureDate(date) {
   return target > today;
 }
 
-async function autoMarkLeave(req, employeeId, date) {
+// All helpers below accept a Prisma client and an explicit tenantId so they
+// work both on the plain client AND inside a punch transaction.
+async function autoMarkLeave(client, tenantId, employeeId, date) {
   const start = toUtcDate(date);
   const end = endOfDateKeyExclusive(manilaDateKey(start));
 
-  const approvedLeave = await prisma.leaveRequest.findFirst({
-    where: withTenant(req, {
+  const approvedLeave = await client.leaveRequest.findFirst({
+    where: {
+      tenantId,
       employeeId,
       status: 'APPROVED',
       fromDate: { lte: end },
       toDate: { gte: start },
-    })
+    }
   });
   if (!approvedLeave) return null;
   return 'On leave';
@@ -49,9 +53,9 @@ const PUNCH_WITH_EMPLOYEE = {
   employee: { select: { firstName: true, lastName: true, employeeNumber: true } },
 };
 
-async function getActiveRule(req) {
-  return prisma.attendanceRule.findFirst({
-    where: withTenant(req, { active: true }),
+async function getActiveRule(client, tenantId) {
+  return client.attendanceRule.findFirst({
+    where: { tenantId, active: true },
   });
 }
 
@@ -67,9 +71,9 @@ function computePunchHours(timeIn, timeOut, rule) {
   return Math.max(0, (elapsed - overlap) / 60);
 }
 
-async function computeRemarkFromRules(req, timeIn, timeOut, hours) {
+async function computeRemarkFromRules(client, tenantId, timeIn, timeOut, hours) {
   if (!timeIn) return null;
-  const rule = await getActiveRule(req);
+  const rule = await getActiveRule(client, tenantId);
   const inMins = manilaMinutes(new Date(timeIn));
   const scheduledStart = rule?.workStartMins ?? DEFAULT_WORK_START;
   const tardinessMin = Math.max(0, inMins - scheduledStart);
@@ -87,6 +91,106 @@ async function computeRemarkFromRules(req, timeIn, timeOut, hours) {
   return 'On time';
 }
 
+async function computePunchInRemark(client, tenantId, employeeId, startOfDay, at) {
+  const leaveRemark = await autoMarkLeave(client, tenantId, employeeId, startOfDay);
+  if (leaveRemark) return leaveRemark;
+  return (await computeRemarkFromRules(client, tenantId, at, null, 0)) || 'Punched in';
+}
+
+// Punch-OUT recomputes the remark from the actual IN/OUT so a late start keeps
+// "Tardiness" (and a long day keeps "Overtime") instead of being replaced with
+// a generic "Completed".
+async function computePunchOutRemark(client, tenantId, employeeId, startOfDay, scoped, outAt, hours) {
+  const leaveRemark = await autoMarkLeave(client, tenantId, employeeId, startOfDay);
+  if (leaveRemark) return leaveRemark;
+  return (await computeRemarkFromRules(client, tenantId, scoped.timeIn, outAt, hours)) || 'Completed';
+}
+
+/**
+ * IN/OUT state transition for the working day (Asia/Manila calendar day).
+ *
+ * - `punchType === 'IN'`: opens a NEW row when all of today's rows are closed
+ *   (multi-punch day).
+ * - `punchType === 'OUT'`: closes the latest open row, computing hours.
+ * - `punchType === null` (device pulls): inferred from row state — an open row
+ *   is closed (OUT), otherwise a row is opened (IN).
+ *
+ * Runs inside a SERIALIZABLE transaction with a conditional `timeOut: null`
+ * update, so two simultaneous OUTs (or double-tap kiosk + device poll) cannot
+ * double-write, and two simultaneous INs cannot create duplicate open rows.
+ * A serialization conflict (P2028) is retried once after re-reading state.
+ */
+async function punchTransition(req, employeeId, punchType, at, source, ref) {
+  const tenantId = req.tenantId;
+  const todayKey = manilaDateKey(at);
+  const startOfDay = dateKeyToUtc(todayKey);
+  const endOfDay = endOfDateKeyExclusive(todayKey);
+
+  const attempt = async () =>
+    prisma.$transaction(async (tx) => {
+      const todays = await tx.attendance.findMany({
+        where: { tenantId, employeeId, date: { gte: startOfDay, lt: endOfDay } },
+        orderBy: { timeIn: 'asc' },
+        include: PUNCH_WITH_EMPLOYEE,
+      });
+
+      const open = todays.find((r) => r.timeIn && !r.timeOut);
+      const action = punchType ?? (open ? 'OUT' : 'IN');
+
+      if (action === 'IN') {
+        if (open) {
+          return { message: 'Already punched in', record: open };
+        }
+        const remark = await computePunchInRemark(tx, tenantId, employeeId, startOfDay, at);
+        const record = await tx.attendance.create({
+          data: {
+            tenantId,
+            employeeId,
+            date: startOfDay,
+            timeIn: at,
+            remark,
+            source,
+            deviceRef: ref ?? null,
+          },
+          include: PUNCH_WITH_EMPLOYEE,
+        });
+        return { message: 'Punched in successfully', record };
+      }
+
+      // OUT
+      if (!open) {
+        throw new AppError(todays.length ? 'Already punched out' : 'Must punch in first', 400, 'PUNCH_CONFLICT');
+      }
+      const scoped = await tx.attendance.findFirst({ where: { tenantId, id: open.id } });
+      if (!scoped) throw new AppError('Cross-tenant access', 403, 'FORBIDDEN');
+
+      const rule = await getActiveRule(tx, tenantId);
+      const hours = computePunchHours(new Date(scoped.timeIn), at, rule);
+      const remark = await computePunchOutRemark(tx, tenantId, employeeId, startOfDay, scoped, at, hours);
+
+      const updated = await tx.attendance.updateMany({
+        where: { id: scoped.id, tenantId, timeOut: null },
+        data: { timeOut: at, hours, remark, source, deviceRef: ref ?? null },
+      });
+      if (updated.count === 0) {
+        throw new AppError('Already punched out', 400, 'PUNCH_CONFLICT');
+      }
+
+      const record = await tx.attendance.findUnique({
+        where: { id: scoped.id },
+        include: PUNCH_WITH_EMPLOYEE,
+      });
+      return { message: 'Punched out successfully', record };
+    }, { isolationLevel: 'Serializable' });
+
+  try {
+    return await attempt();
+  } catch (e) {
+    if (e?.code === 'P2028') return attempt();
+    throw e;
+  }
+}
+
 export const attendanceService = {
   async list(req, date) {
     return attendanceRepository.findAll(req, date);
@@ -95,16 +199,16 @@ export const attendanceService = {
     const { date, timeIn, timeOut, hours, ...rest } = data;
     const utcDate = toUtcDate(date);
     if (isFutureDate(utcDate)) {
-      throw new Error('Cannot create attendance for future dates');
+      throw new AppError('Cannot create attendance for future dates', 400, 'FUTURE_DATE');
     }
     const employeeId = rest.employeeId;
     let remark = data.remark || null;
     if (!remark) {
-      const leaveRemark = await autoMarkLeave(req, employeeId, utcDate);
+      const leaveRemark = await autoMarkLeave(prisma, req.tenantId, employeeId, utcDate);
       if (leaveRemark) {
         remark = leaveRemark;
       } else if (timeIn) {
-        remark = await computeRemarkFromRules(req, normalizeTimeField(timeIn, date), timeOut ? normalizeTimeField(timeOut, date) : null, hours);
+        remark = await computeRemarkFromRules(prisma, req.tenantId, normalizeTimeField(timeIn, date), timeOut ? normalizeTimeField(timeOut, date) : null, hours);
       }
     }
     return attendanceRepository.create(req, {
@@ -121,34 +225,38 @@ export const attendanceService = {
   async update(req, id, data) {
     const updateData = { ...data };
     const existing = await attendanceRepository.get(req, id);
+    if (!existing) return null;
+
     if (updateData.date) {
       updateData.date = toUtcDate(updateData.date);
     }
-    const dateKey = existing?.date ? manilaDateKey(new Date(existing.date)) : manilaDateKey(new Date());
+    const dateKey = manilaDateKey(new Date(existing.date));
     if (updateData.timeIn !== undefined && updateData.timeIn !== null) {
       updateData.timeIn = normalizeTimeField(updateData.timeIn, updateData.date ? manilaDateKey(updateData.date) : dateKey);
       if (isFutureDate(updateData.timeIn)) {
-        throw new Error('Cannot set timeIn to a future datetime');
+        throw new AppError('Cannot set timeIn to a future datetime', 400, 'FUTURE_DATE');
       }
     }
     if (updateData.timeOut !== undefined && updateData.timeOut !== null) {
       updateData.timeOut = normalizeTimeField(updateData.timeOut, updateData.date ? manilaDateKey(updateData.date) : dateKey);
       if (isFutureDate(updateData.timeOut)) {
-        throw new Error('Cannot set timeOut to a future datetime');
+        throw new AppError('Cannot set timeOut to a future datetime', 400, 'FUTURE_DATE');
       }
     }
     if (updateData.hours !== undefined) {
       updateData.hours = Math.max(0, Math.min(24, Number(updateData.hours)));
     }
-    const result = await attendanceRepository.update(req, id, updateData);
-    if (result && !updateData.remark && updateData.timeIn) {
-      const ruleRemark = await computeRemarkFromRules(req, updateData.timeIn, updateData.timeOut || null, updateData.hours);
-      if (ruleRemark) {
-        await prisma.attendance.update({ where: { id }, data: { remark: ruleRemark } });
-        return { ...result, remark: ruleRemark };
-      }
+    // Recompute remark in the same write (no unscoped second update) whenever a
+    // time field changed and the caller did not provide an explicit remark.
+    if (!updateData.remark && updateData.timeIn !== undefined) {
+      const timeIn = updateData.timeIn ?? existing.timeIn;
+      const timeOut = updateData.timeOut !== undefined ? updateData.timeOut : existing.timeOut;
+      const hours = updateData.hours !== undefined ? updateData.hours : existing.hours;
+      const ruleRemark = await computeRemarkFromRules(prisma, req.tenantId, timeIn, timeOut, hours);
+      if (ruleRemark) updateData.remark = ruleRemark;
     }
-    return result;
+
+    return attendanceRepository.update(req, id, updateData);
   },
 
   async remove(req, id) {
@@ -178,11 +286,11 @@ export const attendanceService = {
         const timeOut = normalizeTimeField(record.timeOut, record.date);
         let remark = record.remark || null;
         if (!remark) {
-          const leaveRemark = await autoMarkLeave(req, employee.id, utcDate);
+          const leaveRemark = await autoMarkLeave(prisma, req.tenantId, employee.id, utcDate);
           if (leaveRemark) {
             remark = leaveRemark;
           } else if (record.timeIn) {
-            remark = await computeRemarkFromRules(req, timeIn, timeOut, record.hours);
+            remark = await computeRemarkFromRules(prisma, req.tenantId, timeIn, timeOut, record.hours);
           }
         }
         if (existing) {
@@ -198,7 +306,8 @@ export const attendanceService = {
           results.push({ status: 'updated', id: updated.id, employeeNumber: record.employeeNumber });
         } else {
           const created = await prisma.attendance.create({
-            data: stampTenant(req, {
+            data: {
+              tenantId: req.tenantId,
               employeeId: employee.id,
               date: utcDate,
               timeIn,
@@ -206,7 +315,7 @@ export const attendanceService = {
               hours: record.hours ?? null,
               remark,
               source: 'IMPORT',
-            }),
+            },
           });
           results.push({ status: 'created', id: created.id, employeeNumber: record.employeeNumber });
         }
@@ -217,102 +326,16 @@ export const attendanceService = {
     return results;
   },
 
-  // Biometric punch in/out for employee self-service. The working day is the
-  // Asia/Manila calendar day; a punch-IN opens a NEW row when all of today's
-  // rows are closed (multi-punch), and a punch-OUT closes the latest open row.
+  // Biometric punch in/out for employee self-service (and kiosk / device pulls).
   async biometricPunch(req, employeeId, punchType) {
-    const now = new Date();
-    const todayKey = manilaDateKey(now);
-    const startOfDay = dateKeyToUtc(todayKey);
-    const endOfDay = endOfDateKeyExclusive(todayKey);
-
-    const todays = await prisma.attendance.findMany({
-      where: withTenant(req, { employeeId, date: { gte: startOfDay, lt: endOfDay } }),
-      orderBy: { timeIn: 'asc' },
-      include: PUNCH_WITH_EMPLOYEE,
-    });
-
-    const open = todays.find((r) => r.timeIn && !r.timeOut);
-
-    if (punchType === 'IN') {
-      if (open) {
-        return { message: 'Already punched in', record: open };
-      }
-      const rule = await getActiveRule(req);
-      const leaveRemark = await autoMarkLeave(req, employeeId, startOfDay);
-      const ruleRemark = leaveRemark || (await computeRemarkFromRules(req, now, null, 0)) || 'Punched in';
-      const record = await prisma.attendance.create({
-        data: stampTenant(req, {
-          employeeId,
-          date: startOfDay,
-          timeIn: now,
-          remark: ruleRemark,
-          source: 'PUNCH',
-        }),
-        include: PUNCH_WITH_EMPLOYEE,
-      });
-      return { message: 'Punched in successfully', record };
-    }
-
-    // OUT
-    if (!open) {
-      const err = new Error(todays.length ? 'Already punched out' : 'Must punch in first');
-      err.status = 400;
-      err.code = 'PUNCH_CONFLICT';
-      throw err;
-    }
-    const scoped = await prisma.attendance.findFirst({
-      where: withTenant(req, { id: open.id }),
-    });
-    if (!scoped) throw new Error('Cross-tenant access');
-    const rule = await getActiveRule(req);
-    const hours = computePunchHours(new Date(scoped.timeIn), now, rule);
-    const record = await prisma.attendance.update({
-      where: { id: open.id },
-      data: { timeOut: now, hours, remark: 'Completed', source: 'PUNCH' },
-      include: PUNCH_WITH_EMPLOYEE,
-    });
-    return { message: 'Punched out successfully', record };
+    return punchTransition(req, employeeId, punchType, new Date(), 'PUNCH', null);
   },
 
   // Ingest a punch event pulled from a ZK biometric terminal. IN/OUT is
-  // inferred from row state on the same Asia/Manila calendar day as the
-  // kiosk punch; `ref` records provenance as "DEVICE:<deviceId>:<logId>".
+  // inferred from row state on the same Asia/Manila calendar day as the punch;
+  // `ref` records provenance as "DEVICE:<deviceId>:<logId>".
   async devicePunch(req, employeeId, at, ref) {
-    const todayKey = manilaDateKey(at);
-    const startOfDay = dateKeyToUtc(todayKey);
-    const endOfDay = endOfDateKeyExclusive(todayKey);
-
-    const todays = await prisma.attendance.findMany({
-      where: withTenant(req, { employeeId, date: { gte: startOfDay, lt: endOfDay } }),
-      orderBy: { timeIn: 'asc' },
-    });
-
-    const open = todays.find((r) => r.timeIn && !r.timeOut);
-
-    if (open) {
-      const scoped = await prisma.attendance.findFirst({ where: withTenant(req, { id: open.id }) });
-      if (!scoped) throw new Error('Cross-tenant access');
-      const rule = await getActiveRule(req);
-      const hours = computePunchHours(new Date(scoped.timeIn), at, rule);
-      return prisma.attendance.update({
-        where: { id: scoped.id },
-        data: { timeOut: at, hours, remark: 'Completed', source: 'DEVICE', deviceRef: ref ?? null },
-      });
-    }
-
-    const leaveRemark = await autoMarkLeave(req, employeeId, startOfDay);
-    const ruleRemark = leaveRemark || (await computeRemarkFromRules(req, at, null, 0)) || 'Punched in';
-    return prisma.attendance.create({
-      data: stampTenant(req, {
-        employeeId,
-        date: startOfDay,
-        timeIn: at,
-        remark: ruleRemark,
-        source: 'DEVICE',
-        deviceRef: ref ?? null,
-      }),
-    });
+    return punchTransition(req, employeeId, null, at, 'DEVICE', ref);
   },
 
   // Get attendance for specific employee (self-service)

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { User, Search, Plus, Mail, Phone, MapPin, Briefcase, RefreshCw, X, Save } from 'lucide-react';
+import { User, Search, Plus, Mail, Phone, MapPin, Briefcase, RefreshCw, X, Save, CheckCircle } from 'lucide-react';
 import Layout from '../components/Layout.jsx';
-import { listApplicants, createApplicant } from '../api/recruitment.js';
+import { listApplicants, createApplicant, hireApplicant, updateApplicant } from '../api/recruitment.js';
 import { departmentsApi } from '../api/departments.js';
 import { positionsApi } from '../api/positions.js';
 import { useToast } from '../components/Toast.jsx';
@@ -211,26 +211,70 @@ export default function Recruitment(){
         </div>
       )}
 
-      {/* Applicants Table */}
-      <div className="card p-4">
-        <div className="overflow-x-auto">
-          <table className="data-table w-full">
-            <thead><tr><th>Name</th><th>Email</th><th>Position</th><th>Status</th></tr></thead>
-            <tbody>
-              {applicants.map(a=>(
-                <tr key={a.id}>
-                  <td className="font-medium">{a.firstName} {a.lastName}</td>
-                  <td className="font-mono">{a.email || '—'}</td>
-                  <td>{a.position?.title || a.appliedPositionId || '—'}</td>
-                  <td><span className={`badge ${APPLICANT_STATUSES.find(s => s.value === a.status)?.className || badgeTone(a.status)}`}>{a.status}</span></td>
-                </tr>
-              ))}
-              {applicants.length === 0 && (
-                <tr><td colSpan={4} className="text-muted text-sm py-8 text-center">No applicants found.</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+      {/* Kanban Pipeline */}
+      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        {[
+          { key:'NEW', label:'New' },
+          { key:'SCREENED', label:'Screened' },
+          { key:'SHORTLISTED', label:'Shortlisted' },
+          { key:'INTERVIEWED', label:'Interviewed' },
+          { key:'OFFERED', label:'Offered' },
+          { key:'HIRED', label:'Hired' },
+        ].map(col=> {
+          const items = applicants.filter(a => a.status === col.key);
+          return (
+            <div key={col.key} className="card p-3 flex flex-col min-h-[300px]">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-semibold text-sm">{col.label}</h3>
+                <span className="text-xs mono-label">{items.length}</span>
+              </div>
+              <div className="space-y-2 overflow-y-auto">
+                {items.map(a=>(
+                  <div key={a.id} className="rounded-lg border border-line p-3 bg-surface hover:bg-surface/80">
+                    <div className="font-medium text-sm">{a.firstName} {a.lastName}</div>
+                    <div className="text-xs text-muted">{a.position?.title || '—'}</div>
+                    <div className="text-xs text-muted">{a.email || '—'}</div>
+                    {a.status !== 'HIRED' && a.status !== 'REJECTED' && (
+                      <div className="mt-2 space-y-2">
+                        <div className="flex gap-1">
+                          <select className="select text-xs h-7" value={a.status} onChange={async e=>{
+                            try {
+                              await updateApplicant(a.id, { status: e.target.value });
+                              load();
+                            } catch {}
+                          }}>
+                            {APPLICANT_STATUSES.map(s=> <option key={s.value} value={s.value}>{s.label}</option>)}
+                          </select>
+                          <button className="btn btn-ghost h-7 px-2 text-xs" onClick={async ()=>{
+                            try {
+                              await hireApplicant(a.id);
+                              toast('Applicant hired', 'success');
+                              load();
+                            } catch (err) {
+                              toast(err?.response?.data?.error?.message || 'Failed to hire', 'error');
+                            }
+                          }}><CheckCircle size={12}/> Hire</button>
+                        </div>
+                        <div className="grid grid-cols-3 gap-1">
+                          <input type="number" placeholder="Elig" className="input text-xs h-7" value={a.eligibilityScore||''} onChange={async e=>{
+                            await updateApplicant(a.id, { eligibilityScore: Number(e.target.value)||null });
+                          }}/>
+                          <input type="number" placeholder="Screen" className="input text-xs h-7" value={a.screeningScore||''} onChange={async e=>{
+                            await updateApplicant(a.id, { screeningScore: Number(e.target.value)||null });
+                          }}/>
+                          <input type="number" placeholder="Interv" className="input text-xs h-7" value={a.interviewScore||''} onChange={async e=>{
+                            await updateApplicant(a.id, { interviewScore: Number(e.target.value)||null });
+                          }}/>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+                {items.length === 0 && <div className="text-xs text-muted text-center py-6">Empty</div>}
+              </div>
+            </div>
+          );
+        })}
       </div>
     </Layout>
   );

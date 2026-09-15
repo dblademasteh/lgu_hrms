@@ -90,11 +90,11 @@ export default function Devices() {
       };
       if (editing) {
         const r = await biometricDevicesApi.update(editing.id, payload);
-        setDevices((l) => l.map((d) => (d.id === editing.id ? r.data : d)));
+        setDevices((l) => l.map((d) => (d.id === editing.id ? r : d)));
         toast(`Device ${payload.name} updated`, 'success');
       } else {
         const r = await biometricDevicesApi.create(payload);
-        setDevices((l) => [r.data, ...l]);
+        setDevices((l) => [r, ...l]);
         toast(`Device ${payload.name} added`, 'success');
       }
       setFormOpen(false);

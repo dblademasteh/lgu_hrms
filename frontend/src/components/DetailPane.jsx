@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Edit, History as HistoryIcon } from 'lucide-react';
+import { Edit, History as HistoryIcon, Printer } from 'lucide-react';
 import Tabs from './Tabs.jsx';
 import { badgeTone } from '../data/mock.js';
 import { api } from '../api/client.js';
@@ -7,11 +7,10 @@ import { departmentsApi } from '../api/departments.js';
 import { employeeSectionsApi } from '../api/employeeSections.js';
 
 const initialsOf = name => (name ?? '').split(' ').filter(Boolean).map(p => p[0]).slice(0, 2).join('') || '—';
-const peso = n => `\u20B1 ${Number(n ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-const d10 = v => (v ? String(v).slice(0, 10) : '\u2014');
-const dash = v => (v === 0 || v ? String(v) : '\u2014');
+const peso = n => `₱ ${Number(n ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const d10 = v => (v ? String(v).slice(0, 10) : '—');
+const dash = v => (v === 0 || v ? String(v) : '—');
 
-/** Generic table renderer per relation section. */
 const RELATION_COLUMNS = {
   history: [
     { key: 'position', label: 'Position', get: r => dash(r._positionName ?? r.position?.title ?? r.positionId) },
@@ -42,8 +41,8 @@ const RELATION_COLUMNS = {
   ],
   attendance: [
     { key: 'date', label: 'Date', get: r => d10(r.date) },
-    { key: 'timeIn', label: 'Time In', get: r => (r.timeIn ? String(r.timeIn).slice(11, 16) : '\u2014') },
-    { key: 'timeOut', label: 'Time Out', get: r => (r.timeOut ? String(r.timeOut).slice(11, 16) : '\u2014') },
+    { key: 'timeIn', label: 'Time In', get: r => (r.timeIn ? String(r.timeIn).slice(11, 16) : '—') },
+    { key: 'timeOut', label: 'Time Out', get: r => (r.timeOut ? String(r.timeOut).slice(11, 16) : '—') },
     { key: 'hours', label: 'Hours', get: r => dash(r.hours) },
     { key: 'remark', label: 'Remark', get: r => dash(r.remark) },
   ],
@@ -63,7 +62,7 @@ const RELATION_COLUMNS = {
   training: [
     { key: 'program', label: 'Program', get: r => dash(r.program?.title ?? r.programId) },
     { key: 'enrolledAt', label: 'Enrolled', get: r => d10(r.enrolledAt) },
-    { key: 'completedAt', label: 'Completed', get: r => (r.completedAt ? d10(r.completedAt) : '\u2014') },
+    { key: 'completedAt', label: 'Completed', get: r => (r.completedAt ? d10(r.completedAt) : '—') },
     { key: 'status', label: 'Status', get: r => <span className={`badge ${badgeTone(r.status)}`}>{r.status}</span> },
   ],
   loans: [
@@ -77,7 +76,6 @@ const RELATION_COLUMNS = {
 
 const READONLY_TABS = ['history', 'appointments', 'leave', 'leaveCredits', 'attendance', 'payroll', 'performance', 'training', 'loans'];
 
-/** Cached id -> label maps so history/appointment rows show names, not raw UUIDs. */
 let refCache = null;
 async function getRefMaps() {
   if (refCache) return refCache;
@@ -86,16 +84,10 @@ async function getRefMaps() {
       departmentsApi.list().then(r => r?.data ?? r).catch(() => []),
       api.get('/positions').then(r => r?.data ?? []).catch(() => []),
     ]);
-    const depMap = Object.fromEntries(
-      (Array.isArray(deps) ? deps : []).map(d => [d.id, d.code ? `${d.code} · ${d.name}` : d.name])
-    );
-    const posMap = Object.fromEntries(
-      (Array.isArray(poss) ? poss : []).map(p => [p.id, p.salaryGrade ? `${p.title} (SG ${p.salaryGrade})` : p.title])
-    );
+    const depMap = Object.fromEntries((Array.isArray(deps)?deps:[]).map(d => [d.id, d.code ? `${d.code} · ${d.name}` : d.name]));
+    const posMap = Object.fromEntries((Array.isArray(poss)?poss:[]).map(p => [p.id, p.salaryGrade ? `${p.title} (SG ${p.salaryGrade})` : p.title]));
     refCache = { depMap, posMap };
-  } catch {
-    refCache = { depMap: {}, posMap: {} };
-  }
+  } catch { refCache = { depMap: {}, posMap: {} }; }
   return refCache;
 }
 
@@ -103,27 +95,16 @@ function RelationTable({ employeeId, section, refreshKey }) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
-
   useEffect(() => {
-    if (!employeeId) {
-      setLoading(false);
-      setRows([]);
-      return undefined;
-    }
+    if (!employeeId) { setLoading(false); setRows([]); return; }
     let cancelled = false;
-    setLoading(true);
-    setError(false);
+    setLoading(true); setError(false);
     (async () => {
       try {
-        const [res, { depMap, posMap }] = await Promise.all([
-          employeeSectionsApi.list(employeeId, section),
-          getRefMaps(),
-        ]);
+        const [res, { depMap, posMap }] = await Promise.all([employeeSectionsApi.list(employeeId, section), getRefMaps()]);
         if (cancelled) return;
         const data = res?.data ?? res;
         const list = Array.isArray(data) ? data : [];
-        // Resolve raw id strings (history has no Prisma includes; the seed
-        // stores appointment position/dept as id strings too).
         for (const row of list) {
           if (row.departmentId && depMap[row.departmentId] !== undefined) row._deptName = depMap[row.departmentId];
           if (row.positionId && posMap[row.positionId] !== undefined) row._positionName = posMap[row.positionId];
@@ -131,29 +112,24 @@ function RelationTable({ employeeId, section, refreshKey }) {
           if (row.dept && depMap[row.dept] !== undefined) row._deptString = depMap[row.dept];
         }
         setRows(list);
-      } catch {
-        if (!cancelled) setError(true);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
+      } catch { if (!cancelled) setError(true); }
+      finally { if (!cancelled) setLoading(false); }
     })();
     return () => { cancelled = true; };
   }, [employeeId, section, refreshKey]);
-
-  if (loading) return <p className="text-sm text-muted py-4">Loading…</p>;
-  if (error) return <p className="text-sm text-error py-4">Failed to load records.</p>;
-  if (!rows.length) return <p className="text-sm text-muted py-2">No records on file.</p>;
-
+  if (loading) return <div className="py-8 text-center text-sm text-muted">Loading…</div>;
+  if (error) return <div className="py-8 text-center text-sm text-error">Failed to load records.</div>;
+  if (!rows.length) return <div className="py-10 text-center text-sm text-muted">No records on file.</div>;
   const cols = RELATION_COLUMNS[section];
-  if (!cols) return <p className="text-sm text-muted py-2">{rows.length} record(s) on file.</p>;
+  if (!cols) return <div className="py-4 text-sm text-muted">{rows.length} record(s) on file.</div>;
   return (
-    <div className="overflow-auto">
-      <table className="data-table">
-        <thead><tr>{cols.map(c => <th key={c.key}>{c.label}</th>)}</tr></thead>
-        <tbody>
-          {rows.map((row, i) => (
-            <tr key={row.id ?? i}>
-              {cols.map(c => <td key={c.key}>{c.get(row)}</td>)}
+    <div className="overflow-auto rounded-xl border border-line">
+      <table className="data-table w-full">
+        <thead className="bg-surface/70"><tr className="text-xs uppercase tracking-wide text-muted">{cols.map(c => <th key={c.key} className="p-3 text-left">{c.label}</th>)}</tr></thead>
+        <tbody className="divide-y divide-line">
+          {rows.map((row,i)=>(
+            <tr key={row.id ?? i} className="hover:bg-surface/60 transition-colors">
+              {cols.map(c=> <td key={c.key} className="p-3 text-sm">{c.get(row)}</td>)}
             </tr>
           ))}
         </tbody>
@@ -166,120 +142,110 @@ function PayslipPanel({ employeeId, refreshKey }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
-
   useEffect(() => {
-    if (!employeeId) {
-      setLoading(false);
-      return undefined;
-    }
-    let cancelled = false;
-    setLoading(true);
-    setError(false);
-    employeeSectionsApi.list(employeeId, 'payroll')
-      .then(r => {
-        if (cancelled) return;
-        const data = r?.data ?? r;
-        setItems(Array.isArray(data) ? data : []);
-      })
-      .catch(() => { if (!cancelled) setError(true); })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
+    if (!employeeId) { setLoading(false); return; }
+    let cancelled = false; setLoading(true); setError(false);
+    employeeSectionsApi.list(employeeId,'payroll').then(r=>{ if(!cancelled) setItems(Array.isArray(r?.data??r)?r?.data??r:[]); }).catch(()=>{ if(!cancelled) setError(true); }).finally(()=>{ if(!cancelled) setLoading(false); });
+    return ()=>{ cancelled=true; };
   }, [employeeId, refreshKey]);
-
-  if (loading) return <p className="text-sm text-muted py-4">Loading…</p>;
-  if (error) return <p className="text-sm text-error py-4">Failed to load payslip.</p>;
-  if (!items.length) return <p className="text-sm text-muted py-2">No payroll records on file.</p>;
-
+  if (loading) return <div className="py-8 text-center text-sm text-muted">Loading…</div>;
+  if (error) return <div className="py-8 text-center text-sm text-error">Failed to load payslip.</div>;
+  if (!items.length) return <div className="py-10 text-center text-sm text-muted">No payroll records on file.</div>;
   const latest = items[0];
-  const period = latest.run?.period?.name ?? latest.run?.runDate?.slice(0, 10) ?? 'Latest run';
+  const period = latest.run?.period?.name ?? latest.run?.runDate?.slice(0,10) ?? 'Latest run';
   return (
-    <div>
-      <p className="mono-label mb-3">{period}</p>
-      <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-        <div><dt className="mono-label">Basic Pay</dt><dd className="font-mono mt-0.5">{peso(latest.basicPay)}</dd></div>
-        <div><dt className="mono-label">Allowances</dt><dd className="font-mono mt-0.5">{peso(latest.allowances)}</dd></div>
-        <div><dt className="mono-label">Deductions</dt><dd className="font-mono mt-0.5">{peso(latest.deductions)}</dd></div>
-        <div><dt className="mono-label">Net Pay</dt><dd className="font-mono mt-0.5 font-semibold">{peso(latest.netPay)}</dd></div>
+    <div className="card p-4">
+      <div className="text-xs uppercase tracking-wide text-muted mb-3">{period}</div>
+      <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
+        {[
+          ['Basic Pay', latest.basicPay],
+          ['Allowances', latest.allowances],
+          ['Deductions', latest.deductions],
+          ['Net Pay', latest.netPay],
+        ].map(([k,v])=>(
+          <div key={k} className={k==='Net Pay'?'col-span-2':' '}>
+            <dt className="text-xs text-muted">{k}</dt>
+            <dd className={`font-mono mt-1 ${k==='Net Pay'?'text-lg font-semibold':''}`}>{peso(v)}</dd>
+          </div>
+        ))}
       </dl>
     </div>
   );
 }
 
 export default function DetailPane({ employee, onEdit, refreshKey = 0 }) {
-  const [activeTab, setActiveTab] = useState('profile');
-
-  useEffect(() => {
-    setActiveTab('profile');
-  }, [employee?.id]);
+  const [activeTab, setActiveTab] = useState('201');
+  useEffect(()=>{ setActiveTab('201'); }, [employee?.id]);
 
   const relationTabs = READONLY_TABS.map(id => ({
     id,
-    label: {
-      history: 'Employment History',
-      appointments: 'Appointments', leave: 'Leave', leaveCredits: 'Leave Credits',
-      attendance: 'Attendance', payroll: 'Payroll', performance: 'Performance',
-      training: 'Training', loans: 'Loans',
-    }[id],
+    label: { history:'Employment History', appointments:'Appointments', leave:'Leave', leaveCredits:'Leave Credits', attendance:'Attendance', payroll:'Payroll', performance:'Performance', training:'Training', loans:'Loans' }[id],
     content: <RelationTable employeeId={employee?.id} section={id} refreshKey={refreshKey} />,
   }));
 
   const tabs = employee ? [
-    {
-      id: 'profile',
-      label: '201 Profile',
-      content: (
-        <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
-          <div><dt className="mono-label">Employee No</dt><dd className="font-mono mt-0.5">{employee.employeeNumber}</dd></div>
-          <div><dt className="mono-label">Status</dt><dd className="mt-0.5"><span className={`badge ${badgeTone(employee.status)}`}>{employee.status}</span></dd></div>
-          <div><dt className="mono-label">Department</dt><dd className="text-ink mt-0.5">{employee.department}</dd></div>
-          <div><dt className="mono-label">Salary Grade</dt><dd className="font-mono text-ink mt-0.5">{employee.sg}</dd></div>
-          <div><dt className="mono-label">Date Hired</dt><dd className="font-mono text-ink mt-0.5">{employee.hired}</dd></div>
-          <div><dt className="mono-label">Email</dt><dd className="font-mono text-ink mt-0.5">{employee.email || '—'}</dd></div>
-          <div><dt className="mono-label">Contact</dt><dd className="font-mono text-ink mt-0.5">{employee.contact || '—'}</dd></div>
-          <div><dt className="mono-label">Position</dt><dd className="text-ink mt-0.5">{employee.position}</dd></div>
-        </dl>
-      ),
-    },
-    {
-      id: 'payslip',
-      label: 'Payslip',
-      content: <PayslipPanel employeeId={employee.id} refreshKey={refreshKey} />,
-    },
+    { id:'201', label:'201 File', content:(
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="card p-4 space-y-3">
+          {[
+            ['Employee No', employee.employeeNumber,'font-mono'],
+            ['Status', <span className={`badge ${badgeTone(employee.status)}`}>{employee.status}</span>,''],
+            ['Department', employee.department,''],
+            ['Salary Grade', employee.sg,'font-mono'],
+            ['Date Hired', employee.hired,'font-mono'],
+            ['Email', employee.email || '—','font-mono'],
+            ['Contact', employee.contact || '—','font-mono'],
+            ['Position', employee.position,''],
+          ].map(([k,v,cls])=>(
+            <div key={k} className="flex justify-between gap-4 py-2 border-b border-line last:border-0">
+              <span className="text-xs uppercase tracking-wide text-muted">{k}</span>
+              <span className={`text-sm text-right ${cls||''}`}>{v}</span>
+            </div>
+          ))}
+        </div>
+        <div className="card p-4">
+          <div className="text-xs uppercase tracking-wide text-muted mb-3">Government IDs</div>
+          <dl className="grid grid-cols-1 gap-2 text-sm">
+            {[
+              ['SSS No', employee.raw?.sssNumber],
+              ['PhilHealth No', employee.raw?.philhealthNumber],
+              ['Pag-IBIG No', employee.raw?.pagibigNumber],
+              ['TIN No', employee.raw?.tinNumber],
+            ].map(([k,v])=>v && <div key={k} className="flex justify-between py-2 border-b border-line last:border-0"><dt className="text-muted">{k}</dt><dd className="font-mono">{v}</dd></div>)}
+          </dl>
+          {!employee.raw?.sssNumber && !employee.raw?.philhealthNumber && !employee.raw?.pagibigNumber && !employee.raw?.tinNumber && <div className="text-sm text-muted py-4 text-center">No government IDs on file</div>}
+        </div>
+      </div>
+    )},
+    { id:'payslip', label:'Payslip', content: <PayslipPanel employeeId={employee.id} refreshKey={refreshKey} /> },
     ...relationTabs,
   ] : [];
 
   return (
-    <div className="card p-5 h-full flex flex-col">
-      <h2 className="font-display font-semibold text-ink mb-4">Employee Profile</h2>
+    <div className="flex flex-col max-h-[70vh] overflow-auto">
       {employee ? (
         <>
-          <div className="flex items-center gap-3 mb-5">
-            <div className="w-12 h-12 rounded-xl bg-accent/10 text-accent font-display font-bold flex items-center justify-center shrink-0" aria-hidden="true">
-              {initialsOf(employee.name)}
+          <div className="flex items-center gap-4 mb-4">
+            <div className="w-14 h-14 rounded-2xl bg-accent/10 text-accent font-display font-bold flex items-center justify-center text-xl shrink-0">{initialsOf(employee.name)}</div>
+            <div className="min-w-0">
+              <p className="font-display font-semibold text-lg truncate">{employee.fullName}</p>
+              <p className="text-sm text-muted truncate">{employee.position}</p>
+              <p className="mono-label mt-1">{employee.employeeNumber}</p>
             </div>
-             <div className="min-w-0">
-               <p className="font-display font-semibold text-ink truncate">{employee.fullName}</p>
-               <p className="text-sm text-muted truncate">{employee.position}</p>
-               <p className="mono-label mt-0.5">{employee.employeeNumber}</p>
-             </div>
           </div>
-
           <Tabs tabs={tabs} label="Employee detail sections" active={activeTab} onChange={setActiveTab} />
-
-          <div className="flex gap-2 mt-auto pt-5">
-            <button type="button" className="btn btn-primary gap-2 flex-1" onClick={() => onEdit?.(employee)}>
-              <Edit size={16} />
-              Edit Profile
-            </button>
-            <button type="button" className="btn btn-ghost gap-2" onClick={() => setActiveTab('history')}>
-              <HistoryIcon size={16} />
-              History
-            </button>
+          <div className="flex gap-2 mt-6">
+            <button className="btn btn-primary flex-1 h-8 text-xs font-medium" onClick={()=>onEdit?.(employee)}><Edit size={14}/> Edit</button>
+            <button className="btn btn-secondary flex-1 h-8 text-xs font-medium" onClick={()=>window.print()}><Printer size={14}/> Print</button>
           </div>
         </>
       ) : (
-        <div className="flex flex-1 items-center justify-center text-center py-12">
-          <p className="text-sm text-muted max-w-48">Select an employee from the master list to view their profile.</p>
+        <div className="flex flex-1 items-center justify-center text-center py-16">
+          <div>
+            <div className="mx-auto w-14 h-14 rounded-2xl bg-surface flex items-center justify-center mb-3">👤</div>
+            <p className="font-medium">Select an employee</p>
+            <p className="text-sm text-muted mt-1 max-w-56">Choose from the master list to view 201 profile and records.</p>
+          </div>
         </div>
       )}
     </div>

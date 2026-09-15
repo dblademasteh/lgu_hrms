@@ -87,6 +87,7 @@ export const payrollRepository = {
           i.lines.map(l => ({
             tenantId, payrollItemId: itemIdByEmployee.get(i.employeeId), code: l.code,
             description: l.description, employeeShare: l.employeeShare, employerShare: l.employerShare,
+            quantity: l.quantity ?? null,
           }))
         ),
       });
@@ -97,7 +98,7 @@ export const payrollRepository = {
       return reloaded;
     });
   },
-  /** Post an APPROVED run: ledger entries, payslip rows, mark loans paid, status→POSTED. */
+  /** Post an APPROVED run: ledger entries, payslip rows, mark loans paid, VL settled, status→POSTED. */
   async postRun(req, run, posting) {
     const tenantId = req.tenantId ?? null;
     return prisma.$transaction(async tx => {
@@ -111,6 +112,14 @@ export const payrollRepository = {
           data: { paid: true },
         });
       }
+      if (posting.vlDebits.length > 0) {
+        for (const v of posting.vlDebits) {
+          await tx.leaveCredit.updateMany({
+            where: { tenantId, employeeId: v.employeeId, type: 'VACATION', year: v.year, balance: { gt: 0 } },
+            data: { balance: { decrement: Math.min(v.days, 999) } },
+          });
+        }
+      }
       await tx.payrollRun.update({ where: { id: run.id }, data: { status: 'POSTED', postedAt: new Date() } });
       return tx.payrollRun.findFirst({
         where: { id: run.id, tenantId },
@@ -118,9 +127,11 @@ export const payrollRepository = {
       });
     });
   },
-  async findPayrollItemForPrint(req, itemId) {
+  async findPayrollItemForPrint(req, itemId, employeeId) {
+    const where = withTenant(req, { id: itemId });
+    if (employeeId) where.employeeId = employeeId;
     return prisma.payrollItem.findFirst({
-      where: withTenant(req, { id: itemId }),
+      where,
       include: {
         employee: { include: { position: true, department: true } },
         run: { include: { period: true } },

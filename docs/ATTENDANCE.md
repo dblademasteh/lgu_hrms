@@ -147,6 +147,38 @@ proration; see follow-ups.
 - PUNCH_CONFLICT (400) is the contract for invalid punch transitions; the Portal
   and kiosk both toast/message it — don't turn boundary edges into 500s.
 
+## Punch hardening (pass — Sep 2026)
+
+Applied after the portal deep-dive; targets concurrency, data integrity, and
+boundary edges.
+
+- **`punchTransition` runs in a Serializable transaction** with one P2028 retry.
+  IN/OUT/device punches race against each other server-side; the conditional
+  `updateMany({ timeOut: null })` on OUT means a parallel OUT can never close the
+  same row twice (second wins the check and returns 400 `PUNCH_CONFLICT` instead of
+  silently "succeeding"). **Verified live**: 3 parallel INs → 1 "Punched in", 2
+  "Already punched in", exactly one open row; 2 parallel OUTs → 1 success + 400.
+- **Punch-IN remark preserved on OUT.** `computePunchOutRemark` re-derives the
+  remark from rules on punch-out instead of overwriting with a static
+  "Completed". A tardy IN now stays "Tardiness" through OUT.
+- **All attendance writes create rows with `source: 'MANUAL'`** (manual create)
+  and punches/device/import keep their provenance (`PUNCH`/`DEVICE`/`IMPORT`).
+- **`GET /attendance/today` returns the open/latest row** (`orderBy timeIn desc`)
+  so multi-punch days always surface the current session, not the first punch.
+- **Boundary inputs are 400s, not 500s**:
+  - `timeField` refined with `validClock` — `25:99` → `VALIDATION_ERROR`
+    (was a 500 via `setUTCHours` overflow). `HH:MM(:ss)` or ISO-8601 only.
+  - `date` on `GET /attendance` validated `YYYY-MM-DD` (query schema
+    `listAttendanceSchema`); `month` on `GET /attendance/my` validated `YYYY-MM`
+    (query schema `myAttendanceSchema`) — both wired via `validate()` in
+    `routes/attendance.js`.
+  - Future-date punches → `AppError` 400 `FUTURE_DATE`; invalid transitions →
+    400 `PUNCH_CONFLICT`; non-scoped dept punches → 403 `FORBIDDEN`
+    (`AppError` from `lib/errors.js`, never bare `Error` → 500).
+- **deviceSync ingest no longer aborts the batch** on one failure: failed applies
+  stay `applied: false` and are retried next sync; per-key dedupe map avoids
+  `findMany` per row.
+
 ## Follow-ups (tracked in `TODOS.md`)
 
 - `DELETE /attendance` is a hard delete — AGENTS prefers soft (`deletedAt`).

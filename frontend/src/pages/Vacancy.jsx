@@ -3,6 +3,7 @@ import { Search, Plus, FileText, MapPin, ChevronDown, RefreshCw, Check, X } from
 import Layout from '../components/Layout.jsx';
 import { vacancyApi } from '../api/vacancy.js';
 import { departmentsApi } from '../api/departments.js';
+import { plantillaApi } from '../api/plantilla.js';
 import { useToast } from '../components/Toast.jsx';
 import Modal from '../components/Modal.jsx';
 import { badgeTone } from '../data/mock.js';
@@ -17,8 +18,9 @@ export default function Vacancy() {
   const toast = useToast();
   const [items, setItems] = useState([]);
   const [deptList, setDeptList] = useState([]);
+  const [plantillaItems, setPlantillaItems] = useState([]);
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ plantillaItemId:'', title:'', description:'', qualifications:'', status:'OPEN' });
+  const [form, setForm] = useState({ plantillaItemId:'', title:'', description:'', qualifications:'', eligibilityRequirements:'', closesAt:'', status:'OPEN' });
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
 
@@ -29,6 +31,8 @@ export default function Vacancy() {
       setItems(data.items || []);
       const depts = await departmentsApi.list();
       setDeptList(depts.data || []);
+      const plantilla = await plantillaApi.list();
+      setPlantillaItems((plantilla.data?.items || []).filter(i => i.status === 'VACANT'));
     } catch (e) {
       toast('Failed to load vacancies', 'error');
     }
@@ -49,7 +53,7 @@ export default function Vacancy() {
       await vacancyApi.create(form);
       toast('Vacancy published', 'success');
       setOpen(false);
-      setForm({ plantillaItemId:'', title:'', description:'', qualifications:'', status:'OPEN' });
+      setForm({ plantillaItemId:'', title:'', description:'', qualifications:'', eligibilityRequirements:'', closesAt:'', status:'OPEN' });
       load();
     } catch (err) {
       toast(err?.response?.data?.error?.message || 'Failed to create vacancy', 'error');
@@ -138,55 +142,98 @@ export default function Vacancy() {
         </div>
       </div>
 
-      {/* New Vacancy Modal */}
-      <Modal open={open} onClose={()=>setOpen(false)} title="New Vacancy">
-        <form onSubmit={submit} className="space-y-4">
-          <div>
-            <label htmlFor="v-item" className="block text-sm font-medium text-ink mb-1">Plantilla Item ID *</label>
-            <input 
-              id="v-item" 
-              className="input" 
-              placeholder="e.g. GR-001"
-              value={form.plantillaItemId} 
-              onChange={e=>setForm({...form,plantillaItemId:e.target.value})} 
-              required 
-            />
-          </div>
-          <div>
-            <label htmlFor="v-title" className="block text-sm font-medium text-ink mb-1">Title *</label>
-            <input 
-              id="v-title" 
-              className="input" 
-              placeholder="Position title"
-              value={form.title} 
-              onChange={e=>setForm({...form,title:e.target.value})} 
-              required 
-            />
-          </div>
-          <div>
-            <label htmlFor="v-desc" className="block text-sm font-medium text-ink mb-1">Description</label>
-            <textarea 
-              id="v-desc" 
-              className="input" 
-              value={form.description} 
-              onChange={e=>setForm({...form,description:e.target.value})}
-              placeholder="Position description and responsibilities"
-              rows={3}
-            />
-          </div>
-          <div>
-            <label htmlFor="v-qual" className="block text-sm font-medium text-ink mb-1">Qualifications</label>
-            <textarea 
-              id="v-qual" 
-              className="input" 
-              value={form.qualifications} 
-              onChange={e=>setForm({...form,qualifications:e.target.value})}
-              placeholder="Required education, experience, skills"
-              rows={2}
-            />
-          </div>
-        </form>
-      </Modal>
+        {/* New Vacancy Modal */}
+        <Modal open={open} onClose={()=>setOpen(false)} title="New Vacancy">
+          <form onSubmit={submit} className="space-y-4">
+            <div>
+              <label htmlFor="v-item" className="block text-sm font-medium text-ink mb-1">Plantilla Item *</label>
+              <select 
+                id="v-item" 
+                className="select"
+                value={form.plantillaItemId} 
+                onChange={e=> {
+                  const item = plantillaItems.find(p => p.id === e.target.value);
+                  setForm({...form, plantillaItemId:e.target.value, title:item?.position?.title || ''});
+                }} 
+                required 
+              >
+                <option value="">Select vacant item</option>
+                {plantillaItems.map(p => (
+                  <option key={p.id} value={p.id}>
+                    {p.itemNumber} — {p.position?.title || 'Unknown'} {p.department?.name ? `(${p.department.name})` : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label htmlFor="v-title" className="block text-sm font-medium text-ink mb-1">Title *</label>
+              <input 
+                id="v-title" 
+                className="input" 
+                placeholder="Position title"
+                value={form.title} 
+                onChange={e=>setForm({...form,title:e.target.value})} 
+                required 
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label htmlFor="v-close" className="block text-sm font-medium text-ink mb-1">Closes At</label>
+                <input 
+                  id="v-close" 
+                  type="date"
+                  className="input" 
+                  value={form.closesAt} 
+                  onChange={e=>setForm({...form,closesAt:e.target.value})}
+                />
+              </div>
+              <div>
+                <label htmlFor="v-status" className="block text-sm font-medium text-ink mb-1">Status</label>
+                <select id="v-status" className="select" value={form.status} onChange={e=>setForm({...form,status:e.target.value})}>
+                  <option value="DRAFT">Draft</option>
+                  <option value="OPEN">Open</option>
+                </select>
+              </div>
+            </div>
+           <div>
+             <label htmlFor="v-desc" className="block text-sm font-medium text-ink mb-1">Description</label>
+             <textarea 
+               id="v-desc" 
+               className="input" 
+               value={form.description} 
+               onChange={e=>setForm({...form,description:e.target.value})}
+               placeholder="Position description and responsibilities"
+               rows={3}
+             />
+           </div>
+           <div>
+             <label htmlFor="v-qual" className="block text-sm font-medium text-ink mb-1">Qualifications</label>
+             <textarea 
+               id="v-qual" 
+               className="input" 
+               value={form.qualifications} 
+               onChange={e=>setForm({...form,qualifications:e.target.value})}
+               placeholder="Required education, experience, skills"
+               rows={2}
+             />
+           </div>
+           <div>
+             <label htmlFor="v-elig" className="block text-sm font-medium text-ink mb-1">Eligibility Requirements</label>
+             <textarea 
+               id="v-elig" 
+               className="input" 
+               value={form.eligibilityRequirements} 
+               onChange={e=>setForm({...form,eligibilityRequirements:e.target.value})}
+               placeholder="CSC eligibility, PRC license, etc."
+               rows={2}
+             />
+           </div>
+            <div className="flex gap-2 pt-2">
+              <button type="submit" className="btn btn-primary">Save Vacancy</button>
+              <button type="button" className="btn btn-ghost" onClick={()=>setOpen(false)}>Cancel</button>
+            </div>
+         </form>
+       </Modal>
     </Layout>
   );
 }

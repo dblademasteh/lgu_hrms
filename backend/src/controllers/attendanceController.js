@@ -112,12 +112,15 @@ export const attendanceController = {
       const startOfDay = dateKeyToUtc(todayKey);
       const endOfDay = endOfDateKeyExclusive(todayKey);
 
+      // Latest row by timeIn — an open (still-running) row when one exists,
+      // otherwise the last closed row. This keeps the portal actionable on
+      // multi-punch days (IN → OUT → IN) instead of pinning the first row.
       const record = await prisma.attendance.findFirst({
         where: withTenant(req, {
           employeeId: employee.id,
           date: { gte: startOfDay, lt: endOfDay }
         }),
-        orderBy: { timeIn: 'asc' },
+        orderBy: { timeIn: 'desc' },
       });
 
       res.json({ record });

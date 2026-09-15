@@ -27,3 +27,8 @@ export async function updateEmployee(id, payload) {
 export async function deleteEmployee(id) {
   await api.delete(`/employees/${id}`);
 }
+
+export async function bulkImportEmployees(items) {
+  const { data } = await api.post('/employees/bulk', items);
+  return data;
+}
