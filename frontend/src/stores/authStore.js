@@ -27,6 +27,17 @@ export const useAuthStore = create((set) => ({
   passwordExpired: false,
   loading: false,
   error: null,
+  activeTenantId: (() => {
+    try { return localStorage.getItem('lgu-active-tenant'); } catch { return null; }
+  })(),
+
+  setActiveTenant: (tenantId) => {
+    try {
+      if (tenantId) localStorage.setItem('lgu-active-tenant', tenantId);
+      else localStorage.removeItem('lgu-active-tenant');
+    } catch {}
+    set({ activeTenantId: tenantId });
+  },
 
   login: async (username, password, tenantId) => {
     set({ loading: true, error: null });
@@ -53,8 +64,9 @@ export const useAuthStore = create((set) => ({
   },
 
   logout: () => {
+    try { localStorage.removeItem('lgu-active-tenant'); } catch {}
     localStorage.removeItem('auth');
-    set({ user: null, accessToken: null, refreshToken: null, passwordAgeDays: null, passwordExpired: false });
+    set({ user: null, accessToken: null, refreshToken: null, passwordAgeDays: null, passwordExpired: false, activeTenantId: null });
   },
 
   hydrate: () => {

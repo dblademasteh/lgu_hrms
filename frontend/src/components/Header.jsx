@@ -3,8 +3,9 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { toggleTheme, useTheme } from '../theme.js';
 import { useAuthStore } from '../stores/authStore.js';
 import { useNotifications, useInAppEnabled } from '../hooks/useNotifications.js';
-import { Search, Bell, Sun, Moon, LogOut, User, Menu, ChevronDown, Home, CheckCheck, Trash2, Inbox, HelpCircle } from 'lucide-react';
+import { Search, Bell, Sun, Moon, LogOut, User, Menu, ChevronDown, Home, CheckCheck, Trash2, Inbox, HelpCircle, Building2 } from 'lucide-react';
 import { switchRole } from '../api/dev.js';
+import { tenantsApi } from '../api/tenants.js';
 
 const titles = {
   '/dashboard': 'Dashboard',
@@ -32,10 +33,35 @@ export default function Header({ onToggleSidebar }) {
   const [userOpen, setUserOpen] = useState(false);
   const [devRole, setDevRole] = useState(user?.role || '');
   const [switchingRole, setSwitchingRole] = useState(false);
+  const [tenantOpen, setTenantOpen] = useState(false);
+  const [tenantList, setTenantList] = useState([]);
   const bellRef = useRef(null);
   const userRef = useRef(null);
+  const tenantRef = useRef(null);
   const unread = inAppEnabled ? items.filter(n => n.unread).length : 0;
   const isDev = import.meta.env.NODE_ENV !== 'production';
+  const isSuperAdmin = user?.role === 'SUPER_ADMIN';
+  const activeTenantId = useAuthStore(s => s.activeTenantId) || user?.tenantId || null;
+  const setActiveTenant = useAuthStore(s => s.setActiveTenant);
+  const activeTenant = tenantList.find(t => t.id === activeTenantId) || null;
+  const tenantLabel = activeTenant?.name || activeTenantId || 'Platform';
+
+  useEffect(() => {
+    if (!isSuperAdmin) return undefined;
+    let cancelled = false;
+    tenantsApi.list()
+      .then(data => {
+        if (!cancelled) setTenantList(Array.isArray(data) ? data : data?.items ?? []);
+      })
+      .catch(() => { /* non-fatal: switcher shows ids only */ });
+    return () => { cancelled = true; };
+  }, [isSuperAdmin]);
+
+  const switchTenant = (tenantId) => {
+    setActiveTenant(tenantId);
+    setTenantOpen(false);
+    window.location.reload();
+  };
 
   useEffect(() => {
     if (!bellOpen) return undefined;
@@ -54,6 +80,15 @@ export default function Header({ onToggleSidebar }) {
     document.addEventListener('mousedown', onDown);
     return () => document.removeEventListener('mousedown', onDown);
   }, [userOpen]);
+
+  useEffect(() => {
+    if (!tenantOpen) return undefined;
+    const onDown = e => {
+      if (tenantRef.current && !tenantRef.current.contains(e.target)) setTenantOpen(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [tenantOpen]);
 
   useEffect(() => {
     const onKey = (e) => {
@@ -119,6 +154,58 @@ export default function Header({ onToggleSidebar }) {
           >
             <HelpCircle size={18} />
           </button>
+
+          {isSuperAdmin && (
+            <div className="dropdown" ref={tenantRef}>
+              <button
+                type="button"
+                className="btn btn-ghost px-2 md:px-3 max-w-44 flex items-center gap-1.5"
+                onClick={() => setTenantOpen(o => !o)}
+                aria-expanded={tenantOpen}
+                aria-label="Switch tenant"
+                title={`Tenant scope: ${tenantLabel}`}
+              >
+                <Building2 size={18} className="shrink-0" />
+                <span className="hidden md:inline text-sm truncate">{tenantLabel}</span>
+                <ChevronDown size={14} className="hidden md:block text-muted shrink-0" />
+              </button>
+              {tenantOpen && (
+                <div className="dropdown-panel w-80 p-0" role="menu" aria-label="Switch tenant">
+                  <div className="px-4 py-2.5 border-b border-line">
+                    <p className="font-display font-semibold text-ink text-sm">Tenant scope</p>
+                    <p className="text-[11px] text-muted mt-0.5">SUPER_ADMIN override — HRMS data reads the selected LGU.</p>
+                  </div>
+                  <ul className="max-h-80 overflow-auto py-1">
+                    <li>
+                      <button
+                        type="button"
+                        className="w-full text-left px-4 py-2 text-sm hover:bg-bg/60 flex items-center justify-between gap-2"
+                        onClick={() => switchTenant(null)}
+                      >
+                        <span>Platform (all tenants)</span>
+                        {!activeTenantId && <span className="badge badge-success mono-label">ACTIVE</span>}
+                      </button>
+                    </li>
+                    {tenantList.map(t => (
+                      <li key={t.id}>
+                        <button
+                          type="button"
+                          className="w-full text-left px-4 py-2 text-sm hover:bg-bg/60 flex items-center justify-between gap-2"
+                          onClick={() => switchTenant(t.id)}
+                        >
+                          <span className="truncate">{t.name}</span>
+                          <span className={`mono-label shrink-0 ${t.id === activeTenantId ? 'text-accent' : 'text-muted'}`}>{t.id === activeTenantId ? 'ACTIVE' : t.code}</span>
+                        </button>
+                      </li>
+                    ))}
+                    {tenantList.length === 0 && (
+                      <li className="px-4 py-6 text-center text-muted text-sm">No tenants registered.</li>
+                    )}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="dropdown" ref={bellRef}>
             <button
@@ -243,7 +330,7 @@ export default function Header({ onToggleSidebar }) {
                     <div className="min-w-0">
                       <p className="font-semibold text-ink text-sm truncate">{user?.username ?? 'Account'}</p>
                       <p className="mono-label text-[11px] text-muted truncate">{user?.role?.replaceAll('_', ' ')}</p>
-                      <p className="mono-label text-[10px] text-muted mt-0.5 truncate">{user?.tenantId ? `Tenant · ${user.tenantId}` : 'No tenant'}</p>
+                      <p className="mono-label text-[10px] text-muted mt-0.5 truncate">{isSuperAdmin ? (activeTenant ? `Tenant · ${activeTenant.name}` : 'Tenant · Platform') : (user?.tenantId ? `Tenant · ${user.tenantId}` : 'No tenant')}</p>
                     </div>
                   </div>
                 </div>

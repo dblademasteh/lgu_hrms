@@ -12,6 +12,10 @@ api.interceptors.request.use((config) => {
   if (auth.accessToken) {
     config.headers.Authorization = `Bearer ${auth.accessToken}`;
   }
+  if (auth.user?.role === 'SUPER_ADMIN') {
+    const activeTenantId = localStorage.getItem('lgu-active-tenant');
+    if (activeTenantId) config.headers['X-Tenant-Id'] = activeTenantId;
+  }
   return config;
 });
 

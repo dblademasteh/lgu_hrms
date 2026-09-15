@@ -5,7 +5,8 @@ import { useAuthStore } from '../stores/authStore.js';
 
 function TenantBanner() {
   const user = useAuthStore(s => s.user);
-  const tenantId = user?.tenantId;
+  const activeTenantId = useAuthStore(s => s.activeTenantId);
+  const tenantId = user?.role === 'SUPER_ADMIN' ? (activeTenantId || user?.tenantId) : user?.tenantId;
   if (!tenantId) return null;
   return (
     <div className="px-4 md:px-6 py-1.5 bg-accent/10 border-b border-accent/20 text-[11px] font-mono text-accent truncate" title={`Tenant scope: ${tenantId}`}>

@@ -30,7 +30,7 @@
 - Backend: Express 5 ESM, port 4000, Prisma Postgres, JWT access ~15m + refresh rotation
 - DB: PostgreSQL 16 via docker-compose, `DATABASE_URL` in `backend/.env`
 - Mock layer: `frontend/src/data/mock.js` now only exports `badgeTone()` + `roleMatrix` statics; all pages read `frontend/src/api/`
-- Multi-tenancy: shared-schema with `tenantId` on all business tables. Tenant resolution via `backend/src/middleware/tenant.js` tenantContext, withTenant/stampTenant. JWT carries `tenantId`. SUPER_ADMIN can override via `X-Tenant-Id` / query / subdomain. Subdomain map in `SUBDOMAIN_TENANT_MAP`. Tenant provisioning docs: `docs/TENANT_PROVISIONING.md`
+- Multi-tenancy: shared-schema with `tenantId` on all business tables. Tenant resolution via `backend/src/middleware/tenant.js` tenantContext, withTenant/stampTenant. JWT carries `tenantId`. SUPER_ADMIN can override via `X-Tenant-Id` / query / subdomain. Subdomain map in `SUBDOMAIN_TENANT_MAP` (note: currently maps `tarlac`→`tenant-tarlac` but the seed DB has `SOLANA`/`tenant-solana` — drift). SUPER_ADMIN has an in-app tenant switcher: Header `Building2` dropdown lists all tenants from the public `GET /tenants`, stores the override in localStorage `lgu-active-tenant`, and `frontend/src/api/client.js` injects `X-Tenant-Id` on every request when `auth.user.role === 'SUPER_ADMIN'` (cleared on logout; non-SUPER_ADMIN never sends it). Tenant provisioning docs: `docs/TENANT_PROVISIONING.md`
 
 ## Auth & RBAC
 - JWT verified by `backend/src/middleware/auth.js` `requireAuth`
