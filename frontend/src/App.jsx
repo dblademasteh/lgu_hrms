@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { RouterProvider, createBrowserRouter, Navigate, Outlet } from 'react-router-dom';
 import Login from './pages/Login.jsx';
 import AuthCallback from './pages/AuthCallback.jsx';
 import TenantRegister from './pages/TenantRegister.jsx';
@@ -35,7 +35,8 @@ import CommandPalette from './components/CommandPalette.jsx';
 import { ToastProvider } from './components/Toast.jsx';
 
 import { useAuthStore } from './stores/authStore.js';
-import { visibleRoles, useUserCapabilities } from './config/permissions.js';
+import { useUserCapabilities } from './config/permissions.js';
+import { sentryWrapCreateBrowserRouter } from './lib/sentry.js';
 
 function Protected({ children, roles, capability }) {
   const user = useAuthStore(s => s.user);
@@ -57,45 +58,67 @@ function Protected({ children, roles, capability }) {
   return children;
 }
 
+// Root layout renders the current page plus the global command palette.
+function RootLayout() {
+  return (
+    <>
+      <Outlet />
+      <CommandPalette />
+    </>
+  );
+}
+
+function createAppRouter() {
+  const routes = [
+    {
+      element: <RootLayout />,
+      children: [
+        { path: '/', element: <Login /> },
+        { path: '/auth/callback', element: <AuthCallback /> },
+        { path: '/tenant-register', element: <Protected roles={['SUPER_ADMIN']}><TenantRegister /></Protected> },
+        { path: '/platform', element: <Protected roles={['SUPER_ADMIN']}><SuperAdminDashboard /></Protected> },
+        { path: '/platform/tenants', element: <Protected roles={['SUPER_ADMIN']}><Tenants /></Protected> },
+        { path: '/platform/tenants/:id', element: <Protected roles={['SUPER_ADMIN']}><TenantDetail /></Protected> },
+        { path: '/platform/database', element: <Protected roles={['SUPER_ADMIN']}><DatabaseTools /></Protected> },
+        { path: '/dashboard', element: <Protected><UserDashboard /></Protected> },
+        { path: '/employees', element: <Protected roles={['ADMIN', 'HR_MANAGER', 'DEPARTMENT_HEAD']}><Employees /></Protected> },
+        { path: '/organization', element: <Protected roles={['ADMIN', 'HR_MANAGER', 'DEPARTMENT_HEAD']}><Organization /></Protected> },
+        { path: '/payroll', element: <Protected roles={['ADMIN', 'HR_MANAGER', 'PAYROLL_OFFICER']} capability="payrollRead"><Payroll /></Protected> },
+        { path: '/leave', element: <Protected roles={['ADMIN', 'HR_MANAGER', 'DEPARTMENT_HEAD']} capability="leaveApproval"><Leave /></Protected> },
+        { path: '/audit', element: <Protected roles={['ADMIN', 'AUDITOR']}><Audit /></Protected> },
+        { path: '/reports', element: <Protected roles={['ADMIN', 'HR_MANAGER', 'PAYROLL_OFFICER', 'AUDITOR']}><Reports /></Protected> },
+        { path: '/users', element: <Protected roles={['ADMIN', 'SUPER_ADMIN']} capability="manageUsersAndRoles"><Users /></Protected> },
+        { path: '/attendance', element: <Protected roles={['ADMIN', 'HR_MANAGER', 'DEPARTMENT_HEAD']}><Attendance /></Protected> },
+        { path: '/attendance-portal', element: <Protected roles={['EMPLOYEE', 'ADMIN', 'HR_MANAGER', 'PAYROLL_OFFICER', 'DEPARTMENT_HEAD']}><AttendancePortal /></Protected> },
+        { path: '/appointments', element: <Protected roles={['ADMIN', 'HR_MANAGER']} capability="appointmentsCRUD"><Appointments /></Protected> },
+        { path: '/performance', element: <Protected roles={['ADMIN', 'HR_MANAGER', 'DEPARTMENT_HEAD']}><Performance /></Protected> },
+        { path: '/plantilla', element: <Protected roles={['ADMIN', 'HR_MANAGER']}><Plantilla /></Protected> },
+        { path: '/vacancy', element: <Protected roles={['ADMIN', 'HR_MANAGER']}><Vacancy /></Protected> },
+        { path: '/designation', element: <Protected roles={['ADMIN', 'HR_MANAGER']}><Designation /></Protected> },
+        { path: '/learning', element: <Protected><Learning /></Protected> },
+        { path: '/recruitment', element: <Protected roles={['ADMIN', 'HR_MANAGER']}><Recruitment /></Protected> },
+        { path: '/ess', element: <Protected roles={['EMPLOYEE', 'ADMIN', 'HR_MANAGER', 'PAYROLL_OFFICER', 'DEPARTMENT_HEAD']}><ESS /></Protected> },
+        { path: '/ipcr', element: <Protected roles={['ADMIN', 'HR_MANAGER', 'DEPARTMENT_HEAD']}><IPCR /></Protected> },
+        { path: '/disqualifications', element: <Protected roles={['ADMIN', 'HR_MANAGER']}><Disqualifications /></Protected> },
+        { path: '/settings', element: <Protected><Settings /></Protected> },
+        { path: '/help', element: <Protected><Help /></Protected> },
+        { path: '*', element: <NotFound /> },
+      ],
+    },
+  ];
+  return sentryWrapCreateBrowserRouter(createBrowserRouter)(routes, {
+    future: { v7_startTransition: true, v7_relativeSplatPath: true },
+  });
+}
+
 export default function App() {
+  // Router is created once (after initSentry ran in main.jsx) so Sentry wraps
+  // the instance for route-level traces. useState lazy init keeps it stable.
+  const [router] = React.useState(createAppRouter);
   return (
     <ErrorBoundary>
       <ToastProvider>
-        <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-           <Routes>
-             <Route path="/" element={<Login />} />
-             <Route path="/auth/callback" element={<AuthCallback />} />
-              <Route path="/tenant-register" element={<Protected roles={['SUPER_ADMIN']}><TenantRegister /></Protected>} />
-              <Route path="/platform" element={<Protected roles={['SUPER_ADMIN']}><SuperAdminDashboard /></Protected>} />
-              <Route path="/platform/tenants" element={<Protected roles={['SUPER_ADMIN']}><Tenants /></Protected>} />
-              <Route path="/platform/tenants/:id" element={<Protected roles={['SUPER_ADMIN']}><TenantDetail /></Protected>} />
-              <Route path="/platform/database" element={<Protected roles={['SUPER_ADMIN']}><DatabaseTools /></Protected>} />
-             <Route path="/dashboard" element={<Protected><UserDashboard /></Protected>} />
-             <Route path="/employees" element={<Protected roles={['ADMIN', 'HR_MANAGER', 'DEPARTMENT_HEAD']}><Employees /></Protected>} />
-              <Route path="/organization" element={<Protected roles={['ADMIN', 'HR_MANAGER', 'DEPARTMENT_HEAD']}><Organization /></Protected>} />
-             <Route path="/payroll" element={<Protected roles={['ADMIN', 'HR_MANAGER', 'PAYROLL_OFFICER']} capability="payrollRead"><Payroll /></Protected>} />
-             <Route path="/leave" element={<Protected roles={['ADMIN', 'HR_MANAGER', 'DEPARTMENT_HEAD']} capability="leaveApproval"><Leave /></Protected>} />
-             <Route path="/audit" element={<Protected roles={['ADMIN', 'AUDITOR']}><Audit /></Protected>} />
-             <Route path="/reports" element={<Protected roles={['ADMIN', 'HR_MANAGER', 'PAYROLL_OFFICER', 'AUDITOR']}><Reports /></Protected>} />
-             <Route path="/users" element={<Protected roles={['ADMIN', 'SUPER_ADMIN']} capability="manageUsersAndRoles"><Users /></Protected>} />
-             <Route path="/attendance" element={<Protected roles={['ADMIN', 'HR_MANAGER', 'DEPARTMENT_HEAD']}><Attendance /></Protected>} />
-             <Route path="/attendance-portal" element={<Protected roles={['EMPLOYEE', 'ADMIN', 'HR_MANAGER', 'PAYROLL_OFFICER', 'DEPARTMENT_HEAD']}><AttendancePortal /></Protected>} />
-             <Route path="/appointments" element={<Protected roles={['ADMIN', 'HR_MANAGER']} capability="appointmentsCRUD"><Appointments /></Protected>} />
-             <Route path="/performance" element={<Protected roles={['ADMIN', 'HR_MANAGER', 'DEPARTMENT_HEAD']}><Performance /></Protected>} />
-             <Route path="/plantilla" element={<Protected roles={['ADMIN', 'HR_MANAGER']}><Plantilla /></Protected>} />
-             <Route path="/vacancy" element={<Protected roles={['ADMIN', 'HR_MANAGER']}><Vacancy /></Protected>} />
-             <Route path="/designation" element={<Protected roles={['ADMIN', 'HR_MANAGER']}><Designation /></Protected>} />
-             <Route path="/learning" element={<Protected><Learning /></Protected>} />
-             <Route path="/recruitment" element={<Protected roles={['ADMIN', 'HR_MANAGER']}><Recruitment /></Protected>} />
-             <Route path="/ess" element={<Protected roles={['EMPLOYEE', 'ADMIN', 'HR_MANAGER', 'PAYROLL_OFFICER', 'DEPARTMENT_HEAD']}><ESS /></Protected>} />
-             <Route path="/ipcr" element={<Protected roles={['ADMIN', 'HR_MANAGER', 'DEPARTMENT_HEAD']}><IPCR /></Protected>} />
-             <Route path="/disqualifications" element={<Protected roles={['ADMIN', 'HR_MANAGER']}><Disqualifications /></Protected>} />
-             <Route path="/settings" element={<Protected><Settings /></Protected>} />
-             <Route path="/help" element={<Protected><Help /></Protected>} />
-             <Route path="*" element={<NotFound />} />
-           </Routes>
-          <CommandPalette />
-        </BrowserRouter>
+        <RouterProvider router={router} />
       </ToastProvider>
     </ErrorBoundary>
   );

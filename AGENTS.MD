@@ -110,6 +110,7 @@
 - **Frontend prod hygiene:** rely on `npm run build` (Vite) as the release gate; keep design tokens in `index.css`, zero hardcoded colors; validate form input even when backend re-validates
 - **Logging:** production ships structured logs via the platform collector (per `server.js`); `NODE_ENV !== 'production'` suppresses per-request spam
 - **Health & monitoring:** `GET /api/v1/health` stays alive for LB checks; use Sentry to capture errors in dev and prod
+- **Sentry (SaaS):** optional via DSN envs. Backend — `SENTRY_DSN` (init in `backend/src/lib/sentry.js`, wired in `server.js` error middleware for 500s + startup migrations; user/tenant/URL context; `sendDefaultPii:false`). Frontend — `VITE_SENTRY_DSN` (init in `frontend/src/lib/sentry.js`, `main.jsx`; route tracing via `sentryWrapCreateBrowserRouter` on `createBrowserRouter` in `App.jsx` + root `ErrorBoundary` render capture); source maps upload in prod builds via `@sentry/vite-plugin` gated on `VITE_SENTRY_ORG`/`VITE_SENTRY_PROJECT`/`VITE_SENTRY_AUTH_TOKEN` (`vite.config.js`, `build.sourcemap` follows the token). No DSN/token = full no-op; `.env.example` documents all vars on both sides; never commit real DSNs/tokens.
 
 ## Operational
 - API 500 on login usually dead DB container → `docker ps` then `docker compose up -d db`

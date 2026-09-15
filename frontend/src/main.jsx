@@ -6,7 +6,9 @@ import '@fontsource-variable/jetbrains-mono';
 import './index.css';
 import App from './App.jsx';
 import { applyToastStyle } from './toastStyle.js';
+import { initSentry } from './lib/sentry.js';
 
 applyToastStyle();
+initSentry();
 
 createRoot(document.getElementById('root')).render(<App />);

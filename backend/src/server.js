@@ -4,6 +4,9 @@ import cors from 'cors';
 import routes from './routes/index.js';
 import { apiLimiter } from './middleware/rateLimit.js';
 import { prisma } from './lib/prisma.js';
+import { initSentry, captureError } from './lib/sentry.js';
+
+await initSentry();
 
 const app = express();
 
@@ -36,7 +39,10 @@ app.use((err, req, res, next) => {
   const status = err.status || 500;
   const code = err.code || 'INTERNAL_ERROR';
   const message = status >= 500 ? 'Something went wrong' : err.message;
-  if (status >= 500) console.error(err);
+  if (status >= 500) {
+    console.error(err);
+    captureError(err, req);
+  }
   res.status(status).json({ error: { code, message } });
 });
 
@@ -59,6 +65,7 @@ const server = app.listen(PORT, async () => {
       console.log('[startup] Migrations applied successfully');
     } catch (e) {
       console.error('[startup] Migration failed:', e);
+      captureError(e, { method: 'startup', originalUrl: '/prisma/migrate-deploy' });
       // In production, fail fast rather than serving stale schema.
       if (process.env.NODE_ENV === 'production') {
         process.exit(1);
