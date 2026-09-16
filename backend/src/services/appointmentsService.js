@@ -34,6 +34,10 @@ export const appointmentsService = {
   },
   async update(req, id, data) {
     const payload = { ...data };
+    if (payload.itemNo !== undefined) {
+      payload.itemNumber = payload.itemNo;
+      delete payload.itemNo;
+    }
     if (payload.startDate) payload.startDate = toUtcDate(payload.startDate);
     if (payload.endDate) payload.endDate = toUtcDate(payload.endDate);
     return appointmentsRepository.update(req, id, payload);

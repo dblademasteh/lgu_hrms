@@ -7,27 +7,16 @@ import {
 } from '../controllers/employeeSectionController.js';
 import { validate } from '../middleware/validate.js';
 import { requirePermission } from '../middleware/permission.js';
-import { z } from 'zod';
+import { sectionParamSchema, recordParamSchema, createSectionBodySchema, updateSectionBodySchema } from '../shared/contracts/employeeSections.js';
 
 const router = Router({ mergeParams: true });
 
 // Employee PII blocks share the employeeRecordsCRUD matrix capability.
 router.use(requirePermission('employeeRecordsCRUD'));
 
-const sectionParamSchema = {
-  params: z.object({
-    id: z.string().min(1),
-    section: z.enum(['eligibilities', 'family', 'education', 'awards', 'history', 'appointments', 'leave', 'leaveCredits', 'attendance', 'payroll', 'performance', 'training', 'loans']),
-  }),
-};
-
-const recordParamSchema = {
-  params: sectionParamSchema.params.extend({ recordId: z.string().min(1) }),
-};
-
 router.get('/:section', validate(sectionParamSchema), listSectionHandler);
-router.post('/:section', validate(sectionParamSchema), createSectionHandler);
-router.patch('/:section/:recordId', validate(recordParamSchema), updateSectionHandler);
+router.post('/:section', validate({ ...sectionParamSchema, ...createSectionBodySchema }), createSectionHandler);
+router.patch('/:section/:recordId', validate({ ...recordParamSchema, ...updateSectionBodySchema }), updateSectionHandler);
 router.delete('/:section/:recordId', validate(recordParamSchema), deleteSectionHandler);
 
 export default router;

@@ -76,5 +76,15 @@ export const payrollController = {
     } catch (e) {
       next(e);
     }
+  },
+  async bankExport(req, res, next) {
+    try {
+      const result = await payrollService.bankExport(req, req.params.id);
+      res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="${result.filename}"`);
+      res.send(result.content);
+    } catch (e) {
+      next(e);
+    }
   }
 };

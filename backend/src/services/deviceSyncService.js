@@ -32,10 +32,16 @@ export async function ingestLogs(req, deviceId, logs) {
   const getEmployee = async (userId) => {
     if (!userId) return null;
     if (employees.has(userId)) return employees.get(userId);
-    const emp = await prisma.employee.findFirst({
-      where: withTenant(req, { employeeNumber: userId }),
-      select: { id: true, employeeNumber: true, firstName: true, lastName: true },
+    let emp = await prisma.biometricDeviceUser.findFirst({
+      where: { deviceId, deviceUserId: userId },
+      include: { employee: { select: { id: true, employeeNumber: true, firstName: true, lastName: true } } },
     });
+    if (!emp) {
+      emp = await prisma.employee.findFirst({
+        where: withTenant(req, { employeeNumber: userId }),
+        select: { id: true, employeeNumber: true, firstName: true, lastName: true },
+      });
+    }
     employees.set(userId, emp ?? null);
     return emp;
   };

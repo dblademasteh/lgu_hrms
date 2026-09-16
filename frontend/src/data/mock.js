@@ -10,7 +10,14 @@ export function badgeTone(status) {
     case 'POSTED':
     case 'ACTIVE':
     case 'SUCCESS':
+    case 'HIRED':
+    case 'OPEN':
+    case 'COMPLETED':
+    case 'FILLED':
+    case 'PUBLISHED':
       return 'badge-success';
+    case 'SCHEDULED':
+      return 'badge-info';
     case 'PENDING':
     case 'DRAFT':
     case 'PLANNING':
@@ -22,6 +29,9 @@ export function badgeTone(status) {
     case 'CANCELLED':
     case 'ENDED':
     case 'SEPARATED':
+    case 'REVOKED':
+    case 'DISQUALIFIED':
+    case 'CLOSED':
       return 'badge-error';
     default:
       return 'badge-neutral';

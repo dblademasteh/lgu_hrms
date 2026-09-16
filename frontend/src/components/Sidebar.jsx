@@ -42,7 +42,6 @@ const groups = [
     items: [
       { name: 'Appointments', path: '/appointments', icon: FileBadge, roles: ['HR_MANAGER', 'ADMIN'] },
       { name: 'Plantilla', path: '/plantilla', icon: FileBadge, roles: ['HR_MANAGER', 'ADMIN'] },
-      { name: 'Vacancy', path: '/vacancy', icon: BarChart3, roles: ['HR_MANAGER', 'ADMIN'] },
       { name: 'Designation', path: '/designation', icon: UserCog, roles: ['HR_MANAGER', 'ADMIN'] },
       { name: 'Recruitment', path: '/recruitment', icon: UserCog, roles: ['HR_MANAGER', 'ADMIN'] },
     ]

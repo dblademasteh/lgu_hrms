@@ -43,6 +43,7 @@ export default function Disqualifications() {
   const [typeFilter, setTypeFilter] = useState('');
   const [reasonFilter, setReasonFilter] = useState('');
   const [search, setSearch] = useState('');
+  const [appliedSearch, setAppliedSearch] = useState('');
   const [page, setPage] = useState(1);
   const [showForm, setShowForm] = useState(false);
   const [editingRecord, setEditingRecord] = useState(null);
@@ -52,7 +53,7 @@ export default function Disqualifications() {
 
   useEffect(() => {
     fetchRecords();
-  }, [page]);
+  }, [page, statusFilter, typeFilter, reasonFilter, appliedSearch]);
 
   useEffect(() => {
     listEmployees({ limit: 200 }).then(r => setEmployeeOptions(r.items ?? [])).catch(() => {});
@@ -67,7 +68,7 @@ export default function Disqualifications() {
         status: statusFilter || undefined,
         type: typeFilter || undefined,
         reason: reasonFilter || undefined,
-        search: search || undefined,
+        search: appliedSearch || undefined,
       };
       const response = await disqualificationApi.list(params);
       setRecords(response.data.records || []);
@@ -79,8 +80,8 @@ export default function Disqualifications() {
   };
 
   const handleFilterChange = () => {
+    setAppliedSearch(search.trim());
     setPage(1);
-    fetchRecords();
   };
 
   const handleExport = async () => {
@@ -88,18 +89,28 @@ export default function Disqualifications() {
       const params = {
         type: typeFilter || undefined,
         reason: reasonFilter || undefined,
-        isBarred: statusFilter ? statusFilter === 'active' : undefined,
+        isBarred: statusFilter ? (statusFilter === 'active' ? 'true' : 'false') : undefined,
       };
       const response = await disqualificationApi.getReport(params);
-      const csv = response.data.records.map(r =>
-        `${r.employee.employeeNumber},${r.employee.firstName} ${r.employee.lastName},${r.type},${r.reason},${r.date},${r.isBarred ? 'Active' : 'Expired'}`
-      ).join('\n');
-      const blob = new Blob([csv], { type: 'text/csv' });
+      const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+      const header = ['Employee Number', 'Name', 'Type', 'Reason', 'Date', 'Valid Until', 'Status'];
+      const rows = response.data.records.map(r => [
+        r.employee?.employeeNumber || '',
+        `${r.employee?.firstName || ''} ${r.employee?.lastName || ''}`,
+        r.type || '',
+        r.reason || '',
+        r.date || '',
+        r.validity || '',
+        r.isBarred ? 'Active' : 'Expired',
+      ]);
+      const csv = [header, ...rows].map(row => row.map(esc).join(',')).join('\r\n');
+      const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'dibar-report.csv';
+      a.download = `dibar-report-${new Date().toISOString().slice(0, 10)}.csv`;
       a.click();
+      URL.revokeObjectURL(url);
     } catch (err) {
       toast('Failed to export report', 'error');
     }
@@ -193,7 +204,7 @@ export default function Disqualifications() {
           <select
             className="select w-auto"
             value={statusFilter}
-            onChange={e => { setStatusFilter(e.target.value); handleFilterChange(); }}
+            onChange={e => { setPage(1); setStatusFilter(e.target.value); }}
           >
             <option value="">All Status</option>
             <option value="active">Active Disqualifications</option>
@@ -203,7 +214,7 @@ export default function Disqualifications() {
           <select
             className="select w-auto"
             value={typeFilter}
-            onChange={e => { setTypeFilter(e.target.value); handleFilterChange(); }}
+            onChange={e => { setPage(1); setTypeFilter(e.target.value); }}
           >
             <option value="">All Types</option>
             {DISQUALIFICATION_TYPES.map(t => (
@@ -214,7 +225,7 @@ export default function Disqualifications() {
           <select
             className="select w-auto"
             value={reasonFilter}
-            onChange={e => { setReasonFilter(e.target.value); handleFilterChange(); }}
+            onChange={e => { setPage(1); setReasonFilter(e.target.value); }}
           >
             <option value="">All Reasons</option>
             {DISQUALIFICATION_REASONS.map(r => (

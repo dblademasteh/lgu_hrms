@@ -10,6 +10,6 @@ export const updateBonus = (req, id, data) => {
   return prisma.bonus.findFirst({ where: scope }).then(existing => {
     if (!existing) { const e = new Error('Bonus not found'); e.status = 404; throw e; }
     const stamped = stampTenant(req, data);
-    return prisma.bonus.update({ where: { id }, data: stamped });
+    return prisma.bonus.update({ where: scope, data: stamped });
   });
 };

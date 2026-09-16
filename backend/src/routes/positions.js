@@ -1,11 +1,17 @@
 import { Router } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { withTenant } from '../middleware/tenant.js';
+import { validate } from '../middleware/validate.js';
+import { z } from 'zod';
 
 const router = Router();
 
-// Lightweight read-only list for form selects (positions are managed via plantilla).
-router.get('/', async (req, res, next) => {
+router.get('/', validate({
+  query: z.object({
+    page: z.coerce.number().int().min(1).default(1),
+    limit: z.coerce.number().int().min(1).max(200).default(50),
+  })
+}), async (req, res, next) => {
   try {
     const positions = await prisma.position.findMany({
       where: withTenant(req),

@@ -123,7 +123,7 @@ export async function upsertUserFromOidc({ tenantId, profile }) {
       // Unusable random hash: account is SSO-only unless a password is set later.
       passwordHash: `sso:${sub}:${Date.now()}`,
       passwordChangedAt: new Date(),
-      role: mappedRole || 'DEPARTMENT_HEAD',
+      role: mappedRole || 'EMPLOYEE',
       email,
       displayName: fullName,
       externalId: sub,

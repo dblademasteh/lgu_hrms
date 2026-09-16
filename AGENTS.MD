@@ -25,6 +25,7 @@
 - Create a mock data, not mock workflow, rules etc, create a pool of generated data for testing and seed to database.
 - Use sentry to check errors.
 - Deep dive to page means hardening, check CSC and prime hr for workflows, suggest best practice on the subject matter.
+- After task, check errors for both frontend and backend, then fix it.
 
 ## Architecture
 - Frontend: React 19 + Vite 5 plain JS, Tailwind 4 design tokens in `frontend/src/index.css`, no hardcoded colors

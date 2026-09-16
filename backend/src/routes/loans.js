@@ -1,13 +1,19 @@
 import { Router } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { validate } from '../middleware/validate.js';
+import { requirePermission } from '../middleware/permission.js';
 import { withTenant, stampTenant } from '../middleware/tenant.js';
-import { createLoanSchema, loanIdSchema } from '../shared/contracts/loans.js';
+import {
+  listLoansSchema,
+  loanIdSchema,
+  createLoanSchema,
+} from '../shared/contracts/loans.js';
 
-// NOTE: requireAuth is mounted globally in routes/index.js.
 const router = Router();
 
-router.get('/', async (req,res,next)=>{
+router.use(requirePermission('loansCRUD'));
+
+router.get('/', validate(listLoansSchema), async (req,res,next)=>{
   try{
     const page = Math.max(Number(req.query.page) || 1, 1);
     const limit = Math.min(Number(req.query.limit) || 50, 200);
@@ -70,7 +76,7 @@ router.delete('/:id', validate(loanIdSchema), async (req,res,next)=>{
     if (existing.status !== 'PENDING') {
       return res.status(409).json({ error: { code: 'CONFLICT', message: 'Only PENDING loans can be deleted' } });
     }
-    await prisma.loan.delete({ where: { id: req.params.id } });
+    await prisma.loan.delete({ where: withTenant(req, { id: req.params.id }) });
     res.status(204).end();
   }catch(e){ next(e); }
 });

@@ -1,5 +1,8 @@
 # PRIME-HRM Gap Integration
 
+> **⚠️ SUPERSEDED (Sep 2026).** This document predates the RSP, Performance, and L&D modules. Its claims below (e.g. "no applicant/vacancy model", "no L&D module", "no PerformanceReview") are **out of date** — all those models/routes/pages now exist.
+> **Authoritative current mapping:** `src/docs/PRIME_HRM_EVIDENCE.md` (Evidence Register: ER → artifact → producing feature/endpoint/schema → status → how to generate, plus maturity read and gap→roadmap). Kept for historical benchmark context only.
+
 **Benchmark:** CSC Program to Institutionalize Meritocracy and Excellence in Human Resource Management (PRIME-HRM). Four core HR systems and maturity levels Transactional → Process-Defined → Integrated → Strategic.
 
 ## PRIME-HRM Core Systems

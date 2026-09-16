@@ -22,7 +22,6 @@ import Appointments from './pages/Appointments.jsx';
 import Settings from './pages/Settings.jsx';
 import Performance from './pages/Performance.jsx';
 import Plantilla from './pages/Plantilla.jsx';
-import Vacancy from './pages/Vacancy.jsx';
 import Designation from './pages/Designation.jsx';
 import Learning from './pages/Learning.jsx';
 import Recruitment from './pages/Recruitment.jsx';
@@ -94,14 +93,15 @@ function createAppRouter() {
         { path: '/biometric-devices', element: <Protected roles={['ADMIN', 'SUPER_ADMIN']}><Devices /></Protected> },
         { path: '/appointments', element: <Protected roles={['ADMIN', 'HR_MANAGER', 'SUPER_ADMIN']} capability="appointmentsCRUD"><Appointments /></Protected> },
         { path: '/performance', element: <Protected roles={['ADMIN', 'HR_MANAGER', 'DEPARTMENT_HEAD', 'SUPER_ADMIN']}><Performance /></Protected> },
-        { path: '/plantilla', element: <Protected roles={['ADMIN', 'HR_MANAGER', 'SUPER_ADMIN']}><Plantilla /></Protected> },
-        { path: '/vacancy', element: <Protected roles={['ADMIN', 'HR_MANAGER', 'SUPER_ADMIN']}><Vacancy /></Protected> },
-        { path: '/designation', element: <Protected roles={['ADMIN', 'HR_MANAGER', 'SUPER_ADMIN']}><Designation /></Protected> },
-        { path: '/learning', element: <Protected><Learning /></Protected> },
-        { path: '/recruitment', element: <Protected roles={['ADMIN', 'HR_MANAGER', 'SUPER_ADMIN']}><Recruitment /></Protected> },
+        { path: '/plantilla', element: <Protected roles={['ADMIN', 'HR_MANAGER', 'SUPER_ADMIN']} capability="employeeRecordsCRUD"><Plantilla /></Protected> },
+        { path: '/vacancy', element: <Protected roles={['ADMIN', 'HR_MANAGER', 'SUPER_ADMIN']} capability="recruitmentCRUD"><Navigate to="/recruitment?tab=vacancies" replace /></Protected> },
+        { path: '/designation', element: <Protected roles={['ADMIN', 'HR_MANAGER', 'SUPER_ADMIN']} capability="appointmentsCRUD"><Designation /></Protected> },
+        { path: '/learning', element: <Protected roles={['ADMIN', 'HR_MANAGER', 'SUPER_ADMIN']} capability="trainingCRUD"><Learning /></Protected> },
+        { path: '/recruitment', element: <Protected roles={['ADMIN', 'HR_MANAGER', 'SUPER_ADMIN']} capability="recruitmentCRUD"><Recruitment /></Protected> },
+        { path: '/interviews', element: <Protected roles={['ADMIN', 'HR_MANAGER', 'SUPER_ADMIN']} capability="interviewCRUD"><Navigate to="/recruitment?tab=interviews" replace /></Protected> },
         { path: '/ess', element: <Protected roles={['EMPLOYEE', 'ADMIN', 'HR_MANAGER', 'PAYROLL_OFFICER', 'DEPARTMENT_HEAD']}><ESS /></Protected> },
         { path: '/ipcr', element: <Protected roles={['ADMIN', 'HR_MANAGER', 'DEPARTMENT_HEAD', 'SUPER_ADMIN']}><IPCR /></Protected> },
-        { path: '/disqualifications', element: <Protected roles={['ADMIN', 'HR_MANAGER', 'SUPER_ADMIN']}><Disqualifications /></Protected> },
+        { path: '/disqualifications', element: <Protected roles={['ADMIN', 'HR_MANAGER', 'SUPER_ADMIN']} capability="disqualificationCRUD"><Disqualifications /></Protected> },
         { path: '/settings', element: <Protected><Settings /></Protected> },
         { path: '/help', element: <Protected><Help /></Protected> },
         { path: '*', element: <NotFound /> },

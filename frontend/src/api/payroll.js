@@ -10,5 +10,6 @@ export const payrollApi = {
   approveRun: (id) => api.patch(`/payroll/runs/${id}/approve`),
   generateRun: (id) => api.post(`/payroll/runs/${id}/generate`),
   postRun: (id) => api.post(`/payroll/runs/${id}/post`),
-  payslipPrintUrl: (itemId) => `/api/v1/payroll/payslips/${itemId}/print`,
+  payslipPrint: (itemId) => api.get(`/payroll/payslips/${itemId}/print`, { responseType: 'text' }),
+  bankExport: (runId) => api.get(`/payroll/runs/${runId}/bank-export`, { responseType: 'text' }),
 };

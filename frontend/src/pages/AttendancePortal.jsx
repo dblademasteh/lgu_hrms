@@ -7,11 +7,29 @@ import { badgeTone } from '../data/mock.js';
 import Modal from '../components/Modal.jsx';
 import ConfirmDialog from '../components/ConfirmDialog.jsx';
 
+function toBase64url(buf) {
+  if (typeof buf === 'string') return buf;
+  const bytes = new Uint8Array(buf);
+  let binary = '';
+  for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+function fromBase64url(str) {
+  const base64 = str.replace(/-/g, '+').replace(/_/g, '/');
+  const padded = base64.padEnd(base64.length + (4 - base64.length % 4) % 4, '=');
+  const binary = atob(padded);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes.buffer;
+}
+
 export default function AttendancePortal() {
   const toast = useToast();
   const [today, setToday] = useState(null);
   const [loading, setLoading] = useState(true);
   const [punching, setPunching] = useState(false);
+  const [biometricPunching, setBiometricPunching] = useState(false);
   const [history, setHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [month, setMonth] = useState(new Date().toISOString().slice(0, 7));
@@ -122,16 +140,104 @@ export default function AttendancePortal() {
     }
   };
 
+  const handleBiometricPunch = async (type) => {
+    if (!credentials || credentials.length === 0) {
+      toast('No biometric credential enrolled', 'error');
+      return;
+    }
+    const credential = credentials[0];
+    setBiometricPunching(true);
+    try {
+      const challengeRes = await biometricApi.getVerifyChallenge(credential.credentialId);
+      const { options, credentialId } = challengeRes;
+
+      if (!window.PublicKeyCredential) {
+        toast('Biometric authentication is not supported in this browser', 'error');
+        return;
+      }
+
+      const authenticationResponse = await window.PublicKeyCredential.request({
+        challenge: fromBase64url(options.challenge),
+        rpId: options.rpID,
+        userVerification: 'required',
+        allowCredentials: options.allowCredentials.map((c) => ({
+          id: fromBase64url(c.id),
+          type: c.type,
+          transports: c.transports,
+        })),
+        timeout: options.timeout || 60000,
+      });
+
+      const assertion = {
+        clientDataJSON: toBase64url(authenticationResponse.response.clientDataJSON),
+        authenticatorData: toBase64url(authenticationResponse.response.authenticatorData),
+        signature: toBase64url(authenticationResponse.response.signature),
+        challenge: options.challenge,
+      };
+
+      const res = await biometricApi.verifyAssertion(credentialId, assertion, type);
+      const data = res.data;
+      toast(data?.message || `${type === 'IN' ? 'Punched in' : 'Punched out'} with biometric`, 'success');
+      setToday(data?.record || null);
+    } catch (e) {
+      const msg = e.response?.data?.error?.message || 'Biometric punch failed';
+      toast(msg, 'error');
+    } finally {
+      setBiometricPunching(false);
+    }
+  };
+
   const handleEnroll = async () => {
     setEnrolling(true);
     try {
-      const credentialId = `cred_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
-      const publicKey = `publicKey_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
-      const res = await biometricApi.enroll(credentialId, publicKey, enrollDeviceName.trim() || undefined);
-      toast('Fingerprint enrolled successfully', 'success');
-      setShowEnrollModal(false);
-      setEnrollDeviceName('');
-      loadCredentials();
+      if (window.PublicKeyCredential) {
+        const optionsRes = await biometricApi.getWebauthnEnrollOptions();
+        const { options } = optionsRes.data;
+
+        const credential = await window.PublicKeyCredential.create({
+          challenge: fromBase64url(options.challenge),
+          rp: options.rp,
+          user: {
+            id: fromBase64url(options.user.id),
+            name: options.user.name,
+            displayName: options.user.displayName,
+          },
+          pubKeyCredParams: options.pubKeyCredParams,
+          authenticatorSelection: options.authenticatorSelection,
+          timeout: options.timeout || 60000,
+          attestation: options.attestation || 'none',
+          excludeCredentials: options.excludeCredentials?.map((c) => ({
+            id: fromBase64url(c.id),
+            type: c.type,
+            transports: c.transports,
+          })) || [],
+        });
+
+        const attestationResponse = {
+          id: credential.id,
+          rawId: toBase64url(credential.rawId),
+          response: {
+            clientDataJSON: toBase64url(credential.response.clientDataJSON),
+            attestationObject: toBase64url(credential.response.attestationObject),
+            transports: credential.response.getTransports ? credential.response.getTransports() : [],
+          },
+          type: credential.type,
+        };
+
+        const res = await biometricApi.webauthnEnrollVerify(attestationResponse);
+        toast('Fingerprint enrolled successfully with biometric', 'success');
+        setShowEnrollModal(false);
+        setEnrollDeviceName('');
+        loadCredentials();
+      } else {
+        const credentialId = `cred_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+        const publicKey = `publicKey_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+        const res = await biometricApi.enroll(credentialId, publicKey, enrollDeviceName.trim() || undefined);
+        toast('Fingerprint enrolled successfully', 'success');
+        setShowEnrollModal(false);
+        setEnrollDeviceName('');
+        loadCredentials();
+      }
     } catch (e) {
       toast(e.response?.data?.error?.message || 'Enrollment failed', 'error');
     } finally {
@@ -315,6 +421,26 @@ export default function AttendancePortal() {
                 </div>
               </div>
               <div className="flex flex-wrap gap-2">
+                {credentials.length > 0 && (
+                  <>
+                    <button
+                      className="btn btn-primary gap-2"
+                      onClick={() => handleBiometricPunch('IN')}
+                      disabled={biometricPunching || loading || !canPunchIn}
+                    >
+                      {biometricPunching ? <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" /> : <Fingerprint size={16} />}
+                      Biometric Punch In
+                    </button>
+                    <button
+                      className="btn btn-outline gap-2"
+                      onClick={() => handleBiometricPunch('OUT')}
+                      disabled={biometricPunching || loading || !isPunchedIn}
+                    >
+                      {biometricPunching ? <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-accent" /> : <Fingerprint size={16} />}
+                      Biometric Punch Out
+                    </button>
+                  </>
+                )}
                 <button
                   className="btn btn-primary gap-2"
                   onClick={() => handlePunch('IN')}
@@ -336,14 +462,26 @@ export default function AttendancePortal() {
           ) : (
             <div className="text-center py-8">
               <p className="text-muted mb-4">No record yet for today</p>
-              <button
-                className="btn btn-primary gap-2"
-                onClick={() => handlePunch('IN')}
-                disabled={punching || loading}
-              >
-                {punching ? <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" /> : <LogIn size={16} />}
-                Punch In
-              </button>
+              <div className="flex flex-wrap justify-center gap-2">
+                {credentials.length > 0 && (
+                  <button
+                    className="btn btn-primary gap-2"
+                    onClick={() => handleBiometricPunch('IN')}
+                    disabled={biometricPunching || loading}
+                  >
+                    {biometricPunching ? <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" /> : <Fingerprint size={16} />}
+                    Biometric Punch In
+                  </button>
+                )}
+                <button
+                  className="btn btn-primary gap-2"
+                  onClick={() => handlePunch('IN')}
+                  disabled={punching || loading}
+                >
+                  {punching ? <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" /> : <LogIn size={16} />}
+                  Punch In
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -437,7 +575,11 @@ export default function AttendancePortal() {
         </>
       }>
         <div className="space-y-4">
-          <p className="text-sm text-muted">Enroll a new fingerprint device for biometric attendance. Follow your device instructions to capture the fingerprint template.</p>
+          <p className="text-sm text-muted">
+            {window.PublicKeyCredential
+              ? 'Enroll your device fingerprint or face biometric for attendance verification. You will be prompted to authenticate with your device sensor.'
+              : 'Enroll a new fingerprint device for biometric attendance. Follow your device instructions to capture the fingerprint template.'}
+          </p>
           <div>
             <label className="block text-sm font-medium text-ink mb-1">Device Name (optional)</label>
             <input className="input" value={enrollDeviceName} onChange={e => setEnrollDeviceName(e.target.value)} placeholder="e.g. Left Thumb Scanner" />

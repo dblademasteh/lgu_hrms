@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { tenantRepository } from '../middleware/tenant.js';
 import { requireRole } from '../middleware/rbac.js';
 import { z } from 'zod';
+import { seedNewTenant } from '../services/tenantService.js';
 
 const createTenantSchema = z.object({
   code: z.string().min(1).max(20),
@@ -31,7 +32,6 @@ router.get('/:id', async (req, res, next) => {
   try {
     const tenant = await tenantRepository.get(req.params.id);
     if (!tenant) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Tenant not found' } });
-    // Include the caller's own source IP so the operator can allowlist themselves.
     res.json({ ...tenant, clientIp: req.ip });
   } catch (e) { next(e); }
 });
@@ -39,7 +39,14 @@ router.get('/:id', async (req, res, next) => {
 router.post('/', async (req, res, next) => {
   try {
     const parsed = createTenantSchema.parse(req.body || {});
-    res.status(201).json(await tenantRepository.create(parsed));
+    const tenant = await tenantRepository.create(parsed);
+    let seeded = null;
+    try {
+      seeded = await seedNewTenant(tenant.id, tenant.code, parsed.lguLevel);
+    } catch (seedErr) {
+      console.error('[tenant] auto-seed failed:', seedErr);
+    }
+    res.status(201).json({ ...tenant, seeded });
   } catch (e) {
     if (e.code === 'P2002') return res.status(409).json({ error: { code: 'CONFLICT', message: 'Tenant code or domain already exists' } });
     next(e);

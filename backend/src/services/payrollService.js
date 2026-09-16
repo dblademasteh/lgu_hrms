@@ -3,6 +3,7 @@ import { computeRun } from './payrollEngine.js';
 import { AppError } from '../lib/errors.js';
 import { prisma } from '../lib/prisma.js';
 import { Prisma } from '@prisma/client';
+import { withTenant } from '../middleware/tenant.js';
 
 const MONEY = value => new Prisma.Decimal(value ?? 0).toNumber();
 
@@ -108,12 +109,15 @@ export const payrollService = {
       throw new AppError('Cannot post an empty run', 409, 'EMPTY_RUN');
     }
     const period = run.period;
+    // Only amortizations belonging to employees in THIS run are settled at
+    // posting; an employee absent from the run must not have loans marked paid.
+    const employeeIds = run.items.map(i => i.employeeId);
     const dueAmortizations = await prisma.loanAmortization.findMany({
-      where: {
-        tenantId: req.tenantId ?? null,
+      where: withTenant(req, {
         paid: false,
         dueDate: { gte: period.startDate, lte: period.endDate },
-      },
+        loan: { employeeId: { in: employeeIds } },
+      }),
       select: { id: true },
     });
     const posting = {
@@ -165,6 +169,40 @@ export const payrollService = {
     const item = await payrollRepository.findPayrollItemForPrint(req, itemId);
     if (!item) throw new AppError('Payslip item not found', 404, 'NOT_FOUND');
     return renderPayslipHtml(item);
+  },
+  async bankExport(req, runId) {
+    const run = await payrollRepository.findRunById(req, runId);
+    if (!run) throw new AppError('Payroll run not found', 404, 'NOT_FOUND');
+    if (run.status === 'DRAFT') {
+      throw new AppError('Bank export is only available for APPROVED or POSTED runs', 409, 'INVALID_STATE');
+    }
+    const tenant = run.tenant;
+    const agencyCode = tenant?.code ? String(tenant.code).slice(0, 8).toUpperCase() : 'LGU';
+    const agencyName = tenant?.name ? String(tenant.name).slice(0, 50) : 'LGU';
+    const fileDate = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const lines = [];
+    let totalAmount = new Prisma.Decimal(0);
+    let totalCount = 0;
+    for (const item of run.items) {
+      const emp = item.employee;
+      const amount = new Prisma.Decimal(item.netPay);
+      totalAmount = totalAmount.add(amount);
+      totalCount += 1;
+      const account = (emp?.bankAccount && String(emp.bankAccount).trim()) || String(emp?.employeeNumber ?? '').slice(0, 20);
+      const name = [emp?.firstName, emp?.middleName, emp?.lastName].filter(Boolean).join(' ').slice(0, 50);
+      const empNo = String(emp?.employeeNumber ?? '').slice(0, 15);
+      const amountStr = amount.toDecimalPlaces(2).toFixed(2).replace(/\./g, '');
+      const paddedAmount = amountStr.padStart(15, '0');
+      lines.push(
+        ['D', name.padEnd(50), account.padEnd(20), paddedAmount, empNo.padEnd(15)].join('').padEnd(200)
+      );
+    }
+    const totalStr = totalAmount.toDecimalPlaces(2).toFixed(2).replace(/\./g, '');
+    const paddedTotal = totalStr.padStart(15, '0');
+    const header = ['H', agencyCode.padEnd(8), agencyName.padEnd(50), fileDate, paddedTotal, String(totalCount).padStart(6, '0')].join('').padEnd(200);
+    const trailer = ['T', String(totalCount).padStart(6, '0'), paddedTotal].join('').padEnd(200);
+    const content = [header, ...lines, trailer].join('\n');
+    return { content, filename: `LDDAP-${agencyCode}-${fileDate}.txt` };
   },
 };
 

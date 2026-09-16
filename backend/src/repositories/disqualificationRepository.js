@@ -57,7 +57,7 @@ export const disqualificationRepository = {
       throw e;
     }
     return prisma.disqualification.update({
-      where: { id },
+      where: withTenant(req, { id }),
       data,
       include: { employee: true },
     });
@@ -71,7 +71,7 @@ export const disqualificationRepository = {
       e.status = 404;
       throw e;
     }
-    return prisma.disqualification.delete({ where: { id } });
+    return prisma.disqualification.delete({ where: withTenant(req, { id }) });
   },
 
   async findReport(req, { dateFrom, dateTo, type, reason, isBarred } = {}) {
@@ -107,6 +107,7 @@ export const disqualificationRepository = {
   async findActive(req) {
     const now = new Date();
     const scope = withTenant(req, {});
+    scope.isBarred = true;
     scope.OR = [
       { validity: null },
       { validity: { gt: now } },

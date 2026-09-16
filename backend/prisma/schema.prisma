@@ -76,6 +76,7 @@ model Tenant {
   externalSystems ExternalSystem[]
   biometricDevices BiometricDevice[]
   overtimeRequests OvertimeRequest[]
+  allowanceRules AllowanceRule[]
 }
 
 model User {
@@ -174,6 +175,8 @@ model Employee {
   philhealthNumber String?
   pagibigNumber    String?
   tinNumber        String?
+  bankAccount      String?
+  bankName         String?
   status           EmploymentStatus @default(ACTIVE)
   monthlySalary    Decimal   @default(0) @db.Decimal(12,2)
   departmentId     String
@@ -205,6 +208,7 @@ model Employee {
   tenant      Tenant?   @relation(fields: [tenantId], references: [id])
   biometricCredentials BiometricCredential[]
   overtimeRequests OvertimeRequest[]
+  biometricDeviceUsers BiometricDeviceUser[]
 
   @@index([tenantId])
   @@index([tenantId, status])
@@ -514,6 +518,7 @@ model BiometricDevice {
   createdAt      DateTime  @default(now()) @db.Timestamptz(6)
   updatedAt      DateTime  @updatedAt @db.Timestamptz(6)
   logs           BiometricDeviceLog[]
+  userMappings   BiometricDeviceUser[]
   tenant         Tenant?   @relation(fields: [tenantId], references: [id])
 
   @@index([tenantId, active])
@@ -537,6 +542,22 @@ model BiometricDeviceLog {
 
   @@unique([deviceId, deviceLogId])
   @@index([tenantId, deviceId, punchedAt])
+}
+
+model BiometricDeviceUser {
+  id           String   @id @default(uuid())
+  tenantId     String?
+  deviceId     String
+  deviceUserId String   @db.VarChar(120)
+  employeeId   String
+  createdAt    DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt    DateTime @updatedAt @db.Timestamptz(6)
+  device       BiometricDevice @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  employee     Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([deviceId, deviceUserId])
+  @@index([tenantId, deviceId])
+  @@index([tenantId, employeeId])
 }
 
 model Appointment {
@@ -840,6 +861,20 @@ model TaxBracket {
   tenant      Tenant?   @relation(fields: [tenantId], references: [id])
 
   @@index([tenantId, minIncome])
+}
+
+model AllowanceRule {
+  id            String   @id @default(uuid())
+  tenantId      String?
+  type          String
+  amount        Decimal  @db.Decimal(12,2)
+  effectiveFrom DateTime @db.Date
+  effectiveTo   DateTime? @db.Date
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now()) @db.Timestamptz(6)
+  tenant        Tenant?  @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, effectiveFrom])
 }
 
 model LeaveRuleConfig {

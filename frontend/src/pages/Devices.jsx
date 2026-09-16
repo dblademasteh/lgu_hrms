@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { Fingerprint, Plus, RefreshCw, Save, X, Trash2, Server, Info, AlertTriangle, Activity } from 'lucide-react';
+import { Fingerprint, Plus, RefreshCw, Save, X, Trash2, Server, Info, AlertTriangle, Activity, Users } from 'lucide-react';
 import Layout from '../components/Layout.jsx';
 import Modal from '../components/Modal.jsx';
 import ConfirmDialog from '../components/ConfirmDialog.jsx';
 import { useToast } from '../components/Toast.jsx';
 import { biometricDevicesApi } from '../api/biometricDevices.js';
+import { biometricDeviceUsersApi } from '../api/biometricDevices.js';
 
 const EMPTY_FORM = {
   name: '',
@@ -15,6 +16,8 @@ const EMPTY_FORM = {
   active: true,
   pollIntervalMs: 30000,
 };
+
+const EMPTY_MAPPING = { deviceUserId: '', employeeId: '' };
 
 const fmtTime = (iso) =>
   iso ? new Date(iso).toLocaleString('en-PH', { hour12: true }) : null;
@@ -41,6 +44,15 @@ export default function Devices() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
+
+  const [mappingsOpen, setMappingsOpen] = useState(false);
+  const [mappingsDevice, setMappingsDevice] = useState(null);
+  const [mappings, setMappings] = useState([]);
+  const [mappingsLoading, setMappingsLoading] = useState(false);
+  const [mappingForm, setMappingForm] = useState(EMPTY_MAPPING);
+  const [mappingSaving, setMappingSaving] = useState(false);
+  const [editingMapping, setEditingMapping] = useState(null);
+  const [deleteMappingTarget, setDeleteMappingTarget] = useState(null);
 
   const load = async () => {
     setLoading(true);
@@ -102,6 +114,69 @@ export default function Devices() {
       toast(err?.response?.data?.error?.message || 'Failed to save device', 'error');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const openMappings = async (d) => {
+    setMappingsDevice(d);
+    setMappingsOpen(true);
+    setMappingsLoading(true);
+    try {
+      const data = await biometricDeviceUsersApi.list(d.id);
+      setMappings(Array.isArray(data) ? data : []);
+    } catch (e) {
+      toast('Failed to load mappings', 'error');
+      setMappings([]);
+    } finally {
+      setMappingsLoading(false);
+    }
+  };
+
+  const submitMapping = async (e) => {
+    e.preventDefault();
+    if (!mappingForm.deviceUserId.trim() || !mappingForm.employeeId.trim()) {
+      toast('Device user ID and employee are required', 'error');
+      return;
+    }
+    setMappingSaving(true);
+    try {
+      const payload = {
+        deviceUserId: mappingForm.deviceUserId.trim(),
+        employeeId: mappingForm.employeeId.trim(),
+      };
+      let r;
+      if (editingMapping) {
+        r = await biometricDeviceUsersApi.update(mappingsDevice.id, editingMapping.deviceUserId, payload);
+        setMappings((l) => l.map((m) => (m.deviceUserId === editingMapping.deviceUserId ? r : m)));
+        toast('Mapping updated', 'success');
+      } else {
+        r = await biometricDeviceUsersApi.create(mappingsDevice.id, payload);
+        setMappings((l) => [...l, r]);
+        toast('Mapping added', 'success');
+      }
+      setMappingForm(EMPTY_MAPPING);
+      setEditingMapping(null);
+    } catch (err) {
+      toast(err?.response?.data?.error?.message || 'Failed to save mapping', 'error');
+    } finally {
+      setMappingSaving(false);
+    }
+  };
+
+  const startEditMapping = (m) => {
+    setEditingMapping(m);
+    setMappingForm({ deviceUserId: m.deviceUserId, employeeId: m.employeeId });
+  };
+
+  const confirmDeleteMapping = async () => {
+    if (!deleteMappingTarget) return;
+    try {
+      await biometricDeviceUsersApi.delete(mappingsDevice.id, deleteMappingTarget.deviceUserId);
+      setMappings((l) => l.filter((m) => m.deviceUserId !== deleteMappingTarget.deviceUserId));
+      toast('Mapping removed', 'success');
+      setDeleteMappingTarget(null);
+    } catch (err) {
+      toast(err?.response?.data?.error?.message || 'Failed to remove mapping', 'error');
     }
   };
 
@@ -288,6 +363,15 @@ export default function Devices() {
                           <RefreshCw size={14} className={syncingId === d.id ? 'animate-spin' : ''} />
                           {syncingId === d.id ? 'Syncing' : 'Sync'}
                         </button>
+                        <button
+                          type="button"
+                          className="btn btn-ghost px-2 text-xs"
+                          onClick={() => openMappings(d)}
+                          title="Manage device user ID mappings"
+                        >
+                          <Users size={14} />
+                          Mappings
+                        </button>
                         <button type="button" className="btn btn-ghost px-2 text-xs" onClick={() => openEdit(d)}>
                           Edit
                         </button>
@@ -371,12 +455,117 @@ export default function Devices() {
         </form>
       </Modal>
 
+      <Modal
+        open={mappingsOpen}
+        onClose={() => { setMappingsOpen(false); setMappingsDevice(null); setMappings([]); setMappingForm(EMPTY_MAPPING); setEditingMapping(null); }}
+        title={mappingsDevice ? `Device User Mappings · ${mappingsDevice.name}` : 'Device User Mappings'}
+        footer={
+          <>
+            <button type="button" className="btn btn-ghost gap-2" onClick={() => { setMappingsOpen(false); setMappingForm(EMPTY_MAPPING); setEditingMapping(null); }}>
+              <X size={16} />
+              Close
+            </button>
+            <button type="submit" form="mapping-form" className="btn btn-primary gap-2" disabled={mappingSaving}>
+              <Save size={16} />
+              {mappingSaving ? 'Saving…' : editingMapping ? 'Update Mapping' : 'Add Mapping'}
+            </button>
+          </>
+        }
+      >
+        <form id="mapping-form" onSubmit={submitMapping} className="space-y-4">
+          <p className="text-sm text-muted">
+            Map the ZK terminal&apos;s internal user IDs to HRMS employees. When the device reports a punch for user <span className="font-mono text-ink">{mappingForm.deviceUserId || '&lt;user ID&gt;'}</span>, it will be attributed to the selected employee.
+          </p>
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div>
+              <label htmlFor="m-device-user-id" className="block text-sm font-medium text-ink mb-1">Device User ID</label>
+              <input
+                id="m-device-user-id"
+                className="input"
+                placeholder="e.g. 1 or EMP-DEFAULT-0001"
+                value={mappingForm.deviceUserId}
+                onChange={(e) => setMappingForm((f) => ({ ...f, deviceUserId: e.target.value }))}
+                disabled={!!editingMapping}
+              />
+              <p className="text-xs text-muted mt-1">The user ID configured on the ZK terminal for this employee.</p>
+            </div>
+            <div>
+              <label htmlFor="m-employee-id" className="block text-sm font-medium text-ink mb-1">Employee</label>
+              <input
+                id="m-employee-id"
+                className="input"
+                placeholder="Employee ID or employee number"
+                value={mappingForm.employeeId}
+                onChange={(e) => setMappingForm((f) => ({ ...f, employeeId: e.target.value }))}
+              />
+              <p className="text-xs text-muted mt-1">Paste the HRMS Employee ID or employee number.</p>
+            </div>
+          </div>
+        </form>
+
+        <div className="mt-6">
+          <h3 className="font-display font-semibold text-ink mb-3">Current Mappings</h3>
+          {mappingsLoading ? (
+            <p className="text-sm text-muted text-center py-4">Loading mappings…</p>
+          ) : mappings.length === 0 ? (
+            <p className="text-sm text-muted text-center py-4">No mappings yet. Add one above.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Device User ID</th>
+                    <th>Employee</th>
+                    <th>Employee Number</th>
+                    <th className="text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {mappings.map((m) => (
+                    <tr key={m.deviceUserId}>
+                      <td className="font-mono text-sm">{m.deviceUserId}</td>
+                      <td className="text-sm">{m.employee ? `${m.employee.firstName} ${m.employee.lastName}` : '—'}</td>
+                      <td className="font-mono text-xs text-muted">{m.employee?.employeeNumber || '—'}</td>
+                      <td className="text-right">
+                        <span className="inline-flex gap-1">
+                          <button type="button" className="btn btn-ghost px-2 text-xs" onClick={() => startEditMapping(m)}>
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-ghost px-2 text-xs text-error"
+                            onClick={() => setDeleteMappingTarget(m)}
+                            title="Remove mapping"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </Modal>
+
       <ConfirmDialog
         open={!!deleteTarget}
         onClose={() => setDeleteTarget(null)}
         onConfirm={remove}
         title="Remove device?"
         message={`${deleteTarget?.name} (${deleteTarget?.host}:${deleteTarget?.port}) and its sync logs will be removed. Existing attendance rows are kept.`}
+        confirmLabel="Remove"
+        danger
+      />
+
+      <ConfirmDialog
+        open={!!deleteMappingTarget}
+        onClose={() => setDeleteMappingTarget(null)}
+        onConfirm={confirmDeleteMapping}
+        title="Remove mapping?"
+        message={`Remove mapping for device user ID "${deleteMappingTarget?.deviceUserId}"?`}
         confirmLabel="Remove"
         danger
       />

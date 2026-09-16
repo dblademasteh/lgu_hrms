@@ -20,11 +20,11 @@ export const appointmentsRepository = {
   async update(req, id, data) {
     const existing = await prisma.appointment.findFirst({ where: { ...withTenant(req), id, deletedAt: null } });
     if (!existing) { const e = new Error('Appointment not found'); e.status = 404; throw e; }
-    return prisma.appointment.update({ where: { id }, data });
+    return prisma.appointment.update({ where: withTenant(req, { id }), data: stampTenant(req, data) });
   },
   async softRemove(req, id) {
     const existing = await prisma.appointment.findFirst({ where: { ...withTenant(req), id, deletedAt: null } });
     if (!existing) { const e = new Error('Appointment not found'); e.status = 404; throw e; }
-    return prisma.appointment.update({ where: { id }, data: { deletedAt: new Date() } });
+    return prisma.appointment.update({ where: withTenant(req, { id }), data: { deletedAt: new Date() } });
   },
 };

@@ -4,6 +4,7 @@ import { withTenant, stampTenant } from '../middleware/tenant.js';
 import { requireRole } from '../middleware/rbac.js';
 import { validate } from '../middleware/validate.js';
 import { syncDeviceById } from '../services/deviceSyncService.js';
+import { biometricDeviceUserController } from '../controllers/biometricDeviceUserController.js';
 import {
   createBiometricDeviceSchema,
   updateBiometricDeviceSchema,
@@ -11,6 +12,7 @@ import {
   syncBiometricDeviceSchema,
   deleteBiometricDeviceSchema,
 } from '../shared/contracts/biometricDevices.js';
+import { z } from 'zod';
 
 const router = Router();
 
@@ -70,7 +72,7 @@ router.patch('/:id', validate(updateBiometricDeviceSchema), async (req, res, nex
     }
     const { name, model, protocol, host, port, serial, active, pollIntervalMs } = req.body;
     const device = await prisma.biometricDevice.update({
-      where: { id: req.params.id },
+      where: withTenant(req, { id: req.params.id }),
       data: {
         ...(name !== undefined && { name: name.trim() }),
         ...(model !== undefined && { model: model ?? null }),
@@ -108,11 +110,20 @@ router.delete('/:id', validate(deleteBiometricDeviceSchema), async (req, res, ne
     if (!scoped) {
       return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Device not found' } });
     }
-    await prisma.biometricDevice.delete({ where: { id: req.params.id } });
+    await prisma.biometricDevice.delete({ where: withTenant(req, { id: req.params.id }) });
     res.status(204).end();
   } catch (e) {
     next(e);
   }
 });
+
+// Device user ID ↔ Employee mappings
+const deviceUserIdSchema = z.object({ deviceUserId: z.string().min(1).max(120).trim() });
+const mappingBodySchema = z.object({ deviceUserId: z.string().min(1).max(120).trim(), employeeId: z.string().min(1) });
+
+router.get('/:id/users', validate(getBiometricDeviceSchema), biometricDeviceUserController.listByDevice);
+router.post('/:id/users', validate(getBiometricDeviceSchema), validate({ body: mappingBodySchema }), biometricDeviceUserController.create);
+router.patch('/:id/users/:deviceUserId', validate(getBiometricDeviceSchema), validate({ body: mappingBodySchema.partial() }), biometricDeviceUserController.update);
+router.delete('/:id/users/:deviceUserId', validate(getBiometricDeviceSchema), biometricDeviceUserController.delete);
 
 export default router;

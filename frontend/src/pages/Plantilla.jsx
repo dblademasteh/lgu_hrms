@@ -74,6 +74,7 @@ export default function Plantilla() {
           <option value="VACANT">Vacant</option>
           <option value="FILLED">Filled</option>
           <option value="FROZEN">Frozen</option>
+          <option value="ARCHIVED">Archived</option>
         </select>
       </div>
 
@@ -128,8 +129,18 @@ export default function Plantilla() {
       </div>
 
       {/* New Item Modal */}
-      <Modal open={open} onClose={()=>setOpen(false)} title="New Plantilla Item">
-        <form onSubmit={submit} className="space-y-4">
+      <Modal
+        open={open}
+        onClose={()=>setOpen(false)}
+        title="New Plantilla Item"
+        footer={
+          <>
+            <button type="button" className="btn btn-ghost" onClick={()=>setOpen(false)}>Cancel</button>
+            <button type="submit" form="pi-form" className="btn btn-primary">Create Item</button>
+          </>
+        }
+      >
+        <form id="pi-form" onSubmit={submit} className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label htmlFor="pi-item" className="block text-sm font-medium text-ink mb-1">Item Number *</label>

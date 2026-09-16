@@ -1,5 +1,6 @@
 import { prisma } from '../lib/prisma.js';
 import { AppError } from '../lib/errors.js';
+import { withTenant, stampTenant } from '../middleware/tenant.js';
 
 /**
  * Generic CRUD for CSC 201 employee sub-records.
@@ -89,12 +90,15 @@ function sectionOrThrow(name) {
 }
 
 /**
- * Translate Prisma request errors into client-facing 400s (bad FK, null
- * violation, unknown field) instead of leaking a 500 + raw query dump.
+ * Translate Prisma request errors into client-facing 400s/409s (bad FK,
+ * duplicate, null violation, unknown field) instead of leaking a 500.
  */
 function prismaError(e, section) {
   if (e?.code && String(e.code).startsWith('P2')) {
     const lastLine = String(e.message || '').split('\n').filter(Boolean).pop() || 'Invalid data';
+    if (e.code === 'P2002') throw new AppError(`Section "${section}": a record with that unique value already exists`, 409, 'DUPLICATE');
+    if (e.code === 'P2003') throw new AppError(`Section "${section}": referenced record does not exist`, 400, 'VALIDATION_ERROR');
+    if (e.code === 'P2025') throw new AppError(`Section "${section}": record not found`, 404, 'NOT_FOUND');
     throw new AppError(`Section "${section}": ${lastLine}`, 400, 'VALIDATION_ERROR');
   }
   throw e;
@@ -104,9 +108,12 @@ function assertWritable(cfg, name) {
   if (cfg.readOnly) throw new AppError(`Section "${name}" is read-only`, 405, 'READ_ONLY');
 }
 
-/** Ensure employee exists and is not soft-deleted. */
-export async function assertEmployee(employeeId) {
-  const emp = await prisma.employee.findFirst({ where: { id: employeeId, deletedAt: null }, select: { id: true } });
+/** Ensure the employee exists, is not soft-deleted, and belongs to the request tenant. */
+export async function assertEmployee(req, employeeId) {
+  const emp = await prisma.employee.findFirst({
+    where: withTenant(req, { id: employeeId, deletedAt: null }),
+    select: { id: true },
+  });
   if (!emp) throw new AppError('Employee not found', 404, 'NOT_FOUND');
 }
 
@@ -123,21 +130,21 @@ function coerceDates(cfg, data) {
 }
 
 export const employeeSectionService = {
-  async list(section, employeeId) {
+  async list(req, section, employeeId) {
     const cfg = sectionOrThrow(section);
-    await assertEmployee(employeeId);
+    await assertEmployee(req, employeeId);
     return prisma[cfg.model].findMany({
-      where: { employeeId },
+      where: withTenant(req, { employeeId }),
       orderBy: cfg.orderBy,
       ...(cfg.include ? { include: cfg.include } : {}),
       ...(cfg.take ? { take: cfg.take } : {}),
     });
   },
 
-  async create(section, employeeId, data) {
+  async create(req, section, employeeId, data) {
     const cfg = sectionOrThrow(section);
     assertWritable(cfg, section);
-    await assertEmployee(employeeId);
+    await assertEmployee(req, employeeId);
     for (const f of cfg.required) {
       if (data[f] === undefined || data[f] === null || data[f] === '') {
         throw new AppError(`${f} is required`, 400, 'VALIDATION_ERROR');
@@ -151,18 +158,18 @@ export const employeeSectionService = {
     }
     try {
       return await prisma[cfg.model].create({
-        data: { ...payload, employeeId },
+        data: stampTenant(req, { ...payload, employeeId }),
       });
     } catch (e) {
       prismaError(e, section);
     }
   },
 
-  async update(section, employeeId, recordId, data) {
+  async update(req, section, employeeId, recordId, data) {
     const cfg = sectionOrThrow(section);
     assertWritable(cfg, section);
-    await assertEmployee(employeeId);
-    const existing = await prisma[cfg.model].findFirst({ where: { id: recordId, employeeId } });
+    await assertEmployee(req, employeeId);
+    const existing = await prisma[cfg.model].findFirst({ where: withTenant(req, { id: recordId, employeeId }) });
     if (!existing) throw new AppError('Record not found', 404, 'NOT_FOUND');
     try {
       return await prisma[cfg.model].update({
@@ -174,11 +181,11 @@ export const employeeSectionService = {
     }
   },
 
-  async remove(section, employeeId, recordId) {
+  async remove(req, section, employeeId, recordId) {
     const cfg = sectionOrThrow(section);
     assertWritable(cfg, section);
-    await assertEmployee(employeeId);
-    const existing = await prisma[cfg.model].findFirst({ where: { id: recordId, employeeId } });
+    await assertEmployee(req, employeeId);
+    const existing = await prisma[cfg.model].findFirst({ where: withTenant(req, { id: recordId, employeeId }) });
     if (!existing) throw new AppError('Record not found', 404, 'NOT_FOUND');
     try {
       await prisma[cfg.model].delete({ where: { id: recordId } });

@@ -1,10 +1,17 @@
 import { prisma } from '../lib/prisma.js';
 import { withTenant, stampTenant } from '../middleware/tenant.js';
 
-export async function findPlantillaItems(req, { page=1, limit=50, departmentId, status } = {}) {
+export async function findPlantillaItems(req, { page=1, limit=50, departmentId, status, search } = {}) {
   let where = withTenant(req, {});
   if (departmentId) where.departmentId = departmentId;
   if (status) where.status = status;
+  if (search) {
+    where.OR = [
+      { itemNumber: { contains: search, mode: 'insensitive' } },
+      { position: { title: { contains: search, mode: 'insensitive' } } },
+      { department: { name: { contains: search, mode: 'insensitive' } } },
+    ];
+  }
   const [items, total] = await Promise.all([
     prisma.plantillaItem.findMany({
       where,

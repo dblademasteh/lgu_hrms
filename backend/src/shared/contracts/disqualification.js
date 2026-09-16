@@ -50,6 +50,17 @@ export const disqualificationIdSchema = {
   params: idParam,
 };
 
+export const listDisqualificationsSchema = {
+  query: z.object({
+    page: z.coerce.number().int().min(1).default(1),
+    limit: z.coerce.number().int().min(1).max(200).default(50),
+    status: z.enum(['active', 'expired', 'all']).optional(),
+    type: disqualificationType.optional(),
+    reason: disqualificationReason.optional(),
+    search: z.string().max(120).optional(),
+  }),
+};
+
 export const disqualificationReportSchema = {
   query: z.object({
     dateFrom: dateField.optional(),

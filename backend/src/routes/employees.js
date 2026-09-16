@@ -3,7 +3,7 @@ import { listEmployeesHandler, getEmployeeHandler, createEmployeeHandler, update
 import { requireAuth } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
 import { requirePermission } from '../middleware/permission.js';
-import { createEmployeeSchema, updateEmployeeSchema, employeeIdSchema, bulkEmployeesSchema } from '../shared/contracts/employee.js';
+import { createEmployeeSchema, updateEmployeeSchema, employeeIdSchema, bulkEmployeesSchema, listEmployeesSchema } from '../shared/contracts/employee.js';
 
 const router = Router();
 
@@ -15,7 +15,7 @@ router.post('/bulk', validate(bulkEmployeesSchema), requirePermission('employeeR
 // Employee records require the employeeRecordsCRUD capability (matrix-backed).
 router.use(requirePermission('employeeRecordsCRUD'));
 
-router.get('/', listEmployeesHandler);
+router.get('/', validate(listEmployeesSchema), listEmployeesHandler);
 router.get('/:id', validate(employeeIdSchema), getEmployeeHandler);
 router.post('/', validate(createEmployeeSchema), createEmployeeHandler);
 router.patch('/:id', validate(updateEmployeeSchema), updateEmployeeHandler);

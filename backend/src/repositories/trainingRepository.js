@@ -19,13 +19,13 @@ export async function updateProgram(req, id, data){
   const existing = await prisma.trainingProgram.findFirst({ where: scope });
   if (!existing) { const e = new Error('Training program not found'); e.status = 404; throw e; }
   const stamped = stampTenant(req, data);
-  return prisma.trainingProgram.update({ where: { id }, data: stamped });
+  return prisma.trainingProgram.update({ where: scope, data: stamped });
 }
 export async function deleteProgram(req, id){
   const scope = withTenant(req, { id });
   const existing = await prisma.trainingProgram.findFirst({ where: scope });
   if (!existing) { const e = new Error('Training program not found'); e.status = 404; throw e; }
-  return prisma.trainingProgram.delete({ where: { id } });
+  return prisma.trainingProgram.delete({ where: scope });
 }
 
 export async function findEnrollments(req, { page=1, limit=50, employeeId, programId, status }){

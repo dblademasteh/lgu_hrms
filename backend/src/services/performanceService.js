@@ -443,7 +443,7 @@ export const performanceService = {
 
   async deleteCompetency(req, id) {
     const inUse = await prisma.performanceCompetency.findFirst({
-      where: { competencyId: id },
+      where: { ...withTenant(req), competencyId: id },
     });
     if (inUse) {
       const err = new Error('Competency is in use by performance reviews');
@@ -506,7 +506,7 @@ export const performanceService = {
       throw err;
     }
     const existing = await prisma.performanceCompetency.findFirst({
-      where: { reviewId, competencyId: data.competencyId },
+      where: { ...withTenant(req), reviewId, competencyId: data.competencyId },
     });
     if (existing) {
       const err = new Error('Competency already added to this review');
@@ -526,7 +526,7 @@ export const performanceService = {
 
   async updateReviewCompetency(req, reviewId, competencyItemId, data) {
     const existing = await prisma.performanceCompetency.findFirst({
-      where: { id: competencyItemId, reviewId },
+      where: { ...withTenant(req), id: competencyItemId, reviewId },
     });
     if (!existing) {
       const err = new Error('Competency item not found');
@@ -544,7 +544,7 @@ export const performanceService = {
 
   async removeReviewCompetency(req, reviewId, competencyItemId) {
     const existing = await prisma.performanceCompetency.findFirst({
-      where: { id: competencyItemId, reviewId },
+      where: { ...withTenant(req), id: competencyItemId, reviewId },
     });
     if (!existing) {
       const err = new Error('Competency item not found');

@@ -1,53 +1,82 @@
 import React, { useEffect, useState } from 'react';
-import { FileText, Plus, Calendar, User, MapPin, RefreshCw, Check, X, Save, Search } from 'lucide-react';
+import { FileText, Plus, Calendar, User, RefreshCw, Check, X, Save } from 'lucide-react';
 import Layout from '../components/Layout.jsx';
 import { designationApi } from '../api/designation.js';
+import { listEmployees } from '../api/employees.js';
 import { useToast } from '../components/Toast.jsx';
 import Modal from '../components/Modal.jsx';
+import ConfirmDialog from '../components/ConfirmDialog.jsx';
 import { badgeTone } from '../data/mock.js';
 
 const STATUS_OPTIONS = [
-  { value: 'ACTIVE', label: 'Active', className: 'badge-success' },
-  { value: 'SUSPENDED', label: 'Suspended', className: 'badge-warning' },
-  { value: 'REVOKED', label: 'Revoked', className: 'badge-error' },
+  { value: 'DRAFT', label: 'Draft' },
+  { value: 'RECOMMENDED', label: 'Recommended' },
+  { value: 'APPROVED', label: 'Approved' },
+  { value: 'ISSUED', label: 'Issued' },
+  { value: 'EFFECTIVE', label: 'Effective' },
+  { value: 'REVOKED', label: 'Revoked' },
 ];
 
 export default function Designation() {
   const toast = useToast();
   const [items, setItems] = useState([]);
+  const [employees, setEmployees] = useState([]);
   const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
-  const [form, setForm] = useState({ employeeId:'', orderNumber:'', issuedDate:'', signedBy:'' });
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [form, setForm] = useState({ employeeId:'', orderNumber:'', issuedDate:'', effectiveDate:'', signedBy:'', status:'DRAFT' });
 
   const load = async () => {
     try {
-      const params = { search: search || undefined };
-      const { data } = await designationApi.list();
+      const { data } = await designationApi.list({ limit: 100 });
       setItems(data.items || []);
     } catch (e) {
       toast('Failed to load designation orders', 'error');
     }
   };
-  useEffect(()=>{ load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [search]);
+  useEffect(()=>{ load(); }, []);
 
-  const activeCount = items.filter(d => d.status === 'ACTIVE').length;
-  const suspendedCount = items.filter(d => d.status === 'SUSPENDED').length;
+  useEffect(() => {
+    listEmployees({ limit: 200 }).then((res) => setEmployees(res.items || [])).catch(() => setEmployees([]));
+  }, []);
+
+  const filtered = statusFilter ? items.filter(d => d.status === statusFilter) : items;
+  const effectiveCount = items.filter(d => d.status === 'EFFECTIVE').length;
+  const pendingCount = items.filter(d => ['DRAFT','RECOMMENDED','APPROVED','ISSUED'].includes(d.status)).length;
 
   const submit = async e => {
     e.preventDefault();
-    if (!form.employeeId?.trim() || !form.orderNumber?.trim() || !form.issuedDate) {
-      toast('Employee ID, Order Number, and Issue Date are required.', 'error');
+    if (!form.employeeId || !form.orderNumber?.trim() || !form.issuedDate) {
+      toast('Employee, Order Number, and Issue Date are required.', 'error');
       return;
     }
     try {
-      await designationApi.create(form);
+      await designationApi.create({
+        employeeId: form.employeeId,
+        orderNumber: form.orderNumber.trim(),
+        issuedDate: form.issuedDate,
+        effectiveDate: form.effectiveDate || null,
+        signedBy: form.signedBy || null,
+        status: form.status,
+      });
       toast('Designation order created', 'success');
       setOpen(false);
-      setForm({ employeeId:'', orderNumber:'', issuedDate:'', signedBy:'' });
+      setForm({ employeeId:'', orderNumber:'', issuedDate:'', effectiveDate:'', signedBy:'', status:'DRAFT' });
       load();
     } catch (err) {
       toast(err?.response?.data?.error?.message || 'Failed to create designation order', 'error');
+    }
+  };
+
+  const remove = async () => {
+    if (!deleteTarget) return;
+    try {
+      await designationApi.remove(deleteTarget.id);
+      setItems((l) => l.filter(d => d.id !== deleteTarget.id));
+      toast('Designation order removed', 'success');
+      setDeleteTarget(null);
+    } catch (err) {
+      toast(err?.response?.data?.error?.message || 'Failed to remove designation order', 'error');
     }
   };
 
@@ -76,64 +105,56 @@ export default function Designation() {
       <div className="grid gap-4 md:grid-cols-2 mb-4">
         <div className="card p-4">
           <div className="flex items-center gap-2 mb-2">
-            <User className="text-accent" size={16} />
-            <span className="text-xs mono-label uppercase text-muted">Active</span>
+            <Check className="text-success" size={16} />
+            <span className="text-xs mono-label uppercase text-muted">Effective</span>
           </div>
-          <p className="font-display text-2xl font-bold text-ink">{activeCount}</p>
-          <p className="text-xs text-muted">Valid orders</p>
+          <p className="font-display text-2xl font-bold text-ink">{effectiveCount}</p>
+          <p className="text-xs text-muted">Currently in force</p>
         </div>
         <div className="card p-4">
           <div className="flex items-center gap-2 mb-2">
             <Calendar className="text-accent" size={16} />
-            <span className="text-xs mono-label uppercase text-muted">Suspended</span>
+            <span className="text-xs mono-label uppercase text-muted">Pending / Issued</span>
           </div>
-          <p className="font-display text-2xl font-bold text-ink">{suspendedCount}</p>
-          <p className="text-xs text-muted">On hold</p>
+          <p className="font-display text-2xl font-bold text-ink">{pendingCount}</p>
+          <p className="text-xs text-muted">Awaiting effectivity</p>
         </div>
       </div>
 
-      {/* Search Bar */}
-      <div className="mb-4">
-        <div className="relative">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
-          <input
-            type="search"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Search order number, employee name..."
-            className="input pl-10 w-full md:w-60"
-            aria-label="Search designation orders"
-          />
-        </div>
+      {/* Status Filter */}
+      <div className="mb-4 flex items-center gap-2">
+        <label htmlFor="do-status-filter" className="text-sm text-muted">Status:</label>
+        <select id="do-status-filter" className="select w-48" value={statusFilter} onChange={e=>setStatusFilter(e.target.value)}>
+          <option value="">All</option>
+          {STATUS_OPTIONS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+        </select>
+        <span className="mono-label">{filtered.length} records</span>
       </div>
 
       {/* Orders Table */}
       <div className="card p-4">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="font-display font-semibold text-ink">Designation Orders</h3>
-          <span className="mono-label">{items.length} records</span>
-        </div>
         <div className="overflow-x-auto">
           <table className="data-table">
-            <thead><tr><th>Order No</th><th>Employee</th><th>Issued</th><th>Signed By</th><th>Status</th><th className="text-right">Actions</th></tr></thead>
+            <thead><tr><th>Order No</th><th>Employee</th><th>Issued</th><th>Effective</th><th>Signed By</th><th>Status</th><th className="text-right">Actions</th></tr></thead>
             <tbody>
-              {items.map(d=>(
+              {filtered.map(d=>(
                 <tr key={d.id}>
                   <td className="font-mono">{d.orderNumber}</td>
                   <td>{d.employee?.firstName} {d.employee?.lastName}</td>
                   <td>{d.issuedDate}</td>
+                  <td>{d.effectiveDate || '—'}</td>
                   <td className="font-mono">{d.signedBy || '—'}</td>
                   <td><span className={`badge ${badgeTone(d.status)}`}>{d.status}</span></td>
                   <td className="text-right">
-                    <button type="button" className="btn btn-ghost px-2 text-xs" onClick={() => {}}>
+                    <button type="button" className="btn btn-ghost px-2 text-xs text-error" onClick={() => setDeleteTarget(d)}>
                       <X size={14} />
                       Remove
                     </button>
                   </td>
                 </tr>
               ))}
-              {items.length === 0 && (
-                <tr><td colSpan={6} className="text-muted text-sm py-8 text-center">No designation orders recorded.</td></tr>
+              {filtered.length === 0 && (
+                <tr><td colSpan={7} className="text-muted text-sm py-8 text-center">No designation orders recorded.</td></tr>
               )}
             </tbody>
           </table>
@@ -144,51 +165,41 @@ export default function Designation() {
       <Modal open={open} onClose={()=>setOpen(false)} title="New Designation Order" size="sm">
         <form onSubmit={submit} className="space-y-4" id="do-form">
           <div>
-            <label htmlFor="do-emp" className="block text-sm font-medium text-ink mb-1">Employee ID *</label>
-            <input 
-              id="do-emp" 
-              className="input" 
-              placeholder="e.g. EMP-001"
-              value={form.employeeId} 
-              onChange={e=>setForm({...form,employeeId:e.target.value})} 
-              required 
-            />
+            <label htmlFor="do-emp" className="block text-sm font-medium text-ink mb-1">Employee *</label>
+            <select id="do-emp" className="select" value={form.employeeId} onChange={e=>setForm({...form,employeeId:e.target.value})} required>
+              <option value="">Select employee</option>
+              {employees.map(emp => (
+                <option key={emp.id} value={emp.id}>{emp.lastName}, {emp.firstName}{emp.employeeNumber ? ` · ${emp.employeeNumber}` : ''}</option>
+              ))}
+            </select>
           </div>
           <div>
             <label htmlFor="do-order" className="block text-sm font-medium text-ink mb-1">Order Number *</label>
-            <input 
-              id="do-order" 
-              className="input" 
-              placeholder="Unique order number"
-              value={form.orderNumber} 
-              onChange={e=>setForm({...form,orderNumber:e.target.value})} 
-              required 
-            />
+            <input id="do-order" className="input" placeholder="Unique order number" value={form.orderNumber} onChange={e=>setForm({...form,orderNumber:e.target.value})} required />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label htmlFor="do-date" className="block text-sm font-medium text-ink mb-1">Issue Date *</label>
+              <input id="do-date" type="date" className="input" value={form.issuedDate} onChange={e=>setForm({...form,issuedDate:e.target.value})} required />
+            </div>
+            <div>
+              <label htmlFor="do-effdate" className="block text-sm font-medium text-ink mb-1">Effective Date</label>
+              <input id="do-effdate" type="date" className="input" value={form.effectiveDate} onChange={e=>setForm({...form,effectiveDate:e.target.value})} />
+            </div>
           </div>
           <div>
-            <label htmlFor="do-date" className="block text-sm font-medium text-ink mb-1">Issue Date *</label>
-            <input 
-              id="do-date" 
-              type="date" 
-              className="input" 
-              value={form.issuedDate} 
-              onChange={e=>setForm({...form,issuedDate:e.target.value})} 
-              required 
-            />
+            <label htmlFor="do-status" className="block text-sm font-medium text-ink mb-1">Status</label>
+            <select id="do-status" className="select" value={form.status} onChange={e=>setForm({...form,status:e.target.value})}>
+              {STATUS_OPTIONS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+            </select>
           </div>
           <div>
             <label htmlFor="do-signed" className="block text-sm font-medium text-ink mb-1">Signed By</label>
-            <input 
-              id="do-signed" 
-              className="input" 
-              placeholder="Name of signing authority"
-              value={form.signedBy} 
-              onChange={e=>setForm({...form,signedBy:e.target.value})}
-            />
+            <input id="do-signed" className="input" placeholder="Name of signing authority" value={form.signedBy} onChange={e=>setForm({...form,signedBy:e.target.value})} />
           </div>
         </form>
         <div className="modal-foot">
-          <button type="button" className="btn btn-ghost gap-2" onClick={() => { setOpen(false); setForm({ employeeId:'', orderNumber:'', issuedDate:'', signedBy:'' }); }}>
+          <button type="button" className="btn btn-ghost gap-2" onClick={() => { setOpen(false); setForm({ employeeId:'', orderNumber:'', issuedDate:'', effectiveDate:'', signedBy:'', status:'DRAFT' }); }}>
             <X size={16} />
             Cancel
           </button>
@@ -198,6 +209,16 @@ export default function Designation() {
           </button>
         </div>
       </Modal>
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={remove}
+        title="Remove designation order?"
+        message={`Order ${deleteTarget?.orderNumber} for ${deleteTarget?.employee?.firstName || ''} ${deleteTarget?.employee?.lastName || ''} will be removed permanently.`}
+        confirmLabel="Remove"
+        danger
+      />
     </Layout>
   );
 }

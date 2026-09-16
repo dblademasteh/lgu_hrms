@@ -41,7 +41,7 @@ export const payrollRepository = {
       e.status = 404;
       throw e;
     }
-    return prisma.payrollRun.update({ where: { id }, data: { status } });
+    return prisma.payrollRun.update({ where: scope, data: { status } });
   },
   async findPeriodById(req, id) {
     return prisma.payrollPeriod.findFirst({ where: withTenant(req, { id }) });
@@ -59,7 +59,7 @@ export const payrollRepository = {
       e.status = 404;
       throw e;
     }
-    return prisma.payrollPeriod.update({ where: { id }, data: { status: 'CLOSED' } });
+    return prisma.payrollPeriod.update({ where: withTenant(req, { id }), data: { status: 'CLOSED' } });
   },
   async findRunByPeriod(req, periodId) {
     return prisma.payrollRun.findFirst({ where: withTenant(req, { periodId }) });
@@ -91,6 +91,7 @@ export const payrollRepository = {
           }))
         ),
       });
+      await tx.payrollRun.update({ where: { id: run.id }, data: { generatedAt: new Date() } });
       const reloaded = await tx.payrollRun.findFirst({
         where: { id: run.id, tenantId },
         include: { period: true, items: { include: { employee: true, deductionLines: true } }, ledgerEntries: true },

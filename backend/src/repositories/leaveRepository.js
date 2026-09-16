@@ -63,7 +63,7 @@ export const leaveRepository = {
     }
   },
   async updateRequestStatus(req, id, data) {
-    return prisma.leaveRequest.update({ where: { id }, data });
+    return prisma.leaveRequest.update({ where: withTenant(req, { id }), data });
   },
   async findLeaveRuleConfigs(req) {
     const where = withTenant(req);

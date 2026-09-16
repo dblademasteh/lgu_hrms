@@ -15,12 +15,12 @@ export const departmentsRepository = {
     const scope = withTenant(req, { id });
     const existing = await prisma.department.findFirst({ where: scope });
     if (!existing) { const e = new Error('Department not found'); e.status = 404; throw e; }
-    return prisma.department.update({ where: { id }, data: stampTenant(req, data) });
+    return prisma.department.update({ where: scope, data: stampTenant(req, data) });
   },
   async remove(req, id) {
     const scope = withTenant(req, { id });
     const existing = await prisma.department.findFirst({ where: scope });
     if (!existing) { const e = new Error('Department not found'); e.status = 404; throw e; }
-    return prisma.department.delete({ where: { id } });
+    return prisma.department.delete({ where: scope });
   }
 };

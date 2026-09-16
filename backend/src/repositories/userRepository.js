@@ -21,12 +21,12 @@ export const userRepository = {
   },
   async update(req, id, data) {
     const stamped = stampTenant(req, data);
-    return prisma.user.update({ where: { id }, data: stamped });
+    return prisma.user.update({ where: withTenant(req, { id }), data: stamped });
   },
   async delete(req, id) {
     const exists = await prisma.user.findFirst({ where: withTenant(req, { id }) });
     if (!exists) return null;
-    return prisma.user.delete({ where: { id } });
+    return prisma.user.delete({ where: withTenant(req, { id }) });
   },
   async getSessions(userId) {
     return prisma.userSession.findMany({ where: { userId, revokedAt: null }, orderBy: { lastActive: 'desc' } });

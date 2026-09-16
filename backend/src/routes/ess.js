@@ -35,7 +35,7 @@ router.get('/payslips', async (req, res, next) => {
     const employee = await prisma.employee.findUnique({ where: { ...withTenant(req), employeeNumber: user.externalId }});
     if (!employee) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Employee not found' }});
     const items = await prisma.payrollItem.findMany({
-      where: withTenant(req, { employeeId: employee.id }),
+      where: withTenant(req, { employeeId, run: { is: { status: 'POSTED' } } }),
       include: { run: { include: { period: true } }, deductionLines: true, payslip: true },
       orderBy: { run: { runDate: 'desc' } }
     });
@@ -95,7 +95,9 @@ router.post('/leave-requests',
   }
 );
 
-router.get('/payslips/:itemId/print', async (req, res, next) => {
+router.get('/payslips/:itemId/print',
+  validate({ params: z.object({ itemId: z.string().min(1) }) }),
+  async (req, res, next) => {
   try {
     const user = await prisma.user.findUnique({ where: { ...withTenant(req), id: req.user.id } });
     if (!user?.externalId) {
@@ -104,7 +106,7 @@ router.get('/payslips/:itemId/print', async (req, res, next) => {
     const employee = await prisma.employee.findUnique({ where: { ...withTenant(req), employeeNumber: user.externalId }});
     if (!employee) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Employee not found' }});
     const item = await payrollRepository.findPayrollItemForPrint(req, req.params.itemId, employee.id);
-    if (!item) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Payslip item not found' }});
+    if (!item || item.run?.status !== 'POSTED') return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Payslip item not found' }});
     res.type('html').send(renderPayslipHtml(item));
   } catch (e) { next(e); }
 });

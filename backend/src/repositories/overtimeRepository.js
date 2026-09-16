@@ -29,12 +29,12 @@ export const overtimeRepository = {
     return prisma.overtimeRequest.create({ data: stampTenant(req, data) });
   },
   async update(req, id, data) {
-    return prisma.overtimeRequest.update({ where: { id }, data });
+    return prisma.overtimeRequest.update({ where: withTenant(req, { id }), data });
   },
   async softRemove(req, id) {
-    return prisma.overtimeRequest.delete({ where: { id } });
+    return prisma.overtimeRequest.delete({ where: withTenant(req, { id }) });
   },
   async approve(req, id, data) {
-    return prisma.overtimeRequest.update({ where: { id }, data });
+    return prisma.overtimeRequest.update({ where: withTenant(req, { id }), data });
   },
 };

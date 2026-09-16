@@ -2,15 +2,15 @@ import { Router } from 'express';
 import { requireAuth } from '../middleware/auth.js';
 import { requireRole } from '../middleware/rbac.js';
 import { prisma } from '../lib/prisma.js';
+import { withTenant } from '../middleware/tenant.js';
 
 const router = Router();
 
 router.use(requireAuth);
 
 router.get('/requests', requireRole('ADMIN','HR_MANAGER'), async (req, res) => {
-  const tenantId = req.user.tenantId;
   const items = await prisma.syncRequest.findMany({
-    where: { tenantId },
+    where: withTenant(req, {}),
     orderBy: { createdAt: 'desc' },
   });
   res.json({ items });
@@ -18,11 +18,10 @@ router.get('/requests', requireRole('ADMIN','HR_MANAGER'), async (req, res) => {
 
 router.patch('/requests/:id/approve', requireRole('ADMIN','HR_MANAGER'), async (req, res) => {
   const { id } = req.params;
-  const tenantId = req.user.tenantId;
-  const reqRec = await prisma.syncRequest.findUnique({ where: { id } });
-  if (!reqRec || reqRec.tenantId !== tenantId) return res.status(404).json({ error: 'Not found' });
+  const reqRec = await prisma.syncRequest.findFirst({ where: withTenant(req, { id }) });
+  if (!reqRec) return res.status(404).json({ error: 'Not found' });
   await prisma.syncRequest.update({
-    where: { id },
+    where: withTenant(req, { id }),
     data: { status: 'APPROVED', approvedBy: req.user.id, updatedAt: new Date() },
   });
   res.json({ ok: true });

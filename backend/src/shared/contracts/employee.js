@@ -38,3 +38,13 @@ export const employeeIdSchema = {
 export const bulkEmployeesSchema = {
   body: z.array(createEmployeeSchema.body).min(1).max(1000),
 };
+
+export const listEmployeesSchema = {
+  query: z.object({
+    page: z.coerce.number().int().min(1).default(1),
+    limit: z.coerce.number().int().min(1).max(200).default(50),
+    search: z.string().max(200).optional().nullable(),
+    departmentId: z.string().min(1).optional().nullable(),
+    status: z.enum(['ACTIVE', 'INACTIVE', 'RESIGNED', 'RETIRED']).optional().nullable(),
+  }),
+};

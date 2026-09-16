@@ -12,7 +12,6 @@ const pages = [
   { label: 'Biometric Devices', path: '/biometric-devices', icon: Fingerprint },
   { label: 'Appointments', path: '/appointments', icon: FileText },
   { label: 'Plantilla', path: '/plantilla', icon: FileText },
-  { label: 'Vacancy', path: '/vacancy', icon: FileText },
   { label: 'Designation', path: '/designation', icon: Users },
   { label: 'Recruitment', path: '/recruitment', icon: Users },
   { label: 'Performance', path: '/performance', icon: BarChart3 },

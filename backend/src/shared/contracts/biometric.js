@@ -2,6 +2,8 @@ import { z } from 'zod';
 
 export const enrollBiometricSchema = {
   body: z.object({
+    credentialId: z.string().min(1).max(120).trim(),
+    publicKey: z.string().min(1).max(255).trim(),
     deviceName: z.string().max(255).optional().nullable(),
   }),
 };

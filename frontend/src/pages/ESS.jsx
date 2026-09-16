@@ -3,8 +3,9 @@ import { Calendar, FileText, Clock, User, Check, CalendarDays, FileDown, Trendin
 import Layout from '../components/Layout.jsx';
 import Modal from '../components/Modal.jsx';
 import { useToast } from '../components/Toast.jsx';
+import { openHtmlInNewTab } from '../lib/print.js';
 import { badgeTone } from '../data/mock.js';
-import { getEssProfile, getEssPayslips, getEssLeaveRequests, createEssLeaveRequest, getEssAttendance, essPayslipPrintUrl } from '../api/ess.js';
+import { getEssProfile, getEssPayslips, getEssLeaveRequests, createEssLeaveRequest, getEssAttendance, getEssPayslipPrint } from '../api/ess.js';
 import { useNotifications } from '../hooks/useNotifications.js';
 import { useAuthStore } from '../stores/authStore.js';
 import { manilaDateLabel, manilaTimeLabel, manilaMonthKey } from '../lib/time.js';
@@ -307,7 +308,9 @@ export default function ESS() {
                           <td>{p.run?.period?.name || '—'}</td>
                           <td className="font-mono">{formatCurrency(p.netPay)}</td>
                           <td>
-                            <button type="button" className="btn btn-ghost btn-sm gap-1" onClick={() => window.open(essPayslipPrintUrl(p.id), '_blank', 'noopener')}>
+                            <button type="button" className="btn btn-ghost btn-sm gap-1" onClick={async () => {
+                              try { await openHtmlInNewTab(getEssPayslipPrint(p.id)); } catch { toast('Payslip could not be opened', 'error'); }
+                            }}>
                               <FileDown size={14} />
                               Print
                             </button>

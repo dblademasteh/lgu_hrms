@@ -1,7 +1,7 @@
 import * as repo from '../repositories/rulesRepository.js';
-export const listContributionRules = repo.findContributionRules;
-export const addContributionRule = repo.createContributionRule;
-export const listTaxBrackets = repo.findTaxBrackets;
-export const addTaxBracket = repo.createTaxBracket;
-export const listLeaveRuleConfigs = repo.findLeaveRuleConfigs;
-export const addLeaveRuleConfig = repo.createLeaveRuleConfig;
+export const listContributionRules = (req, where = {}) => repo.findContributionRules(req, where);
+export const addContributionRule = (req, data) => repo.createContributionRule(req, data);
+export const listTaxBrackets = (req, where = {}) => repo.findTaxBrackets(req, where);
+export const addTaxBracket = (req, data) => repo.createTaxBracket(req, data);
+export const listLeaveRuleConfigs = (req, where = {}) => repo.findLeaveRuleConfigs(req, where);
+export const addLeaveRuleConfig = (req, data) => repo.createLeaveRuleConfig(req, data);

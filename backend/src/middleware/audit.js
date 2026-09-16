@@ -27,7 +27,7 @@ async function readBefore(req) {
     const url = req.originalUrl || req.url || '';
     if (url.includes('/employees/') && url.includes('/sections/')) {
       const { employeeSectionService } = await import('../services/employeeSectionService.js');
-      const items = await employeeSectionService.list(req.params.section, req.params.id).catch(() => null);
+      const items = await employeeSectionService.list(req, req.params.section, req.params.id).catch(() => null);
       return items ? { count: items.length } : null;
     }
     return null;
@@ -80,13 +80,14 @@ function safeBody(body) {
   try {
     if (!body) return undefined;
     const parsed = typeof body === 'string' ? JSON.parse(body) : body;
-    if (parsed && typeof parsed === 'object' && 'password' in parsed) {
-      const { password, ...rest } = parsed;
-      return rest;
+    let value = parsed;
+    if (parsed && typeof parsed === 'object') {
+      const { password, temporaryPassword, ...rest } = parsed;
+      value = rest;
     }
-    const serialized = typeof parsed === 'object' ? JSON.stringify(parsed) : String(parsed);
-    if (serialized.length <= MAX_AUDIT_BODY_BYTES) return parsed;
-    return summarizeObject(parsed);
+    const serialized = typeof value === 'object' ? JSON.stringify(value) : String(value);
+    if (serialized.length <= MAX_AUDIT_BODY_BYTES) return value;
+    return summarizeObject(value);
   } catch {
     return undefined;
   }

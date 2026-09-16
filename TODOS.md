@@ -74,6 +74,69 @@
 - [ ] **Dead mock data** — `frontend/src/data/mock.js` still exports unused arrays (departments, employees, payrollRuns, ledgerEntries, leaveRequests, auditLogs, users, leaveCredits, attendance, appointments, deductionLines, auditDetails, employmentHistory, roleMatrix); only `badgeTone` is consumed. Delete unused exports to satisfy "no dead code".
 - [ ] **Dependency audit (pre-existing)** — `npm audit` on frontend: react-router-dom 6.x open redirect (CVE-2025-68470, HIGH) + vite≤6 dev-server (esbuild advisory, MODERATE). Fixes are breaking major bumps (react-router-dom@7, vite@8); plan a migration window.
 
+## Workforce (deep dive Sep 2026 — reference: src/docs/WORKFORCE.md)
+- [x] **Critical — tenant isolation violation in `/employees/:id/sections/*`** (`employeeSectionService.js`): all 13 section models read/written unscoped; `assertEmployee` is a cross-tenant oracle (line 109); `create` omits `stampTenant` → sub-records get `tenantId=NULL` (153-155); update/remove by bare id (165-184); audit before-snapshot inherits the unscoped reads — **fixed**: service now threads `req`, reads via `withTenant` + writes via `stampTenant`, strict existence checks are tenant-scoped; controllers + `audit.js` pass `req`. **Verified live**: family create now stamps `tenantId="tenant-default"`, section reads 200 under tenant
+- [x] **High — unvalidated inputs → 500:** `GET /employees` query raw (`employeeController.js:5-7`), section `POST/PATCH` bodies (params only; non-P2xxx errors → 500), `GET /ess/payslips/:itemId/print` param (`ess.js:98`) — **fixed**: `listEmployeesSchema` (page/limit/search/departmentId/status) wired on `GET /`; new `contracts/employeeSections.js` (AGENTS drift closed) with section/record param schemas + flat record-body schema on POST/PATCH; ESS print param validated. **Verified live**: `limit=5000` → 400, valid list → 200, bogus section → 400
+- [x] **High — Prisma `P2002`/`P2003` → generic 500:** global-unique keys (`employeeNumber`, `department.code`, `username`) collide cross-tenant; FK violations and department hard-delete-with-children all 500 — map to 409/400 AppErrors — **fixed**: `server.js` centralized `normalizePrismaError` (P2002→409 DUPLICATE, P2003→400, P2025→404, P2000→400) + `employeeSectionService.prismaError` refined (P2002→409, P2003→400, P2025→404). **Verified live**: duplicate `employeeNumber` POST → 409 `DUPLICATE`
+- [ ] **High — Employees `limit:500` vs backend cap 200** (`Employees.jsx:55` / `employeeController.js:6`): stats/dept filter/CSV silently see only first 200; `total` ignored; no headcount/stats endpoint exists
+- [ ] **High — Department `level` never maintained** (only tenant seed writes it); no soft delete, no `GET /:id`, no parent cycle check, no headcount, no date coercion for concurrence/cscSubmission dates
+- [ ] **High — unpaginated sub-resources:** ESS payslips, ESS leave-requests, `/leave/requests`, section lists (except attendance `take:30`)
+- [ ] **High — bulk employee upsert** sequential per-row loop, no transaction (`employeeService.js:85-109`)
+- [ ] **Medium — UserDashboard** fires `listEnrollments`/`listPrograms` for every role (403 noise, `UserDashboard.jsx:102-103`); attendance "today" uses UTC not Manila (:87); 7 duplicated skeleton blocks
+- [ ] **Medium — Organization** Add/Edit modals duplicate markup + duplicate DOM ids; "OSSP Compliance" button no-op (:188); `childCount` dead (:169); catches drop server message; no re-fetch after mutation; local-state mutations bypass reload
+- [ ] **Medium — ESS** month flip over-fetches profile/payslips/leave (:80-84); `formatCurrency` decimals inconsistent; `documentUrl` free-text
+- [ ] **Medium — Employees** skeleton `colSpan={7}` on 11-col table (:190); no re-fetch after delete (:113); duplicates MasterTable
+- [ ] **Medium — dead code:** `EmployeeProfileModal.jsx` (whole component), `bulkImportEmployees` (`api/employees.js:31`), `SECTION_NAMES` (`api/employeeSections.js:14`); contract drift — AGENTS claims `contracts/employeeSections.js` which doesn't exist (inline Zod)
+- [ ] **Low — `/workforce/stats` aggregate endpoint** (headcount by dept/status, hires, attrition) → Dashboard consumes real numbers; ESS balances from `LeaveCredit` not request-count; 201 File attachments + Service Record print
+
+## Payroll (deep dive Sep 2026 — reference: src/docs/PAYROLL.md)
+- [x] **Critical — `/rules/*` tenant leak + no validation** — **fixed**: new `contracts/rules.js` (decimal-string rates/money, precision-matched), `rulesRepository` scopes reads `withTenant` + stamps writes + coerces dates, controller/service thread `req`, route validates. **Verified live**: create → `tenantId="tenant-default"` stamped, list returns owner tenant only, bad rate → 400
+- [x] **Critical — payslip print 401** — **fixed** (client transport, no token-in-URL): `openHtmlInNewTab` in `lib/print.js` fetches via axios (auth header attached) then opens a `blob:` URL (`noopener` kept); `payslipPrint`/`getEssPayslipPrint` replace the bare URL helpers in Payroll.jsx + ESS.jsx
+- [x] **High — ESS shows DRAFT-run payslips** — **fixed**: `/ess/payslips` filters `run.is.status=POSTED`; print route 404s non-POSTED
+- [x] **High — AuditLog bulk cap dead code** — **fixed**: `audit.js` `safeBody` rewritten so `MAX_AUDIT_BODY_BYTES`/`summarizeObject` actually run (generate/post compacted to `{count}`)
+- [x] **High — postRun over-marks amortizations + `generatedAt` missing** — **fixed**: amortization fetch scoped `loan.employeeId ∈ run employees`; regenerate sets `generatedAt`
+- [ ] **High — cash-side dead:** `LoanAmortization` never created (no approve/disburse); `allowances` always ZERO (`payrollEngine.js:319`); no 13th-month/tax-breakdown on `PayrollItem`; `Bonus` never enters a run
+- [ ] **High — under-withholding:** `tax = (taxable−min)×rate` no baseTax/dependents/annualization (`payrollEngine.js:306`); `ContributionRule` linear-only — no GSIS/PhilHealth-cap/Pag-IBIG-tier model
+- [ ] **High — manual deduction lines don't reconcile item totals** (`payrollDeductionRepository.js:7-10`); frontend has NO deduction editor (`addLines`/`upsertPayslip` dead exports)
+- [ ] **High — no seed rules / no AttendanceRule route** (`tardinessMin` fixed 0, contribution/tax absent out-of-box; `deductionRate` never read)
+- [ ] **High — engine-input validation:** money as `z.number()` (`contracts/payrollDeduction.js:8-9`, `loans.js:22`), `overtimeService.js:104-108` JS floats
+- [ ] **Medium — payroll runs list no pagination** (frontend, first 20 only; `total` stat can disagree); 8× duplicated `peso()` printers; new-run row shows missing period/items (`Payroll.jsx:102`)
+- [ ] **Medium — dead code:** `EmployeeProfileModal.jsx` (no imports), `api/payrollDeduction.js` addLines/upsertPayslip no consumers; AGENTS.md drift — migration `20260913160000_payroll_scale_indexes` does not exist (indexes are in `20260913103813`)
+
+## Reports (deep dive Sep 2026 — reference: src/docs/REPORTS.md)
+- [ ] **High — "Standard Reports" is a stub catalogue** (4 hardcoded `data/reports.js` entries; Generate=toast, Preview="not yet generated"; 4 entries but "3 templates" label) and **pdfmake/ExcelJS are not installed** yet `Reports.jsx:56` badges them; Help.jsx + FEATURE_GAP_ANALYSIS.md also over-promise — render or de-claim
+- [ ] **High — only ONE backend report endpoint** (`GET /reports/payroll-summary`) — no COA Payroll Register/Journal, remittances (GSIS/Pag-IBIG/PhilHealth/BIR 1601-C), DTR, leave, loans, Service Record; all CSVs are ad-hoc client blobs with divergent quoting/decimals
+- [ ] **High — summary shows unposted runs** (`reportsController.js:28-33` latest-by-runDate, no status filter) — exclude non-POSTED like ESS now does
+- [ ] **Medium — 5+ duplicated client export blobs** (Reports/Audit/Employees/Disqualifications/Attendance) — shared `lib/export.js` (`downloadCsv` w/ quoting + Manila filename) then adopt
+- [ ] **Medium — export hygiene:** filenames use UTC `toISOString().slice(0,10)`; money in CSV should keep 2dp; Preview modal labels a stub as "PDF Document/Excel Workbook"
+- [ ] **P2/P3 — server-side report engine:** `GET /reports/payroll-register` (per-employee rows + per-code deduction columns), journal from `LedgerEntry`, remittance groups by `PayrollDeductionLine.code`; then install pdfmake/ExcelJS (or server render) for the catalogue + payslip PDF
+
+## PRIME-HRM Evidence Pack (Sep 2026 — reference: src/docs/PRIME_HRM_EVIDENCE.md)
+> Evidence register mapping every PRIME-HRM ER to the live producing feature (page + endpoint + schema). Current self-assessment read: RSP ML2→3, L&D ML1, PM ML2-3, R&R ML1-2. Items below are the pack's gap→roadmap; R&R report items overlap the Reports section.
+- [ ] **Cross-cutting — Docs Store (blocks every pillar):** versioned, tenant-scoped document model for office orders, resolutions, MOAs, and policies → files MSB/HRDC constitutions (RSP Governance), L&D policy + Annual L&D Plan (L&D Governance/Planning), R&R program (R&R Governance). Only URL slots today: `Employee.resumeUrl`, `Payslip.pdfUrl`
+- [ ] **Cross-cutting — form printers:** CSC Form 33 (appointment), SPMS Form 1, Service Record (CSC 212), COA payslip certificate; reuse `openHtmlInNewTab` transport; DESIGN.md §10 print contract
+- [ ] **RSP** — public job-seeker posting portal (`VacancyPublication` is admin-logged today); MSB deliberation/minutes capture (screeningScore + board notes exist, minutes doc doesn't); appointment-time validation eligibility vs vacancy requirements (RSP Pillar B/C/D evid pieces)
+- [ ] **L&D — `/learning` deep-dive** — LNA/TNA instrument, annual L&D plan + utilization report by `TrainingEnrollment` (per-employee training history exists in 201), level-1/2 evaluation capture, IDP editor end-to-end (`IDP` model + seed exist)
+- [ ] **PM** — OPCR→IPCR cascade depth + sign-off notifications (cascade (`parentReviewId`) modeled; workflow depth to verify); SPMS Form 1 print
+- [ ] **Verify-on-site PMCs** — publication flow, appointment-form QA, L&D IDP editor, OPCR cascade & approval workflow, R&R bonus/loans landing (flagged 🟡 in the pack)
+
+## Recruitment Funnel Redesign (Sep 2026)
+- [x] **Whole recruitment experience unified** — Recruitment page rebuilt as hiring funnel with three functional tabs: Applicants (master-detail pane + stage strip + Hire modal + single-save score editor + eligibility block), Interviews (schedule/complete/cancel/delete + applicant picker), Vacancies (create/close/remove + status filter + plantilla-item select auto-fill). Scope: "Whole recruitment experience"; direction: "List + detail pane".
+- [x] **Route unification** — `/interviews` and `/vacancy` now redirect into `/recruitment?tab=...` (gated on `interviewCRUD` and `recruitmentCRUD`); `Interviews.jsx` and `Vacancy.jsx` deleted; Sidebar RSP group shows single "Recruitment" entry; CommandPalette updated.
+- [x] **Design compliance** — funnel follows DESIGN.md §6 page specs + craft-floor rules (Operate surface, token-only colors, font-display/font-mono scale, one .btn-primary per view, ConfirmDialog for destructive, toasts on every action, empty states in every pane).
+- [ ] **Live smoke confirm** — run the app, exercise funnel tabs end-to-end (create applicant, schedule interview, create vacancy, advance stage, hire, verify redirects).
+
+## RSP (deep dive Sep 2026 — reference: src/docs/RSP.md)
+- [x] **P1 RSP correctness batch — DONE** (backend + frontend, smoke-verified): hire rewrote transactional + enum-safe; interviews contract+page rewritten; tenant assert helper added; appointmentsService+repo patched (itemNo mapping, stampTenant); date coercion on designation; eligibility enum aligned; plantilla status fixed; disqualification list validated; composite uniques added; frontend: Recruitment hiring funnel, Interviews rewritten, Designation rewritten, Plantilla submit wired, Disqualifications CSV fixed, Vacancy dead search removed, Sidebar/CommandPalette unified. Details + strikethroughs in `src/docs/RSP.md`; Evidence Pack statuses in `src/docs/PRIME_HRM_EVIDENCE.md`.
+- [ ] **P2 RSP follow-ups** — `findActive` `isBarred` filter; applicant-scoped DIBAR; vacancy auto-close at `closesAt`; MSB minutes artifact; offer-letter/CSC Form 33/designation print; seed fixtures for RSP pages.
+
+
+## RSP evidence follow-ups
+- [ ] RSP pages empty on re-seed (seed only creates PlantillaItem) — add Vacancy/Applicant/Interview/Appointment fixtures as generated mock *data* (not rules/mocks)
+- [ ] No offer-letter / CSC Form 33 / designation print; DIBAR `evidenceDocument` not settable; `oraohraReference/cscFormNo/documentUrl` columns unused
+- [ ] DIBAR pre-hire gate + applicant watchlist (Disqualification is Employee-only today); eligibility-vs-vacancy match (`Vacancy.eligibilityRequirements` free-text)
+- [ ] After P1: update `src/docs/PRIME_HRM_EVIDENCE.md` RSP statuses (interviews/hire flip once generatable)
+
 ## High Priority
 - [ ] Remove Google Fonts CDN `@import` in `frontend/src/index.css` (on-prem violation; 10 unused families — self-hosted fontsource is the only font source)
 - [ ] Print styles: `@media print` with `.print-area`/`.no-print` for COA payslips, Service Records, CSC forms (contract per DESIGN.md §10)

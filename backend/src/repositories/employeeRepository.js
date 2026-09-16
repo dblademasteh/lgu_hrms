@@ -80,7 +80,7 @@ export async function patchEmployee(req, id, data) {
   }
   const stamped = stampTenant(req, data);
   return prisma.employee.update({
-    where: { id },
+    where: scope,
     data: stamped,
     include: { department: true, position: true },
   });
@@ -95,5 +95,5 @@ export async function softDeleteEmployee(req, id) {
     throw e;
   }
   assertDepartmentAccess(req, existing.departmentId);
-  return prisma.employee.update({ where: { id }, data: { deletedAt: new Date() } });
+  return prisma.employee.update({ where: scope, data: { deletedAt: new Date() } });
 }

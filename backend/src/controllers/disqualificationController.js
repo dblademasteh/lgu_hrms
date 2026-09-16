@@ -7,8 +7,8 @@ export const disqualificationController = {
         status: req.query.status,
         type: req.query.type,
         reason: req.query.reason,
-        page: parseInt(req.query.page) || 1,
-        limit: parseInt(req.query.limit) || 50,
+        page: Math.max(parseInt(req.query.page) || 1, 1),
+        limit: Math.min(parseInt(req.query.limit) || 50, 200),
         search: req.query.search,
       };
       const result = await disqualificationService.getAll(req, options);

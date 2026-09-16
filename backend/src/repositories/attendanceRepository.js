@@ -56,7 +56,7 @@ export const attendanceRepository = {
       }
     }
     
-    return prisma.attendance.update({ where: { id }, data });
+    return prisma.attendance.update({ where: withTenant(req, { id }), data });
   },
   async remove(req, id) {
     const scoped = await prisma.attendance.findFirst({ where: withTenant(req, { id }) });
@@ -76,6 +76,6 @@ export const attendanceRepository = {
       }
     }
     
-    return prisma.attendance.delete({ where: { id } });
+    return prisma.attendance.delete({ where: withTenant(req, { id }) });
   },
 };

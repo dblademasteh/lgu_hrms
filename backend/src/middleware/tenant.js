@@ -14,7 +14,8 @@ import { prisma } from '../lib/prisma.js';
  */
 const SUBDOMAIN_TENANT_MAP = {
   default: 'tenant-default',
-  tarlac: 'tenant-tarlac',
+  tarlac: 'tenant-solana',
+  solana: 'tenant-solana',
 };
 
 export function tenantContext(req, res, next) {

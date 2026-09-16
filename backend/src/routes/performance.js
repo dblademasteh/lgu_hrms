@@ -30,23 +30,23 @@ router.delete('/competencies/:id', validate(competencyIdSchema), requireRole('AD
 // Performance reviews
 router.get('/', performanceController.list);
 router.get('/:id', validate(performanceIdSchema), performanceController.get);
-router.post('/', validate(createPerformanceSchema), performanceController.create);
-router.patch('/:id', validate(updatePerformanceSchema), performanceController.update);
+router.post('/', validate(createPerformanceSchema), requireRole('ADMIN'), performanceController.create);
+router.patch('/:id', validate(updatePerformanceSchema), requireRole('ADMIN'), performanceController.update);
 router.delete('/:id', validate(performanceIdSchema), requireRole('ADMIN'), performanceController.remove);
 
 // Rating computation
-router.post('/:id/compute', validate(computeRatingSchema), performanceController.compute);
+router.post('/:id/compute', validate(computeRatingSchema), requireRole('ADMIN'), performanceController.compute);
 
 // Review targets
 router.get('/:id/targets', validate(performanceIdSchema), performanceController.listTargets);
-router.post('/:id/targets', validate(createTargetSchema), performanceController.addTarget);
-router.patch('/:id/targets/:targetId', validate(updateTargetSchema), performanceController.updateTarget);
-router.delete('/:id/targets/:targetId', validate(targetIdSchema), performanceController.removeTarget);
+router.post('/:id/targets', validate(createTargetSchema), requireRole('ADMIN'), performanceController.addTarget);
+router.patch('/:id/targets/:targetId', validate(updateTargetSchema), requireRole('ADMIN'), performanceController.updateTarget);
+router.delete('/:id/targets/:targetId', validate(targetIdSchema), requireRole('ADMIN'), performanceController.removeTarget);
 
 // Review competencies
 router.get('/:id/competencies', validate(performanceIdSchema), performanceController.listReviewCompetencies);
-router.post('/:id/competencies', validate(performanceIdSchema), validate(createReviewCompetencySchema), performanceController.addReviewCompetency);
-router.patch('/:id/competencies/:itemId', validate(performanceIdSchema), validate(updateReviewCompetencySchema), performanceController.updateReviewCompetency);
+router.post('/:id/competencies', validate(performanceIdSchema), validate(createReviewCompetencySchema), requireRole('ADMIN'), performanceController.addReviewCompetency);
+router.patch('/:id/competencies/:itemId', validate(performanceIdSchema), validate(updateReviewCompetencySchema), requireRole('ADMIN'), performanceController.updateReviewCompetency);
 router.delete('/:id/competencies/:itemId', validate(performanceIdSchema), requireRole('ADMIN'), performanceController.removeReviewCompetency);
 
 export default router;

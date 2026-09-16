@@ -84,5 +84,11 @@ router.get(
   validate({ params: z.object({ itemId: z.string().min(1) }) }),
   payrollController.printPayslip
 );
+router.get(
+  '/runs/:id/bank-export',
+  requirePermission('payrollRuns'),
+  validate({ params: idParam }),
+  payrollController.bankExport
+);
 
 export default router;

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Plus, Check, ExternalLink, Printer, Lock } from 'lucide-react';
+import { X, Plus, Check, ExternalLink, Printer, Lock, Download } from 'lucide-react';
 import Layout from '../components/Layout.jsx';
 import Modal from '../components/Modal.jsx';
 import ConfirmDialog from '../components/ConfirmDialog.jsx';
@@ -7,6 +7,7 @@ import { badgeTone } from '../data/mock.js';
 import { payrollApi } from '../api/payroll.js';
 import { getLines } from '../api/payrollDeduction.js';
 import { useToast } from '../components/Toast.jsx';
+import { openHtmlInNewTab } from '../lib/print.js';
 import { useUserCapabilities } from '../config/permissions.js';
 
 const peso = n => `₱ ${Number(n ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -139,9 +140,30 @@ export default function Payroll() {
     }
   };
 
-  const printPayslip = item => {
-    const url = payrollApi.payslipPrintUrl(item.id);
-    window.open(url, '_blank', 'noopener');
+  const printPayslip = async item => {
+    try {
+      await openHtmlInNewTab(payrollApi.payslipPrint(item.id));
+    } catch {
+      toast('Payslip could not be opened', 'error');
+    }
+  };
+
+  const downloadBankExport = async run => {
+    try {
+      const res = await payrollApi.bankExport(run.id);
+      const blob = new Blob([res.data], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `LDDAP-${run.period?.name?.replace(/\s+/g, '-') || 'run'}-${String(run.id).slice(0, 8)}.txt`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast('Bank export downloaded', 'success');
+    } catch (e) {
+      toast(e?.response?.data?.error?.message || 'Bank export failed', 'error');
+    }
   };
 
   const openDetail = async run => {
@@ -421,6 +443,12 @@ export default function Payroll() {
                 Approve Run
               </button>
             )}
+            {(detail?.status === 'APPROVED' || detail?.status === 'POSTED') && (
+              <button type="button" className="btn btn-outline gap-2" onClick={() => downloadBankExport(detail)} disabled={!canRun}>
+                <Download size={14} />
+                Bank Export
+              </button>
+            )}
             <button type="button" className="btn btn-primary gap-2" onClick={() => setDetail(null)}><X size={16} /> Close</button>
           </>
         }
@@ -479,16 +507,21 @@ export default function Payroll() {
               <thead><tr><th>Earnings</th><th className="text-right">Amount</th></tr></thead>
               <tbody>
                 <tr><td>Basic Pay</td><td className="font-mono text-right">{peso(payslip.basicPay)}</td></tr>
-                <tr><td>Allowances</td><td className="font-mono text-right">{peso(payslip.allowances)}</td></tr>
+                {payslipLines.filter(l => ['PERA','RATA','HAZARD_PAY','SUBSISTENCE'].includes((l.code || '').toUpperCase())).map(line => (
+                  <tr key={line.id}><td>{line.description || line.code}</td><td className="font-mono text-right">{peso(line.employeeShare)}</td></tr>
+                ))}
+                {payslip.allowances > 0 && payslipLines.filter(l => ['PERA','RATA','HAZARD_PAY','SUBSISTENCE'].includes((l.code || '').toUpperCase())).length === 0 && (
+                  <tr><td>Allowances</td><td className="font-mono text-right">{peso(payslip.allowances)}</td></tr>
+                )}
               </tbody>
             </table>
             <table className="data-table mt-3">
               <thead><tr><th>Deductions</th><th className="text-right">Amount</th></tr></thead>
               <tbody>
-                {payslipLines.map(line => (
+                {payslipLines.filter(l => Number(l.employeeShare) > 0 && !['PERA','RATA','HAZARD_PAY','SUBSISTENCE'].includes((l.code || '').toUpperCase())).map(line => (
                   <tr key={line.id}><td>{line.description || line.code}</td><td className="font-mono text-right">{peso(line.employeeShare)}</td></tr>
                 ))}
-                {payslipLines.length === 0 && (
+                {payslipLines.filter(l => Number(l.employeeShare) > 0 && !['PERA','RATA','HAZARD_PAY','SUBSISTENCE'].includes((l.code || '').toUpperCase())).length === 0 && (
                   <tr><td>Statutory / other deductions</td><td className="font-mono text-right">{peso(payslip.deductions)}</td></tr>
                 )}
                 <tr><td className="font-semibold">Total</td><td className="font-mono text-right font-semibold">{peso(payslipLines.length ? payslipLines.reduce((s, l) => s + Number(l.employeeShare ?? 0), 0) : payslip.deductions)}</td></tr>

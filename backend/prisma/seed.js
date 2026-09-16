@@ -766,7 +766,29 @@ async function seedTenant(tenantId, tenantCode, lguLevel, hash) {
         },
       });
     }
+
+  // ── Default allowance rules (PERA / RATA / Hazard Pay / Subsistence) ──────
+  const allowanceDefaults = [
+    { type: 'PERA', amount: 2000 },
+    { type: 'RATA', amount: 1500 },
+    { type: 'HAZARD_PAY', amount: 0 },
+    { type: 'SUBSISTENCE', amount: 0 },
+  ];
+  for (const rule of allowanceDefaults) {
+    const existing = await prisma.allowanceRule.findFirst({ where: { tenantId, type: rule.type } });
+    if (!existing) {
+      await prisma.allowanceRule.create({
+        data: {
+          tenantId,
+          type: rule.type,
+          amount: rule.amount,
+          effectiveFrom: new Date(`${currentMonth}-01`),
+          active: true,
+        },
+      });
+    }
   }
+}
 
 async function main() {
   const hash = await bcrypt.hash(process.env.SEED_DEFAULT_PASSWORD || 'admin123', 10);

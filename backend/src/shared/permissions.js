@@ -22,6 +22,10 @@ export const CAPABILITIES = [
   { key: 'appointmentsRead', label: 'View appointments' },
   { key: 'appointmentsCRUD', label: 'Manage appointments' },
   { key: 'disqualificationCRUD', label: 'Manage DIBAR records' },
+  { key: 'recruitmentCRUD', label: 'Manage vacancies and applicants' },
+  { key: 'interviewCRUD', label: 'Manage interviews and selection' },
+  { key: 'trainingCRUD', label: 'Manage training programs and enrollments' },
+  { key: 'loansCRUD', label: 'Manage employee loans' },
 ];
 
 /** route mapping (documentation only) */
@@ -59,6 +63,10 @@ export const DEFAULT_PERMISSIONS = {
     appointmentsRead: true,
     appointmentsCRUD: true,
     disqualificationCRUD: true,
+    recruitmentCRUD: true,
+    interviewCRUD: true,
+    trainingCRUD: true,
+    loansCRUD: true,
   },
   SUPER_ADMIN: {
     manageUsersAndRoles: true,
@@ -73,6 +81,10 @@ export const DEFAULT_PERMISSIONS = {
     appointmentsRead: true,
     appointmentsCRUD: true,
     disqualificationCRUD: true,
+    recruitmentCRUD: true,
+    interviewCRUD: true,
+    trainingCRUD: true,
+    loansCRUD: true,
   },
   HR_MANAGER: {
     manageUsersAndRoles: false,
@@ -87,6 +99,10 @@ export const DEFAULT_PERMISSIONS = {
     appointmentsRead: true,
     appointmentsCRUD: true,
     disqualificationCRUD: true,
+    recruitmentCRUD: true,
+    interviewCRUD: true,
+    trainingCRUD: true,
+    loansCRUD: true,
   },
   PAYROLL_OFFICER: {
     manageUsersAndRoles: false,
@@ -101,6 +117,10 @@ export const DEFAULT_PERMISSIONS = {
     appointmentsRead: false,
     appointmentsCRUD: false,
     disqualificationCRUD: false,
+    recruitmentCRUD: false,
+    interviewCRUD: false,
+    trainingCRUD: false,
+    loansCRUD: false,
   },
   DEPARTMENT_HEAD: {
     manageUsersAndRoles: false,
@@ -115,6 +135,10 @@ export const DEFAULT_PERMISSIONS = {
     appointmentsRead: false,
     appointmentsCRUD: false,
     disqualificationCRUD: false,
+    recruitmentCRUD: false,
+    interviewCRUD: false,
+    trainingCRUD: false,
+    loansCRUD: false,
   },
   AUDITOR: {
     manageUsersAndRoles: false,
@@ -129,6 +153,10 @@ export const DEFAULT_PERMISSIONS = {
     appointmentsRead: false,
     appointmentsCRUD: false,
     disqualificationCRUD: false,
+    recruitmentCRUD: false,
+    interviewCRUD: false,
+    trainingCRUD: false,
+    loansCRUD: false,
   },
   EMPLOYEE: {
     manageUsersAndRoles: false,
@@ -143,5 +171,9 @@ export const DEFAULT_PERMISSIONS = {
     appointmentsRead: false,
     appointmentsCRUD: false,
     disqualificationCRUD: false,
+    recruitmentCRUD: false,
+    interviewCRUD: false,
+    trainingCRUD: false,
+    loansCRUD: false,
   },
 };
