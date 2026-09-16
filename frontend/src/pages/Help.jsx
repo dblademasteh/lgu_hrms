@@ -3,7 +3,8 @@ import Layout from '../components/Layout.jsx';
 import {
   Database, User, Building, Calendar, BarChart3, Shield, Settings as SettingsIcon,
   FileText, Edit3, Search, ChevronRight, Users, Banknote,
-  LayoutGrid, Keyboard
+  LayoutGrid, Keyboard, ShieldCheck, Clock, Fingerprint, Smartphone,
+  RefreshCw, Download, Trash2, Bell, Sun, LogOut
 } from 'lucide-react';
 import { ROLE_BADGE_TONES } from '../config/permissions.js';
 
@@ -12,6 +13,8 @@ const quickLinks = [
   { label: 'Dashboard', desc: 'Overview & metrics', icon: LayoutGrid, color: 'text-accent', chip: 'bg-accent/10', target: 'routes' },
   { label: 'Employees', desc: 'People management', icon: Users, color: 'text-success', chip: 'bg-success/10', target: 'modules' },
   { label: 'Payroll', desc: 'Pay runs & payslips', icon: Banknote, color: 'text-accent', chip: 'bg-accent/10', target: 'modules' },
+  { label: 'Attendance', desc: 'Time records & kiosk', icon: Clock, color: 'text-warning', chip: 'bg-warning/10', target: 'modules' },
+  { label: 'Biometrics', desc: 'Device sync & enrolment', icon: Fingerprint, color: 'text-success', chip: 'bg-success/10', target: 'modules' },
   { label: 'Leave', desc: 'Requests & approvals', icon: Calendar, color: 'text-warning', chip: 'bg-warning/10', target: 'modules' },
   { label: 'Performance', desc: 'IPCR & OPCR', icon: BarChart3, color: 'text-accent', chip: 'bg-accent/10', target: 'modules' },
   { label: 'Multi-Tenant', desc: 'Tenant setup & onboarding', icon: Building, color: 'text-success', chip: 'bg-success/10', target: 'multi-tenancy' },
@@ -31,10 +34,11 @@ export default function Help() {
           items: [
             { label: 'Open Browser', description: 'Navigate to the LGU HRMS application URL provided by your administrator' },
             { label: 'Enter Credentials', description: 'Use your assigned username and password to log in — or the PIN tab if you set a sign-in PIN' },
-            { label: 'Administrative Account', description: 'First-time admin: initial password is admin123. Please change immediately after login.' },
+            { label: 'Administrative Account', description: 'First-time admin: initial password is <code>LguIms2026!</code>. Change immediately after login in Settings → Account → Security.' },
             { label: 'PIN Sign-In', description: 'Set a 4–6 digit PIN in Settings → Account → Security, then use the PIN tab on the login page. Locked after 8 failed attempts in 15 minutes.' },
             { label: 'Password Rotation', description: 'Passwords expire every 30 days. The login page routes you to Settings when expired; renew in Account → Security.' },
-            { label: 'Tenant Selection', description: 'SUPER_ADMIN can pick an LGU via Advanced options on login. Subdomain or X-Tenant-Id auto-detects tenant. Regular users see auto-detect only.' },
+            { label: 'Tenant Selection (SUPER_ADMIN)', description: 'SUPER_ADMIN: click the Building2 dropdown in the header to switch LGUs. Selection is stored in localStorage (<code>lgu-active-tenant</code>) and sent as X-Tenant-Id on every request. Regular users are auto-scoped to their tenant via JWT.' },
+            { label: 'Tenant Registration', description: 'First-time setup: visit /tenant-register to provision a new LGU instance. Platform SUPER_ADMIN only for direct API provisioning.' },
           ]
         },
         {
@@ -73,9 +77,10 @@ export default function Help() {
         {
           title: 'Tenant Registration',
           items: [
-            { label: 'Platform Operator Only', description: 'Tenant creation is restricted to SUPER_ADMIN. Use the admin portal or contact the platform operator.' },
-            { label: 'Seed Data', description: 'After creation, run seedTenant for DEFAULT/TARLAC to populate initial departments, users, employees, payroll.' },
-            { label: 'Provisioning Docs', description: 'See docs/TENANT_PROVISIONING.md for full provisioning steps.' },
+            { label: 'Self-Service Portal', description: 'New LGUs can provision via /tenant-register. Fill company details and admin contact.' },
+            { label: 'Platform Provisioning', description: 'SUPER_ADMIN: POST /api/v1/tenants to create a tenant programmatically. See docs/TENANT_PROVISIONING.md.' },
+            { label: 'Database Seed', description: 'After creation, seed with: <code>cd backend && node prisma/seed.js</code>. Seeds DEFAULT and TARLAC tenants with initial data.' },
+            { label: 'On-Premise Login', description: 'Auth endpoints (login, login-pin, refresh) are IP-restricted per tenant via allowedIps CIDR allowlist. Configure in Tenant settings.' },
           ]
         }
       ]
@@ -114,10 +119,11 @@ export default function Help() {
           title: 'Performance & Learning',
           icon: BarChart3,
           items: [
-            { label: 'IPCR - Create', description: 'Select employee. Choose review year. Rate each competency 1-5. Submit.' },
-            { label: 'OPCR - Create', description: 'Organization-wide rating for same competencies.' },
+            { label: 'IPCR', description: 'Individual Performance Commitment and Review. Visit /ipcr. Real columns, no mocks.' },
+            { label: 'OPCR', description: 'Organization-level performance review for the same competencies.' },
             { label: 'Training - Enroll', description: 'Select program. Click Enroll. Add employee to training.' },
             { label: 'Training - Track', description: 'Mark attendance. Update completion status.' },
+            { label: 'Learning Plans', description: 'IDP (Individual Development Plan) and L&D plans at /learning-programs.' },
           ]
         },
         {
@@ -168,7 +174,14 @@ export default function Help() {
         { title: '/organization', description: 'Department tree structure. Create, edit, and manage organizational units.' },
         { title: '/employees', description: 'Employee master list with search, column filters, sorting, and export.' },
         { title: '/ess', description: 'Employee Self-Service: View payslips, file leave requests, check attendance.' },
-        { title: '/payroll', description: 'Create payroll periods, generate runs, approve, and download payslips.' },
+        { title: '/attendance', description: 'Daily Time Record monitoring, overtime tracking, self-service punch, and attendance reports.' },
+        { title: '/attendance/punch', description: 'Self-service punch in/out. Open/close attendance rows with automatic lunch deduction.' },
+        { title: '/attendance/my', description: 'Your full attendance history for the selected period.' },
+        { title: '/attendance/today', description: 'Today\'s punch events and computed hours.' },
+        { title: '/kiosk', description: 'Login-less kiosk app for lobby terminals. Supports punch in/out and keypad entry.' },
+        { title: '/biometric-devices', description: 'ADMIN-only: manage biometric device connections, sync, and enrolment.' },
+        { title: '/payroll', description: 'Create payroll periods, generate runs, approve, post, and download payslips.' },
+        { title: '/payroll/payslips/:id/print', description: 'Printable HTML payslip for a specific payroll item.' },
         { title: '/leave', description: 'Submit leave requests, track status, view balances and history.' },
         { title: '/attendance', description: 'Daily Time Record monitoring, overtime tracking, and attendance reports.' },
         { title: '/audit', description: 'Comprehensive audit log of all changes. Filter by user or date range.' },
@@ -195,8 +208,9 @@ export default function Help() {
             { label: 'Global Search', description: 'Press Ctrl/Cmd+K. Type query and press Enter to search all modules.' },
             { label: 'Help Link', description: 'Click the Help icon to view this documentation page.' },
             { label: 'Notifications', description: 'Click bell icon. Red badge shows unread count. Click to view and clear.' },
-            { label: 'Theme Toggle', description: 'Click sun/moon icon to switch between light and dark mode.' },
-            { label: 'User Menu', description: 'Click your avatar/name. Options: Profile, Change Password, Logout.' },
+            { label: 'Theme Toggle', description: 'Click sun/moon icon to switch between light and dark mode. Preference saved to localStorage.' },
+            { label: 'Tenant Switcher (SUPER_ADMIN)', description: 'Building2 dropdown in the app bar lists all tenants. Click to switch — X-Tenant-Id is sent on every subsequent request.' },
+            { label: 'User Menu', description: 'Click your avatar/name. Options: Profile, Settings, Change Password, Logout.' },
           ]
         },
         {
@@ -227,11 +241,189 @@ export default function Help() {
           ]
         },
         {
-          title: 'Role Management',
+          title: 'Capability-Based Permissions',
           items: [
-            { label: 'Assign Users', description: 'Admin users: Go to Users module to change role assignments.' },
-            { label: 'Effective Immediately', description: 'Role changes apply after next login or token refresh.' },
-            { label: 'Inactive Status', description: 'Users with INACTIVE status cannot log in. Set to ACTIVE to restore.' },
+            { label: 'Capabilities Over Roles', description: 'Permissions are capability-based: manageUsersAndRoles, employeeRecordsCRUD, payrollRuns, payrollRead, auditTrail, reports, leaveApproval, performanceCRUD, trainingCRUD, interviewCRUD, selfService.' },
+            { label: 'Custom Roles', description: 'SUPER_ADMIN can create custom roles and grant capabilities via /roles/:name/permissions. Changes apply immediately.' },
+            { label: 'My Permissions', description: 'Visit /roles/my-permissions to see your exact capabilities (unauthenticated self-endpoint).' },
+            { label: 'SUPER_ADMIN', description: 'SUPER_ADMIN bypasses all role gating — sees all Sidebar groups and can override tenant via X-Tenant-Id header.' },
+          ]
+        },
+        {
+          title: 'Route Matrix',
+          items: [
+            { label: '/users & /roles', description: 'manageUsersAndRoles capability — ADMIN only by default.' },
+            { label: '/employees', description: 'employeeRecordsCRUD — ADMIN + HR_MANAGER.' },
+            { label: '/payroll (GET)', description: 'payrollRead — ADMIN + HR_MANAGER + PAYROLL_OFFICER.' },
+            { label: '/payroll/runs POST/approve/post', description: 'payrollRuns — ADMIN + PAYROLL_OFFICER only.' },
+            { label: '/payroll/periods POST/close', description: 'payrollRuns — ADMIN + PAYROLL_OFFICER only.' },
+            { label: '/audit', description: 'auditTrail — ADMIN + AUDITOR only.' },
+            { label: '/reports', description: 'reports — ADMIN + HR_MANAGER + PAYROLL_OFFICER + AUDITOR.' },
+            { label: '/leave PATCH', description: 'leaveApproval — ADMIN + HR_MANAGER + DEPARTMENT_HEAD.' },
+            { label: '/databases (query/backup/import)', description: 'SUPER_ADMIN only. Tenant-scoped read/export for ADMIN + SUPER_ADMIN.' },
+          ]
+        }
+      ]
+    },
+    {
+      id: 'payroll-engine',
+      title: 'Payroll Engine Walkthrough',
+      icon: Banknote,
+      items: [
+        {
+          title: 'Payroll Lifecycle',
+          items: [
+            { label: '1. Create Period', description: 'Payroll → New Period. Set start/end month and pay date. Period starts in DRAFT.' },
+            { label: '2. Generate Run', description: '<code>POST /payroll/runs/:id/generate</code> computes all items: monthlySalary, contribution/tax rules, attendance late/undertime, and loan amortizations — all in Prisma Decimal.' },
+            { label: '3. Review Items', description: 'Each employee payslip shows earnings, deductions, and net. Drill into /runs/:id for full deduction lines.' },
+            { label: '4. Approve Run', description: '<code>PATCH /payroll/runs/:id/approve</code> moves DRAFT → APPROVED. Only APPROVED runs can be posted.' },
+            { label: '5. Post Run', description: '<code>POST /payroll/runs/:id/post</code> appends LedgerEntry rows, creates Payslip rows, marks loan amortizations as paid, and sets status to POSTED. This is irreversible.' },
+            { label: '6. Print Payslips', description: 'Navigate to /payroll/payslips/:id/print for a printable HTML payslip.' },
+          ]
+        },
+        {
+          title: 'Payroll Scale Notes',
+          items: [
+            { label: 'Pagination', description: 'GET /payroll/runs is paginated (page/limit, cap 100). List view omits deductionLines — fetch /runs/:id or deduction lines separately.' },
+            { label: 'Money Integrity', description: 'Never use JS floats. Salary source of truth is Employee.monthlySalary (Decimal 12,2). Server recomputes all totals from stored rates.' },
+            { label: 'Audit Trail', description: 'Every payroll mutation (create, approve, post, generate) is logged to AuditLog with before/after snapshots.' },
+          ]
+        }
+      ]
+    },
+    {
+      id: 'attendance',
+      title: 'Attendance & Time Tracking',
+      icon: Clock,
+      items: [
+        {
+          title: 'Self-Service / My Attendance',
+          items: [
+            { label: 'Punch In', description: 'Visit /attendance/punch or the kiosk. Clock in at start of day — opens a new row.' },
+            { label: 'Punch Out', description: 'Clock out at end of day. System closes the latest open row and computes hours minus the lunch window.' },
+            { label: 'Today View', description: '<code>/attendance/today</code> shows today\'s punch events and computed hours.' },
+            { label: 'My History', description: '<code>/attendance/my</code> shows your full attendance history for the period.' },
+          ]
+        },
+        {
+          title: 'Team Attendance',
+          items: [
+            { label: 'List Records', description: 'ADMIN/HR_MANAGER/DEPARTMENT_HEAD access /attendance. Results are scope-filtered to your department for DEPARTMENT_HEAD.' },
+            { label: 'Late/Absent Tracking', description: 'Attendance rules (workStart, lunch window) come from AttendanceRule. Lateness is computed automatically.' },
+            { label: 'Overtime Requests', description: 'Submit via /overtime. Requires ADMIN/HR_MANAGER/PAYROLL_OFFICER to approve.' },
+          ]
+        },
+        {
+          title: 'Time Rules',
+          items: [
+            { label: 'Work Schedule', description: 'Defaults 08:00–17:00 with 12:00–13:00 lunch. Configurable via AttendanceRule (workStartMins, lunchStartMins, etc.).' },
+            { label: 'Manila Day Logic', description: 'All times parsed as HH:MM and stored UTC, displayed Asia/Manila.' },
+          ]
+        }
+      ]
+    },
+    {
+      id: 'biometric',
+      title: 'Biometric Devices',
+      icon: Fingerprint,
+      items: [
+        {
+          title: 'Device Management',
+          items: [
+            { label: 'Add Device', description: 'Settings → Biometric Devices → Add. Configure IP, port (default 4370), and optional punch key.' },
+            { label: 'Sync Now', description: '<code>POST /biometric-devices/:id/sync</code> pulls logs from device. Deduplicates by [deviceId, deviceLogId].' },
+            { label: 'Manual Event Injection', description: 'Dev-only: <code>POST /dev/device-events</code> injects events through the real ingest+dedup pipeline — no hardware needed.' },
+          ]
+        },
+        {
+          title: 'How Sync Works',
+          items: [
+            { label: 'Deduplication', description: 'BiometricDeviceLog table keyed by [deviceId, deviceLogId]. No duplicate attendance entries.' },
+            { label: 'User Mapping', description: 'Device userId maps to Employee.employeeNumber via BiometricDeviceUser table.' },
+            { label: 'Auto-Polling', description: 'When <code>BIOMETRIC_POLLER=1</code> env is set, server polls every 30s (configurable via BIOMETRIC_POLL_MS).' },
+          ]
+        },
+        {
+          title: 'Enrolment',
+          items: [
+            { label: 'WebAuthn Credentials', description: 'Employee credentials stored as BiometricCredential. Supports passkey-style enrolment via /biometric/credentials.' },
+          ]
+        }
+      ]
+    },
+    {
+      id: 'kiosk',
+      title: 'Attendance Kiosk',
+      icon: Smartphone,
+      items: [
+        {
+          title: 'Kiosk App',
+          items: [
+            { label: 'What', description: 'A separate login-less React app at /kiosk/ (dev :5176) for lobby terminals — no authentication required.' },
+            { label: 'Punch In/Out', description: 'Large buttons with name/time/hours confirmation. Designed for 10ft touch screens.' },
+            { label: 'Keypad Mode', description: 'Employees enter their employee number on a keypad, then punch.' },
+            { label: 'Punch Key', description: 'Device may require a punch key (case-insensitive tenantCode) when BIOMETRIC_PUNCH_KEY is set.' },
+          ]
+        },
+        {
+          title: 'Deployment',
+          items: [
+            { label: 'Build', description: 'Builds to kiosk/dist. Deploy with nginx using base path /kiosk/.' },
+            { label: 'API Proxy', description: 'Kiosk proxies /api to backend :4000 in dev via Vite config.' },
+            { label: 'Docs', description: 'See docs/KIOSK.md for full deployment and workflow chart.' },
+          ]
+        }
+      ]
+    },
+    {
+      id: 'audit',
+      title: 'Audit Trail',
+      icon: ShieldCheck,
+      items: [
+        {
+          title: 'What is Logged',
+          items: [
+            { label: 'Mutating Requests', description: 'Every POST/PUT/PATCH/DELETE passes through global audit middleware exactly once — no per-route duplicates.' },
+            { label: 'Snapshot', description: 'Before and after snapshots stored in AuditLog table.' },
+            { label: 'Failed Attempts', description: 'Failed auth attempts are logged with <code>error: true</code> and go to stderr.' },
+          ]
+        },
+        {
+          title: 'Viewing Logs',
+          items: [
+            { label: 'Audit Module', description: 'Navigate to /audit. Filter by entity, user, or date range.' },
+            { label: 'Roles', description: 'ADMIN and AUDITOR can view audit logs. All others are blocked.' },
+          ]
+        }
+      ]
+    },
+    {
+      id: 'api',
+      title: 'API & Architecture',
+      icon: Database,
+      items: [
+        {
+          title: 'API Layer',
+          items: [
+            { label: 'Base URL', description: 'Backend API at <code>http://localhost:4000/api/v1</code>. Frontend proxies /api on dev.' },
+            { label: 'Auth', description: 'JWT access token (~15 min) + refresh token rotation. Login at /auth/login.' },
+            { label: 'Validation', description: 'All inputs validated with Zod via /middleware/validate.js. Query params use defineProperty (Express 5).' },
+          ]
+        },
+        {
+          title: 'Architecture',
+          items: [
+            { label: 'Thin Routes', description: 'Routes = HTTP + validation only. Services = business logic. Repos = Prisma queries.' },
+            { label: 'Multi-Tenancy', description: 'Shared-schema. All queries use withTenant() scope. Writes stamp tenantId.' },
+            { label: 'Tenant Isolation', description: 'JWT carries tenantId. SUPER_ADMIN can override via X-Tenant-Id header.' },
+          ]
+        },
+        {
+          title: 'Developer Tools',
+          items: [
+            { label: 'Prisma Studio', description: '<code>cd backend && npx prisma studio</code> — visual DB inspector.' },
+            { label: 'Health Check', description: '<code>GET /api/v1/health</code> — always alive for load balancers.' },
+            { label: 'Error Reporting', description: 'Sentry wired in both frontend (route tracing) and backend (error middleware).' },
           ]
         }
       ]
@@ -411,8 +603,8 @@ export default function Help() {
                   {/* ── Modules section: grouped sub-sections with icons ── */}
                   {section.id === 'modules' && items.filter((item) => item.icon && item.items).map((item, i) => renderGroup(item, i))}
 
-                  {/* ── Getting started / Controls: labelled groups ── */}
-                  {(section.id === 'getting-started' || section.id === 'controls') && items.filter((item) => item.items).map((item, i) => renderGroup(item, i))}
+                  {/* ── Getting started / Controls / Deep-dive sections: labelled groups ── */}
+                  {(section.id === 'getting-started' || section.id === 'controls' || section.id === 'multi-tenancy' || section.id === 'payroll-engine' || section.id === 'attendance' || section.id === 'biometric' || section.id === 'kiosk' || section.id === 'audit' || section.id === 'api') && items.filter((item) => item.items).map((item, i) => renderGroup(item, i))}
 
                   {/* ── Routes: route cards ── */}
                   {section.id === 'routes' && (
@@ -429,7 +621,7 @@ export default function Help() {
                           {['ADMIN', 'HR_MANAGER', 'PAYROLL_OFFICER', 'DEPARTMENT_HEAD', 'AUDITOR', 'EMPLOYEE'].map((role) => (
                             <span
                               key={role}
-                              className={`inline-flex items-center px-2 py-0.5 rounded-md border text-[10px] font-mono font-semibold uppercase tracking-wider ${roleBadgeTones[role]}`}
+                              className={`inline-flex items-center px-2 py-0.5 rounded-md border text-[10px] font-mono font-semibold uppercase tracking-wider ${ROLE_BADGE_TONES[role]}`}
                             >
                               {role}
                             </span>

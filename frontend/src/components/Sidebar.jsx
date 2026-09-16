@@ -3,7 +3,7 @@ import { NavLink, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Users, Building2, FileBadge, Banknote, CalendarDays, Clock,
   ShieldCheck, BarChart3, UserCog, Landmark, Settings as SettingsIcon, Fingerprint, ShieldAlert, HelpCircle,
-  Search, ChevronDown, Database
+  Search, ChevronDown, Database, File, ClipboardList, FileText, Trophy, Calendar, Star
 } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore.js';
 import { useSidebarStyle } from '../sidebarStyle.js';
@@ -44,6 +44,7 @@ const groups = [
       { name: 'Plantilla', path: '/plantilla', icon: FileBadge, roles: ['HR_MANAGER', 'ADMIN'] },
       { name: 'Designation', path: '/designation', icon: UserCog, roles: ['HR_MANAGER', 'ADMIN'] },
       { name: 'Recruitment', path: '/recruitment', icon: UserCog, roles: ['HR_MANAGER', 'ADMIN'] },
+      { name: 'MSB Minutes', path: '/msb-minutes', icon: ClipboardList, roles: ['HR_MANAGER', 'ADMIN'], capability: 'interviewCRUD' },
     ]
   },
   {
@@ -51,6 +52,11 @@ const groups = [
     items: [
       { name: 'Performance', path: '/performance', icon: BarChart3, roles: ['HR_MANAGER', 'ADMIN', 'DEPARTMENT_HEAD'] },
       { name: 'Learning', path: '/learning', icon: Landmark },
+      { name: 'IDP', path: '/idp', icon: FileText, roles: ['HR_MANAGER', 'ADMIN'], capability: 'trainingCRUD' },
+      { name: 'Awards', path: '/awards', icon: Trophy, roles: ['HR_MANAGER', 'ADMIN'], capability: 'performanceCRUD' },
+      { name: 'TNA', path: '/tna', icon: ClipboardList, roles: ['HR_MANAGER', 'ADMIN'], capability: 'trainingCRUD' },
+      { name: 'L&D Plans', path: '/ld-plans', icon: Calendar, roles: ['HR_MANAGER', 'ADMIN'], capability: 'trainingCRUD' },
+      { name: 'Evaluations', path: '/training-evaluations', icon: Star, roles: ['HR_MANAGER', 'ADMIN'], capability: 'trainingCRUD' },
       { name: 'Attendance', path: '/attendance', icon: Clock, roles: ['HR_MANAGER', 'ADMIN', 'DEPARTMENT_HEAD'], children: [
         { name: 'DTR', path: '/attendance' },
         { name: 'Portal', path: '/attendance-portal' },
@@ -65,6 +71,8 @@ const groups = [
         { name: 'Requests', path: '/leave' },
         { name: 'Credits', path: '/leave/credits' },
       ]},
+      { name: 'Loans', path: '/loans', icon: FileText, roles: ['PAYROLL_OFFICER', 'HR_MANAGER', 'ADMIN'], capability: 'loansCRUD' },
+      { name: 'Bonus', path: '/bonus', icon: Banknote, roles: ['PAYROLL_OFFICER', 'HR_MANAGER', 'ADMIN'], capability: 'payrollRuns' },
     ]
   },
   {
@@ -80,6 +88,7 @@ const groups = [
     items: [
       { name: 'Users & Roles', path: '/users', icon: UserCog, roles: ['ADMIN', 'SUPER_ADMIN'], capability: 'manageUsersAndRoles' },
       { name: 'Biometric Devices', path: '/biometric-devices', icon: Fingerprint, roles: ['ADMIN'] },
+      { name: 'Documents', path: '/documents', icon: File, roles: ['ADMIN', 'SUPER_ADMIN'] },
       { name: 'Settings', path: '/settings', icon: SettingsIcon },
     ]
   },
@@ -452,8 +461,8 @@ function AccordionSidebar({ collapsed, visibleGroups, role }) {
           <p className="mono-label text-[10px]">GOV · CSC Compliant</p>
         </div>
       </div>
-      <div className="px-3 pt-3">
-        <label className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl border border-line bg-surface text-ink shadow-sm transition-colors focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/30">
+      <div className="px-3 pt-3 pb-2">
+        <label className="flex items-center gap-2.5 px-3 py-2 rounded-xl border border-line bg-surface text-ink shadow-sm transition-colors focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/30">
           <Search size={15} className="text-muted" aria-hidden="true" />
           <input
             value={query}
@@ -464,7 +473,7 @@ function AccordionSidebar({ collapsed, visibleGroups, role }) {
           />
         </label>
       </div>
-      <nav className="flex-1 overflow-y-auto hide-scrollbar py-2 px-2 space-y-2" aria-label="Modules by group">
+      <nav className="flex-1 overflow-y-auto hide-scrollbar py-1 px-2 space-y-2" aria-label="Modules by group">
         {filtered.length === 0 && (
           <p className="px-3 py-6 text-center text-xs text-muted">No modules match “{query}”.</p>
         )}
@@ -492,7 +501,7 @@ function AccordionSidebar({ collapsed, visibleGroups, role }) {
                 <ChevronDown size={15} className={`text-muted/70 shrink-0 transition-transform duration-200 ${isOpen ? 'rotate-180 text-ink' : ''}`} aria-hidden="true" />
               </button>
               {isOpen && (
-                <div className="px-1 pb-1.5 space-y-0.5">
+                <div className="px-2 pb-2 space-y-1">
                   {g.items.map(i => {
                     const Icon = i.icon;
                     const hasChildren = i.children && i.children.length > 0;
@@ -502,7 +511,7 @@ function AccordionSidebar({ collapsed, visibleGroups, role }) {
                           to={i.path}
                           title={i.name}
                           className={({ isActive }) =>
-                            `flex items-center gap-2.5 px-3 py-2 rounded-lg mx-1 transition-all duration-150 text-[13px]
+                            `flex items-center gap-2.5 px-3 py-2 rounded-lg transition-all duration-155 text-[13px]
                               ${isActive
                                 ? 'bg-accent/10 text-accent font-semibold border-l-2 border-accent'
                                 : 'text-ink hover:bg-bg/60 border-l-2 border-transparent'}`}
