@@ -12,3 +12,11 @@ export async function openHtmlInNewTab(promise) {
   setTimeout(() => URL.revokeObjectURL(url), 60000);
   return res;
 }
+
+// Open a pre-built HTML document (e.g. a generated IPCRF) in a new tab for printing.
+export function openHtmlString(html) {
+  if (!html) return;
+  const url = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
+  window.open(url, '_blank', 'noopener');
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+}

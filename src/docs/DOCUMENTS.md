@@ -104,3 +104,21 @@ decomposed into shippable module specs in
 M2 version history, M3 routing & assignment, M5 retention & disposal,
 M6 notifications & escalation, M7 e-signature, plus the phase-0 housekeeping
 backlog (remaining: document seed data, stale benchmark docs).
+
+## Deep-dive findings (Sep 2026 harden scan)
+- **Error surfacing fixed:** `Documents.jsx` + `DocumentsTracking.jsx` now surface
+  `err.response.data.error.message` (backend's descriptive `{error:{code,message}}`)
+  instead of the generic Axios "Request failed with status code 4xx" on
+  status/archive/submit/timeline/export failures. App-wide normalization deferred.
+- **Read-gating drift (open):** the routes gate `GET /documents`, `/stats`, `/:id`,
+  `/:id/download` with `requirePermission('documentsCRUD')`, so non-`documentsCRUD`
+  roles (EMPLOYEE incl.) get `403` on the list — this contradicts the "reads require
+  auth only" text above and AGENTS.md. Decision pending: open reads to any
+  authenticated user (align to docs) or keep restricted and document the intent.
+  Tracked in `TODOS.md` → "DTMS deep-dive findings".
+- **Dev-DB leftover mocks:** five `Document` rows seed with `https://example.com/...`
+  URLs, all `DRAFT`, no real file — authenticated download 404s `FILE_MISSING`.
+  Housekeeping (honest seed with fixture files) still open.
+- **Other open notes:** orphaned file on replace, phantom `PRINTED`/`EXPORTED`
+  actions, `tags` filter unused, stats refetch churn, form misses version/effective/
+  tags/retention fields — see `TODOS.md` → "DTMS deep-dive findings".

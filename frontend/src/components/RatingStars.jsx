@@ -13,11 +13,11 @@ export default function RatingStars({ rating, size = 14 }) {
   return (
     <div className="flex items-center gap-0.5">
       {[...Array(fullStars)].map((_, i) => (
-        <Star key={`full-${i}`} size={size} fill="currentColor" className="text-amber-400" />
+        <Star key={`full-${i}`} size={size} fill="currentColor" className="text-warning" />
       ))}
-      {hasHalf && <StarHalf key="half" size={size} fill="currentColor" className="text-amber-400" />}
+      {hasHalf && <StarHalf key="half" size={size} fill="currentColor" className="text-warning" />}
       {[...Array(emptyStars)].map((_, i) => (
-        <StarOutline key={`empty-${i}`} size={size} className="text-paper" />
+        <StarOutline key={`empty-${i}`} size={size} className="text-line" />
       ))}
     </div>
   );

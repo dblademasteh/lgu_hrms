@@ -40,3 +40,19 @@ export async function findEnrollments(req, { page=1, limit=50, employeeId, progr
   return { items,total,page,limit };
 }
 export async function createEnrollment(req, data){ return prisma.trainingEnrollment.create({ data: stampTenant(req, data), include:{ employee:true, program:true } }); }
+export async function findEnrollmentById(req, id){ return prisma.trainingEnrollment.findFirst({ where: withTenant(req, { id }), include:{ employee:true, program:true } }); }
+export async function findEnrollmentDuplicate(req, { programId, employeeId }){
+  return prisma.trainingEnrollment.findFirst({ where: withTenant(req, { programId, employeeId }) });
+}
+export async function updateEnrollment(req, id, data){
+  const scope = withTenant(req, { id });
+  const existing = await prisma.trainingEnrollment.findFirst({ where: scope });
+  if (!existing) { const e = new Error('Enrollment not found'); e.status = 404; throw e; }
+  return prisma.trainingEnrollment.update({ where: scope, data, include:{ employee:true, program:true } });
+}
+export async function deleteEnrollment(req, id){
+  const scope = withTenant(req, { id });
+  const existing = await prisma.trainingEnrollment.findFirst({ where: scope });
+  if (!existing) { const e = new Error('Enrollment not found'); e.status = 404; throw e; }
+  return prisma.trainingEnrollment.delete({ where: scope });
+}

@@ -42,18 +42,10 @@ import { sentryWrapCreateBrowserRouter } from './lib/sentry.js';
 
 function Protected({ children, roles, capability }) {
   const user = useAuthStore(s => s.user);
-  const hydrate = useAuthStore(s => s.hydrate);
   const caps = useUserCapabilities();
-  const [ready, setReady] = React.useState(!!user);
-  React.useEffect(() => {
-    if (!user) hydrate();
-    setReady(true);
-  }, [user, hydrate]);
-  if (!ready) return null;
-  if (!useAuthStore.getState().user) return <Navigate to="/" replace />;
-  const current = useAuthStore.getState().user;
-  if (roles && !roles.includes(current.role)) return <Navigate to="/dashboard" replace />;
-  if (capability && current.role !== 'SUPER_ADMIN') {
+  if (!user) return <Navigate to="/" replace />;
+  if (roles && !roles.includes(user.role)) return <Navigate to="/dashboard" replace />;
+  if (capability && user.role !== 'SUPER_ADMIN') {
     if (Object.keys(caps).length === 0) return null;
     if (!caps[capability]) return <Navigate to="/dashboard" replace />;
   }
@@ -96,7 +88,7 @@ function createAppRouter() {
         { path: '/appointments', element: <Protected roles={['ADMIN', 'HR_MANAGER', 'SUPER_ADMIN']} capability="appointmentsCRUD"><Appointments /></Protected> },
         { path: '/documents', element: <Protected roles={['ADMIN', 'HR_MANAGER', 'SUPER_ADMIN']} capability="documentsCRUD"><Documents /></Protected> },
   { path: '/documents/tracking', element: <Protected roles={['ADMIN', 'HR_MANAGER', 'AUDITOR', 'SUPER_ADMIN']} capability="documentsTrack"><DocumentsTracking /></Protected> },
-        { path: '/performance', element: <Protected roles={['ADMIN', 'HR_MANAGER', 'DEPARTMENT_HEAD', 'SUPER_ADMIN']}><Performance /></Protected> },
+        { path: '/performance', element: <Protected roles={['ADMIN', 'HR_MANAGER', 'DEPARTMENT_HEAD', 'SUPER_ADMIN']} capability="performanceRead"><Performance /></Protected> },
         { path: '/plantilla', element: <Protected roles={['ADMIN', 'HR_MANAGER', 'SUPER_ADMIN']} capability="employeeRecordsCRUD"><Plantilla /></Protected> },
         { path: '/vacancy', element: <Protected roles={['ADMIN', 'HR_MANAGER', 'SUPER_ADMIN']} capability="recruitmentCRUD"><Navigate to="/recruitment?tab=vacancies" replace /></Protected> },
         { path: '/designation', element: <Protected roles={['ADMIN', 'HR_MANAGER', 'SUPER_ADMIN']} capability="appointmentsCRUD"><Designation /></Protected> },
@@ -104,7 +96,7 @@ function createAppRouter() {
         { path: '/recruitment', element: <Protected roles={['ADMIN', 'HR_MANAGER', 'SUPER_ADMIN']} capability="recruitmentCRUD"><Recruitment /></Protected> },
         { path: '/interviews', element: <Protected roles={['ADMIN', 'HR_MANAGER', 'SUPER_ADMIN']} capability="interviewCRUD"><Navigate to="/recruitment?tab=interviews" replace /></Protected> },
         { path: '/ess', element: <Protected roles={['EMPLOYEE', 'ADMIN', 'HR_MANAGER', 'PAYROLL_OFFICER', 'DEPARTMENT_HEAD']}><ESS /></Protected> },
-        { path: '/ipcr', element: <Protected roles={['ADMIN', 'HR_MANAGER', 'DEPARTMENT_HEAD', 'SUPER_ADMIN']}><IPCR /></Protected> },
+        { path: '/ipcr', element: <Protected roles={['ADMIN', 'HR_MANAGER', 'DEPARTMENT_HEAD', 'SUPER_ADMIN']} capability="performanceRead"><IPCR /></Protected> },
         { path: '/disqualifications', element: <Protected roles={['ADMIN', 'HR_MANAGER', 'SUPER_ADMIN']} capability="disqualificationCRUD"><Disqualifications /></Protected> },
         { path: '/settings', element: <Protected><Settings /></Protected> },
         { path: '/help', element: <Protected><Help /></Protected> },

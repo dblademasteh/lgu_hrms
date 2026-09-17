@@ -245,4 +245,54 @@ Planning complete. Implemented so far: **Housekeeping (partial)** + **M4**.
 - [ ] [M3 Routing & Assignment](src/docs/modules/dtms/03-routing-and-assignment.md)
 - [ ] [M5 Retention & Disposal](src/docs/modules/dtms/05-retention-and-disposal.md)
 - [ ] [M6 Notifications & Escalation](src/docs/modules/dtms/06-notifications-and-escalation.md)
+
+### DTMS deep-dive findings (Sep 2026 harden scan)
+Reads-vs-docs drift + error UX + leftover fixtures surfaced in a live scan:
+- [ ] **Read gating drift (confirmed 403):** `GET /documents`, `/stats`, `/:id`, `/:id/download` are gated by `requirePermission('documentsCRUD')`, but AGENTS.md + DOCUMENTS.md say "reads require auth only". EMPLOYEE (tested) gets `403` on list — staff cannot browse published documents at all. Decide: (a) open reads to any authenticated user (align to docs), or (b) keep restricted + document the intent in AGENTS/DOCUMENTS.
+- [ ] **No employee-facing document browse:** only ADMIN/HR_MANAGER/SUPER_ADMIN see `/documents`. There is no "Published Documents" read-only view for staff; the public `/doc-download/:id/download` requires knowing the UUID+subdomain. If staff should read office orders/policies/payslips, add an ESS/portal published-documents read view (feeds M3 "for information" too).
+- [ ] **Opaque toast errors:** `Documents.jsx` `handleStatus`/`handleDelete`/`handleSubmit` toast `e.message` (axios generic "Request failed with status code 409") — the backend's descriptive `{error:{code,message}}` is dropped (`err.response.data.error.message`). Cross-cutting (most pages share this), but DTMS workflow 403/409s are the most confusing. Add a client helper or normalize in `api/client.js`.
+- [x] **DTMS error surfacing (partial):** `Documents.jsx` + `DocumentsTracking.jsx` now read `err.response.data.error.message` before falling back — workflow 409/403/save failures show the backend's descriptive text. Deferred app-wide normalization (the other pages still toast generic Axios messages) to its own pass.
+- [ ] **Dev-DB leftover mocks:** 5 seeded `Document` rows (Office Order / MSB / LD Plan / Policy / Minutes) point to `https://example.com/...`, all `DRAFT`, no real file — authenticated download 404s `FILE_MISSING`; housekeeping "delete test fixtures" + "seed honest documents with real uploads" still open (pending item above).
+- [ ] **`stats` refetch churn:** `Documents.jsx` refetches `GET /documents/stats` on every `[page, filters]` change though counts are tenant-wide — fetch once on mount + after transitions, not per filter/page.
+- [ ] **Orphaned files on replace:** `updateDocument` with a new file never unlinks the previous file from disk (storage leak over time). Delete the old file only after the DB update commits.
+- [ ] **`tags` filter not applied:** `listContracts.query.tags` is accepted but `documentRepository.findMany` never applies it — either wire it (client sends `tags`) or drop the schema field.
+- [ ] **`PRINTED`/`EXPORTED` phantom actions:** `DocumentAccessAction` + tracking filters offer `PRINTED`/`EXPORTED` but no capture point exists (only VIEWED/DOWNLOADED are logged). Wire print/export actions or hide them.
+- [ ] **Create/Edit form under-fields:** modal only exposes title/type/employee/description/file; `version`, `effectiveDate`, `tags`, `retentionClass`, `seriesCode` are contract+model supported but absent from the UI (needed by M1/M2/M5 anyway).
+- [ ] **Minor harden notes:** `resolveFilePath` uses sync `fs.statSync` (blocking in handler); download sends `Content-Disposition: inline` (public route renders in-browser — consider an `?download=1` attachment flag); `documentController.workflow` builds the map manually — fine, just duplicated from `workflow.js`.
 - [ ] [M7 E-Signature](src/docs/modules/dtms/07-e-signature.md)
+
+## Performance & L&D deep-dive findings (Sep 2026 harden scan — verified live, reference: src/docs/PERFORMANCE_LEARNING.md)
+### Verified live bugs (backend)
+- [x] **Crash — enrollment `IN_PROGRESS` → HTTP 500** — **fixed**: `contracts/training.js` enrollment enum realigned to the DB `EnrollmentStatus` enum (`ENROLLED|COMPLETED|CANCELLED`, dropped `IN_PROGRESS`); live POST with a bogus status now 400 (contract rejection), no longer 500.
+- [x] **Duplicate enrollments allowed** — **fixed**: composite UNIQUE `[tenantId, programId, employeeId]` via migration `20260917120000_add_performance_review_and_enrollment_uniques` (deployed) + `findEnrollmentDuplicate` guard in repo/service → live dup POST now 409 (`P2002` mapper), not 201.
+- [x] **Enrollment lifecycle dead** — **fixed**: `PATCH /enrollments/:id` (status `ENROLLED→COMPLETED` with `completedAt` stamp, `→CANCELLED`; terminal states guarded → 422) + `DELETE /enrollments/:id` (204) mounted in `routes/training.js` (routes/controllers/service/repo), so the Learning UI can track completion end-to-end.
+- [x] **EMPLOYEE reads all reviews (privacy leak)** — **fixed**: `GET /performance` + `/:id` gated by `requirePermission('performanceRead')` (ADMIN/HR_MANAGER/DEPARTMENT_HEAD + SUPER_ADMIN only; `performanceRead` is a real capability now); live `employee-default` → 403, `department_head-default` → 200.
+- [x] **Review uniqueness missing** — **fixed**: composite UNIQUE `[tenantId, employeeId, reviewYear, reviewType]` in the same migration (deployed); dev OPCR dupes deduped (4 junk reviews collapsed to 1, kept latest; `remaining duplicate groups = 0`).
+- [x] **Dead `parentReviewId` TDZ code** — **fixed**: `performanceService.updatePerformanceReview` now assigns `payload.parentReviewId` after `const payload` (TDZ moved below the declaration, `parentReviewId` block pre-flags parent validation); `updatePerformanceReviewSchema` gained `parentReviewId` so OPCR cascade is settable.
+
+### Frontend wiring gaps (module can't do its job end-to-end)
+- [x] **No create-review UI** — **fixed** (`IPCR.jsx` rewrite): "New Review" modal (employee, type, year, period, weights, parent OPCR, comments), auto-selects the new review; `api/performance.js` create/update/delete now called.
+- [x] **No status/approve UI** — **fixed**: contextual `WORKFLOW` button groups per status (PLANNING/MONITORING/REVIEW/APPROVED/REJECTED/CANCELLED) calling `updatePerformanceReview(status)`; APPROVED compute + approve controls reachable.
+- [x] **Target "Remove" is local-only** — **fixed**: unsaved rows filter locally; persisted rows ConfirmDialog → `removeTarget` server-side DELETE → reload.
+- [x] **Part II competencies un-writable** — **fixed**: inline competency picker (score/max/weight) → `addReviewCompetency`; per-row edit+Save → `updateReviewCompetency`; remove → `removeReviewCompetency`.
+- [x] **Competency catalog dead** — **fixed**: catalog modal (list + create code/name/description + delete with in-use guard) on the Part II card.
+- [x] **Write access only for ADMIN** (`requireRole('ADMIN')` on all review/target/compute routes) — HR_MANAGER & DEPARTMENT_HEAD (the SPMS rater) can't author or rate IPCRs. **Still open — backend matrix** (frontend gates on `performanceCRUD` capability; route gating pending).
+- [x] **Print preview is a stub** — **fixed**: `buildIPCRFHtml` (named-color-only SPMS-style IPCRF: meta header, Part I targets + group averages, Part II competencies, Part III summary, signatures) → `openHtmlString` (new blob transport in `lib/print.js`).
+- [ ] **Notifications on REVIEW/approve requests** + **mid-year (MONITORING) capture screen** — still future work.
+
+### Dead code / dead navigation
+- [ ] **Broken Sidebar links under Performance & L&D:** IDP `/idp`, Awards `/awards`, TNA `/tna`, L&D Plans `/ld-plans`, Evaluations `/training-evaluations` — no App.jsx routes, no backend mounts; all NotFound.
+- [ ] **Route stubs with missing imports (unmounted):** `routes/trainingEvaluations.js`, `awards.js`, `ldPlans.js`, `tna.js` import controllers + contracts that don't exist (`trainingEvaluationController`, `contracts/trainingEvaluations`, award/ldPlan/tna controllers+contracts all absent). Remove or implement.
+- [ ] **`performanceCRUD` capability referenced but undefined** (`awards.js` `requirePermission('performanceCRUD')` + Sidebar Awards entry) — not in `CAPABILITIES`/`DEFAULT_PERMISSIONS`; 403s everyone if ever mounted. Add a real `performanceCRUD`/`performanceRead` capability or drop the references.
+- [ ] **`frontend/src/utils/performance.js` (`adjectivalDisplayName`, `incentiveFlags`) + `performanceEngine.adjectivalDisplayName`/`incentiveFlags` unused** — dead exports (incentive logic PBB/promotion/step not surfaced anywhere).
+- [ ] **`/performance` + `/training` still not matrix-backed** (AGENTS whitelist note) — newer modules (documents, appointments) set the pattern via `requirePermission`; fold these in.
+- [ ] **Learning.jsx Sidebar item is not rank/capability-gated** (no `roles`) → all roles see it, but route requires ADMIN/HR_MANAGER/SUPER_ADMIN + `trainingCRUD`.
+
+### Design-token nits (don't block)
+- [ ] `RatingStars.jsx` uses `text-amber-400` (hardcoded) — swap to a token (e.g. accent/star semantic).
+- [x] `IPCR.jsx` `ADJECTIVAL_COLOR` hardcodes `text-emerald-600`/`text-teal-600`/`text-blue-600`/`text-amber-600`/`text-red-600` — **fixed**: `ADJECTIVAL_TONE` maps to `text-success`/`text-accent`/`text-warning`/`text-error`.
+- [x] Existing High-Priority TODO ("replace `text-gray-300` hits at IPCR.jsx:43 / Performance.jsx:121") is stale — those lines no longer contain `text-gray-300` (IPCR rewrite removed all `gray-*`).
+
+### Benchmark notes vs CSC SPMS / PRIME-HRM (see doc)
+- Engine matches CSC MC No. 6 s. 2012 five-point scale + IPCRF Part I/II/III computation; states PLANNING→MONITORING→REVIEW→APPROVED/REJECTED track the SPMS Appraisal process.
+- Gaps: no mid-year (MONITORING) review capture; no rating-sheet/SPMS Form 1 print; no OPCR→IPCR cascade UI (model exists); no sign-off notifications; L&D eval levels (Kirkpatrick 1–2 via `TrainingEvaluation` model) + TNA + L&D plan + IDP all modeled but unmounted/unwired.

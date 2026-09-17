@@ -1,20 +1,34 @@
 import React, { useEffect, useState } from 'react';
 import Layout from '../components/Layout.jsx';
-import { listPrograms, createProgram, listEnrollments, createEnrollment } from '../api/training.js';
+import Modal from '../components/Modal.jsx';
+import ConfirmDialog from '../components/ConfirmDialog.jsx';
+import { listPrograms, createProgram, updateProgram, deleteProgram, listEnrollments, createEnrollment, updateEnrollment, deleteEnrollment } from '../api/training.js';
 import { listEmployees } from '../api/employees.js';
 import { useToast } from '../components/Toast.jsx';
 import { badgeTone } from '../data/mock.js';
-import { BookOpen, User, FileText, Plus, Calendar, RefreshCw, X, Save } from 'lucide-react';
-import Modal from '../components/Modal.jsx';
+import { useUserCapabilities } from '../config/permissions.js';
+import { BookOpen, User, FileText, Plus, Calendar, RefreshCw, X, Save, CheckCircle, Ban, Trash2, Award } from 'lucide-react';
 
-export default function Learning(){
+const errMsg = e => e?.response?.data?.error?.message || e?.message || 'Failed';
+const emptyForm = { code: '', title: '', description: '', durationHours: 0 };
+const fmtDate = d => (d ? new Date(d).toLocaleDateString() : '—');
+
+export default function Learning() {
   const toast = useToast();
+  const caps = useUserCapabilities();
+  const canManage = caps.trainingCRUD === true;
+
   const [programs, setPrograms] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [enrollments, setEnrollments] = useState([]);
-  const [showAdd, setShowAdd] = useState(false);
-  const [form, setForm] = useState({ code:'', title:'', description:'', durationHours:0 });
   const [loading, setLoading] = useState(false);
+  const [showAdd, setShowAdd] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [form, setForm] = useState(emptyForm);
+  const [editForm, setEditForm] = useState(emptyForm);
+  const [deleteProgramTarget, setDeleteProgramTarget] = useState(null);
+  const [cancelEnrollmentTarget, setCancelEnrollmentTarget] = useState(null);
+  const [deleteEnrollmentTarget, setDeleteEnrollmentTarget] = useState(null);
 
   const load = async () => {
     setLoading(true);
@@ -27,19 +41,18 @@ export default function Learning(){
       setPrograms(progs.items || []);
       setEmployees(emps.items || []);
       setEnrollments(enrs.items || []);
-    } catch {
-      toast('Failed to load training data', 'error');
+    } catch (e) {
+      toast(errMsg(e), 'error');
     } finally {
       setLoading(false);
     }
   };
-  useEffect(()=>{ load(); },[]);
+  useEffect(() => { load(); }, []);
 
   const totalEnrollments = enrollments.length;
   const activeEnrollments = enrollments.filter(e => e.status === 'ENROLLED').length;
-  const completedEnrollments = enrollments.filter(e => e.status === 'COMPLETED').length;
 
-  const onSubmit = async (e)=>{
+  const onSubmitCreate = async e => {
     e.preventDefault();
     if (!form.code.trim() || !form.title.trim()) {
       toast('Code and title are required.', 'error');
@@ -49,28 +62,97 @@ export default function Learning(){
       setLoading(true);
       await createProgram({ ...form, durationHours: Number(form.durationHours) || 0 });
       toast('Training program created.', 'success');
-      setShowAdd(false); setForm({ code:'', title:'', description:'', durationHours:0 });
+      setShowAdd(false);
+      setForm(emptyForm);
       load();
     } catch (err) {
-      const msg = err?.response?.data?.error?.message;
-      toast(msg || 'Failed to create program', 'error');
+      toast(errMsg(err), 'error');
     } finally {
       setLoading(false);
     }
   };
 
-  const enroll = async (programId, employeeId)=>{
+  const openEdit = p => {
+    setEditing(p);
+    setEditForm({ code: p.code || '', title: p.title || '', description: p.description || '', durationHours: p.durationHours ?? 0 });
+  };
+
+  const onSubmitEdit = async e => {
+    e.preventDefault();
+    if (!editForm.code.trim() || !editForm.title.trim()) {
+      toast('Code and title are required.', 'error');
+      return;
+    }
+    try {
+      setLoading(true);
+      await updateProgram(editing.id, { ...editForm, durationHours: Number(editForm.durationHours) || 0 });
+      toast('Training program updated.', 'success');
+      setEditing(null);
+      load();
+    } catch (err) {
+      toast(errMsg(err), 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const onDeleteProgram = async () => {
+    const id = deleteProgramTarget?.id;
+    if (!id) return;
+    try {
+      await deleteProgram(id);
+      toast('Training program deleted.', 'success');
+      load();
+    } catch (err) {
+      toast(errMsg(err), 'error');
+    }
+  };
+
+  const enroll = async (programId, employeeId) => {
     if (!employeeId) return;
     try {
       setLoading(true);
-      await createEnrollment({ programId, employeeId, status:'ENROLLED' });
+      await createEnrollment({ programId, employeeId, status: 'ENROLLED' });
       toast('Employee enrolled.', 'success');
       load();
     } catch (err) {
-      const msg = err?.response?.data?.error?.message;
-      toast(msg || 'Enrollment failed', 'error');
+      toast(errMsg(err), 'error');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const completeEnrollment = async en => {
+    try {
+      await updateEnrollment(en.id, { status: 'COMPLETED' });
+      toast('Enrollment marked as completed.', 'success');
+      load();
+    } catch (err) {
+      toast(errMsg(err), 'error');
+    }
+  };
+
+  const onCancelEnrollment = async () => {
+    const id = cancelEnrollmentTarget?.id;
+    if (!id) return;
+    try {
+      await updateEnrollment(id, { status: 'CANCELLED' });
+      toast('Enrollment cancelled.', 'success');
+      load();
+    } catch (err) {
+      toast(errMsg(err), 'error');
+    }
+  };
+
+  const onDeleteEnrollment = async () => {
+    const id = deleteEnrollmentTarget?.id;
+    if (!id) return;
+    try {
+      await deleteEnrollment(id);
+      toast('Enrollment deleted.', 'success');
+      load();
+    } catch (err) {
+      toast(errMsg(err), 'error');
     }
   };
 
@@ -88,14 +170,15 @@ export default function Learning(){
           <button className="btn btn-ghost" onClick={load} aria-label="Refresh">
             <RefreshCw size={18} />
           </button>
-          <button className="btn btn-primary gap-2" onClick={()=>setShowAdd(true)}>
-            <Plus size={18} />
-            New Program
-          </button>
+          {canManage && (
+            <button className="btn btn-primary gap-2" onClick={() => setShowAdd(true)}>
+              <Plus size={18} />
+              New Program
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Summary Cards */}
       <div className="grid gap-4 md:grid-cols-3 mb-4">
         <div className="card p-4">
           <div className="flex items-center gap-2 mb-2">
@@ -123,7 +206,6 @@ export default function Learning(){
         </div>
       </div>
 
-      {/* Programs Table */}
       <div className="card p-5">
         <div className="flex items-center justify-between mb-3">
           <h3 className="font-display font-semibold text-ink flex items-center gap-2">
@@ -139,30 +221,47 @@ export default function Learning(){
                 <th>Code</th>
                 <th>Title</th>
                 <th>Hours</th>
-                <th className="text-right">Enroll</th>
+                {canManage && <th className="text-right">Enroll</th>}
+                {canManage && <th className="text-right">Actions</th>}
               </tr>
             </thead>
             <tbody>
-              {programs.map(p=>(
+              {programs.map(p => (
                 <tr key={p.id}>
                   <td className="font-mono font-medium text-ink">{p.code}</td>
                   <td>{p.title}</td>
                   <td className="font-mono">{p.durationHours}</td>
-                  <td className="text-right">
-                    <select onChange={e=>e.target.value && enroll(p.id, e.target.value)} defaultValue="">
-                      <option value="">Enroll employee…</option>
-                      {employees.map(e=> (
-                        <option key={e.id} value={e.id}>
-                          {e.employeeNumber} · {e.lastName}, {e.firstName}
-                        </option>
-                      ))}
-                    </select>
-                  </td>
+                  {canManage && (
+                    <td className="text-right">
+                      <select onChange={e => e.target.value && enroll(p.id, e.target.value)} defaultValue="">
+                        <option value="">Enroll employee…</option>
+                        {employees.map(emp => (
+                          <option key={emp.id} value={emp.id}>
+                            {emp.employeeNumber} · {emp.lastName}, {emp.firstName}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                  )}
+                  {canManage && (
+                    <td className="text-right">
+                      <div className="flex justify-end gap-1">
+                        <button className="btn btn-ghost btn-sm gap-1" onClick={() => openEdit(p)}>
+                          <FileText size={14} />
+                          Edit
+                        </button>
+                        <button className="btn btn-ghost btn-sm gap-1" onClick={() => setDeleteProgramTarget(p)}>
+                          <Trash2 size={14} />
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  )}
                 </tr>
               ))}
               {programs.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="text-muted text-sm py-8 text-center">
+                  <td colSpan={canManage ? 5 : 3} className="text-muted text-sm py-8 text-center">
                     No training programs found.
                   </td>
                 </tr>
@@ -172,11 +271,10 @@ export default function Learning(){
         </div>
       </div>
 
-      {/* Enrollments Table */}
       <div className="card p-5">
         <div className="flex items-center justify-between mb-3">
           <h3 className="font-display font-semibold text-ink flex items-center gap-2">
-            <User size={18} className="text-accent" />
+            <Award size={18} className="text-accent" />
             Enrollments
           </h3>
           <span className="mono-label">{totalEnrollments} enrollments</span>
@@ -191,16 +289,40 @@ export default function Learning(){
                   <th>Employee</th>
                   <th>Program</th>
                   <th>Status</th>
+                  <th>Completed At</th>
+                  {canManage && <th className="text-right">Actions</th>}
                 </tr>
               </thead>
               <tbody>
-                {enrollments.map(en=>(
+                {enrollments.map(en => (
                   <tr key={en.id}>
                     <td className="font-mono">
                       {en.employee?.employeeNumber} · {en.employee?.lastName}, {en.employee?.firstName}
                     </td>
                     <td>{en.program?.title}</td>
                     <td><span className={`badge ${badgeTone(en.status)}`}>{en.status}</span></td>
+                    <td className="font-mono">{fmtDate(en.completedAt)}</td>
+                    {canManage && (
+                      <td className="text-right">
+                        <div className="flex justify-end gap-1">
+                          {en.status === 'ENROLLED' && (
+                            <>
+                              <button className="btn btn-ghost btn-sm gap-1" onClick={() => completeEnrollment(en)} title="Mark completed">
+                                <CheckCircle size={14} />
+                                Complete
+                              </button>
+                              <button className="btn btn-ghost btn-sm gap-1" onClick={() => setCancelEnrollmentTarget(en)} title="Cancel enrollment">
+                                <Ban size={14} />
+                                Cancel
+                              </button>
+                            </>
+                          )}
+                          <button className="btn btn-ghost btn-sm gap-1" onClick={() => setDeleteEnrollmentTarget(en)} title="Delete enrollment">
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -209,7 +331,6 @@ export default function Learning(){
         )}
       </div>
 
-      {/* New Program Modal */}
       <Modal
         open={showAdd}
         onClose={() => setShowAdd(false)}
@@ -228,25 +349,93 @@ export default function Learning(){
           </>
         }
       >
-        <form id="prog-form" onSubmit={onSubmit} className="space-y-3">
+        <form id="prog-form" onSubmit={onSubmitCreate} className="space-y-3">
           <div>
             <label className="mono-label">Code *</label>
-            <input className="input" placeholder="e.g., IT-SEC-001" value={form.code} onChange={e=>setForm({...form, code:e.target.value})} required />
+            <input className="input" placeholder="e.g., IT-SEC-001" value={form.code} onChange={e => setForm({ ...form, code: e.target.value })} required />
           </div>
           <div>
             <label className="mono-label">Title *</label>
-            <input className="input" placeholder="Program title" value={form.title} onChange={e=>setForm({...form, title:e.target.value})} required />
+            <input className="input" placeholder="Program title" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} required />
           </div>
           <div>
             <label className="mono-label">Description</label>
-            <textarea className="input" placeholder="Program description" value={form.description} onChange={e=>setForm({...form, description:e.target.value})} rows={2} />
+            <textarea className="input" placeholder="Program description" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} rows={2} />
           </div>
           <div>
             <label className="mono-label">Duration (Hours)</label>
-            <input type="number" className="input" placeholder="0" value={form.durationHours} onChange={e=>setForm({...form, durationHours:Number(e.target.value)})} min="0" />
+            <input type="number" className="input" placeholder="0" value={form.durationHours} onChange={e => setForm({ ...form, durationHours: Number(e.target.value) })} min="0" />
           </div>
         </form>
       </Modal>
+
+      <Modal
+        open={!!editing}
+        onClose={() => setEditing(null)}
+        title="Edit Training Program"
+        size="md"
+        footer={
+          <>
+            <button type="button" className="btn btn-ghost gap-2" onClick={() => setEditing(null)}>
+              <X size={16} />
+              Cancel
+            </button>
+            <button type="submit" form="prog-edit-form" className="btn btn-primary gap-2">
+              <Save size={16} />
+              Save Changes
+            </button>
+          </>
+        }
+      >
+        <form id="prog-edit-form" onSubmit={onSubmitEdit} className="space-y-3">
+          <div>
+            <label className="mono-label">Code *</label>
+            <input className="input" placeholder="e.g., IT-SEC-001" value={editForm.code} onChange={e => setEditForm({ ...editForm, code: e.target.value })} required />
+          </div>
+          <div>
+            <label className="mono-label">Title *</label>
+            <input className="input" placeholder="Program title" value={editForm.title} onChange={e => setEditForm({ ...editForm, title: e.target.value })} required />
+          </div>
+          <div>
+            <label className="mono-label">Description</label>
+            <textarea className="input" placeholder="Program description" value={editForm.description} onChange={e => setEditForm({ ...editForm, description: e.target.value })} rows={2} />
+          </div>
+          <div>
+            <label className="mono-label">Duration (Hours)</label>
+            <input type="number" className="input" placeholder="0" value={editForm.durationHours} onChange={e => setEditForm({ ...editForm, durationHours: Number(e.target.value) })} min="0" />
+          </div>
+        </form>
+      </Modal>
+
+      <ConfirmDialog
+        open={!!deleteProgramTarget}
+        onClose={() => setDeleteProgramTarget(null)}
+        onConfirm={onDeleteProgram}
+        title="Delete training program"
+        message={`Delete program "${deleteProgramTarget?.code}"? This will also remove its enrollments.`}
+        confirmLabel="Delete"
+        danger
+      />
+
+      <ConfirmDialog
+        open={!!cancelEnrollmentTarget}
+        onClose={() => setCancelEnrollmentTarget(null)}
+        onConfirm={onCancelEnrollment}
+        title="Cancel enrollment"
+        message={`Cancel ${cancelEnrollmentTarget?.employee?.lastName}, ${cancelEnrollmentTarget?.employee?.firstName}'s enrollment in "${cancelEnrollmentTarget?.program?.title}"?`}
+        confirmLabel="Cancel Enrollment"
+        danger
+      />
+
+      <ConfirmDialog
+        open={!!deleteEnrollmentTarget}
+        onClose={() => setDeleteEnrollmentTarget(null)}
+        onConfirm={onDeleteEnrollment}
+        title="Delete enrollment"
+        message={`Delete ${deleteEnrollmentTarget?.employee?.lastName}, ${deleteEnrollmentTarget?.employee?.firstName}'s enrollment in "${deleteEnrollmentTarget?.program?.title}"? This cannot be undone.`}
+        confirmLabel="Delete"
+        danger
+      />
     </Layout>
   );
 }

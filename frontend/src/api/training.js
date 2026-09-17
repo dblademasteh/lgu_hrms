@@ -12,3 +12,5 @@ export async function listEnrollments({ page=1, limit=50, employeeId, programId,
   return data;
 }
 export async function createEnrollment(payload){ const { data } = await api.post('/training/enrollments', payload); return data; }
+export async function updateEnrollment(id, payload){ const { data } = await api.patch(`/training/enrollments/${id}`, payload); return data; }
+export async function deleteEnrollment(id){ await api.delete(`/training/enrollments/${id}`); }

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 const idField = z.string().min(1);
+const enrollmentStatusEnum = z.enum(['ENROLLED', 'COMPLETED', 'CANCELLED']);
 
 export const listProgramsSchema = {
   query: z.object({
@@ -46,6 +47,15 @@ export const createEnrollmentSchema = {
   body: z.object({
     employeeId: z.string().min(1),
     programId: z.string().min(1),
-    status: z.enum(['ENROLLED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED']).default('ENROLLED'),
+    status: enrollmentStatusEnum.default('ENROLLED'),
   }),
+};
+
+export const enrollmentIdSchema = {
+  params: z.object({ id: idField }),
+};
+
+export const updateEnrollmentSchema = {
+  params: z.object({ id: idField }),
+  body: z.object({ status: enrollmentStatusEnum }),
 };

@@ -119,11 +119,11 @@ export default function Help() {
           title: 'Performance & Learning',
           icon: BarChart3,
           items: [
-            { label: 'IPCR', description: 'Individual Performance Commitment and Review. Visit /ipcr. Real columns, no mocks.' },
+            { label: 'IPCR', description: 'Individual Performance Commitment and Review. Visit /ipcr. Full SPMS editor: targets, competencies, ratings, printable IPCRF.' },
             { label: 'OPCR', description: 'Organization-level performance review for the same competencies.' },
             { label: 'Training - Enroll', description: 'Select program. Click Enroll. Add employee to training.' },
-            { label: 'Training - Track', description: 'Mark attendance. Update completion status.' },
-            { label: 'Learning Plans', description: 'IDP (Individual Development Plan) and L&D plans at /learning-programs.' },
+            { label: 'Training - Track', description: 'Mark an enrollment COMPLETED. Cancel removes it from the active list.' },
+            { label: 'Learning Plans', description: 'Training programs and enrollments live at /learning.' },
           ]
         },
         {
@@ -243,7 +243,7 @@ export default function Help() {
         {
           title: 'Capability-Based Permissions',
           items: [
-            { label: 'Capabilities Over Roles', description: 'Permissions are capability-based: manageUsersAndRoles, employeeRecordsCRUD, payrollRuns, payrollRead, auditTrail, reports, leaveApproval, performanceCRUD, trainingCRUD, interviewCRUD, selfService.' },
+            { label: 'Capabilities Over Roles', description: 'Permissions are capability-based: manageUsersAndRoles, employeeRecordsCRUD, payrollRuns, payrollRead, auditTrail, reports, leaveApproval, performanceRead, performanceCRUD, trainingCRUD, interviewCRUD, loansCRUD, documentsCRUD, documentsTrack.' },
             { label: 'Custom Roles', description: 'SUPER_ADMIN can create custom roles and grant capabilities via /roles/:name/permissions. Changes apply immediately.' },
             { label: 'My Permissions', description: 'Visit /roles/my-permissions to see your exact capabilities (unauthenticated self-endpoint).' },
             { label: 'SUPER_ADMIN', description: 'SUPER_ADMIN bypasses all role gating — sees all Sidebar groups and can override tenant via X-Tenant-Id header.' },

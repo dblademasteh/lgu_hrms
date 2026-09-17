@@ -15,6 +15,7 @@ export const createPerformanceSchema = {
     supportWeight: z.number().min(0).max(100).optional(),
     competencyWeight: z.number().min(0).max(100).optional(),
     officeRatingCap: z.number().min(1).max(5).optional().nullable(),
+    parentReviewId: z.string().optional().nullable(),
     comments: z.string().max(5000).optional().nullable(),
     status: z.enum(['PLANNING', 'MONITORING', 'REVIEW', 'APPROVED', 'REJECTED', 'CANCELLED']).optional(),
   }),

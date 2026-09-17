@@ -139,7 +139,7 @@ export default function Documents() {
       await documentsApi.remove(deleting.id);
       toast('Document archived', 'success');
     } catch (e) {
-      toast(e.message || 'Archive failed', 'error');
+      toast(e.response?.data?.error?.message || e.message || 'Archive failed', 'error');
     } finally {
       setDeleting(null);
     }
@@ -154,7 +154,7 @@ export default function Documents() {
       toast(`Status → ${labelForStatus(nextStatus)}`, 'success');
       reload();
     } catch (e) {
-      toast(e.message || 'Status update failed', 'error');
+      toast(e.response?.data?.error?.message || e.message || 'Status update failed', 'error');
     }
   };
 
@@ -203,7 +203,7 @@ export default function Documents() {
       resetForm();
       reload();
     } catch (err) {
-      const msg = err.message || 'Save failed';
+      const msg = err.response?.data?.error?.message || err.message || 'Save failed';
       toast(msg, 'error');
       const details = err.response?.data?.details;
       if (Array.isArray(details)) {

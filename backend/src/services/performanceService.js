@@ -143,6 +143,20 @@ export const performanceService = {
       throw err;
     }
 
+    const duplicate = await prisma.performanceReview.findFirst({
+      where: withTenant(req, {
+        employeeId: data.employeeId,
+        reviewYear: data.reviewYear,
+        reviewType: data.reviewType || 'IPCR',
+      }),
+    });
+    if (duplicate) {
+      const err = new Error('A review already exists for this employee, year, and review type');
+      err.status = 409;
+      err.code = 'DUPLICATE';
+      throw err;
+    }
+
     const initialStatus = data.status || 'PLANNING';
     if (!['PLANNING', 'MONITORING'].includes(initialStatus)) {
       const err = new Error('New review must start as PLANNING or MONITORING');
@@ -163,6 +177,7 @@ export const performanceService = {
       supportWeight: coerceNumber(data.supportWeight) ?? 20,
       competencyWeight: coerceNumber(data.competencyWeight) ?? 30,
       officeRatingCap: coerceNumber(data.officeRatingCap),
+      parentReviewId: data.parentReviewId || null,
       comments: data.comments || null,
       status: initialStatus,
     };
@@ -186,19 +201,21 @@ export const performanceService = {
       throw err;
     }
 
-    // Office rating cap validation: IPCR average must not exceed parent OPCR rating
-    if (data.parentReviewId) {
-      const parent = await repo.findPerformanceReviewById(req, data.parentReviewId);
-      if (parent && parent.reviewType !== 'OPCR') {
-        const err = new Error('Parent review must be an OPCR');
-        err.status = 400;
-        err.code = 'INVALID_PARENT';
-        throw err;
+    const payload = {};
+
+    if (data.parentReviewId !== undefined) {
+      if (data.parentReviewId) {
+        const parent = await repo.findPerformanceReviewById(req, data.parentReviewId);
+        if (!parent || parent.reviewType !== 'OPCR') {
+          const err = new Error('Parent review must be a valid OPCR');
+          err.status = 400;
+          err.code = 'INVALID_PARENT';
+          throw err;
+        }
       }
-      payload.parentReviewId = data.parentReviewId;
+      payload.parentReviewId = data.parentReviewId || null;
     }
 
-    const payload = {};
     const dateFields = ['periodStart', 'periodEnd', 'planningDate'];
     for (const f of dateFields) {
       if (data[f] !== undefined) payload[f] = coerceDate(data[f]);

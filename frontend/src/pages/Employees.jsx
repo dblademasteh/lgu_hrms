@@ -52,7 +52,7 @@ export default function Employees() {
   const load = async () => {
     try {
       setLoading(true);
-      const data = await listEmployees({ page: 1, limit: 500 });
+      const data = await listEmployees({ page: 1, limit: 200 });
       setRows((data.items ?? []).map(mapEmployee));
     } catch { toast('Failed to load employees','error'); }
     finally { setLoading(false); }

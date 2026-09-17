@@ -50,13 +50,9 @@ const groups = [
   {
     label: 'Performance & L&D',
     items: [
-      { name: 'Performance', path: '/performance', icon: BarChart3, roles: ['HR_MANAGER', 'ADMIN', 'DEPARTMENT_HEAD'] },
-      { name: 'Learning', path: '/learning', icon: Landmark },
-      { name: 'IDP', path: '/idp', icon: FileText, roles: ['HR_MANAGER', 'ADMIN'], capability: 'trainingCRUD' },
-      { name: 'Awards', path: '/awards', icon: Trophy, roles: ['HR_MANAGER', 'ADMIN'], capability: 'performanceCRUD' },
-      { name: 'TNA', path: '/tna', icon: ClipboardList, roles: ['HR_MANAGER', 'ADMIN'], capability: 'trainingCRUD' },
-      { name: 'L&D Plans', path: '/ld-plans', icon: Calendar, roles: ['HR_MANAGER', 'ADMIN'], capability: 'trainingCRUD' },
-      { name: 'Evaluations', path: '/training-evaluations', icon: Star, roles: ['HR_MANAGER', 'ADMIN'], capability: 'trainingCRUD' },
+      { name: 'Performance', path: '/performance', icon: BarChart3, roles: ['HR_MANAGER', 'ADMIN', 'DEPARTMENT_HEAD'], capability: 'performanceRead' },
+      { name: 'IPCR/OPCR', path: '/ipcr', icon: FileText, roles: ['HR_MANAGER', 'ADMIN', 'DEPARTMENT_HEAD'], capability: 'performanceRead' },
+      { name: 'Learning', path: '/learning', icon: Landmark, roles: ['HR_MANAGER', 'ADMIN'], capability: 'trainingCRUD' },
       { name: 'Attendance', path: '/attendance', icon: Clock, roles: ['HR_MANAGER', 'ADMIN', 'DEPARTMENT_HEAD'], children: [
         { name: 'DTR', path: '/attendance' },
         { name: 'Portal', path: '/attendance-portal' },

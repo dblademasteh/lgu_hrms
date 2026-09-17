@@ -631,6 +631,7 @@ model PerformanceReview {
   targets          PerformanceTarget[]
 
   @@index([tenantId, reviewYear, status])
+  @@unique([tenantId, employeeId, reviewYear, reviewType])
 }
 
 model PerformanceTarget {
@@ -766,6 +767,8 @@ model TrainingEnrollment {
   program     TrainingProgram      @relation(fields: [programId], references: [id])
   tenant      Tenant?              @relation(fields: [tenantId], references: [id])
   evaluations TrainingEvaluation[]
+
+  @@unique([tenantId, programId, employeeId])
 }
 
 model Eligibility {

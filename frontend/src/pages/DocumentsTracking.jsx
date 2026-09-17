@@ -60,7 +60,7 @@ export default function DocumentsTracking() {
       const { data } = await documentsApi.documentTimeline(row.documentId);
       setTimeline(data);
     } catch (e) {
-      toast(e.message || 'Failed to load timeline', 'error');
+      toast(e.response?.data?.error?.message || e.message || 'Failed to load timeline', 'error');
     } finally {
       setTimelineLoading(false);
     }
@@ -82,7 +82,7 @@ export default function DocumentsTracking() {
       link.remove();
       URL.revokeObjectURL(objectUrl);
     } catch (e) {
-      toast(e.message || 'Export failed', 'error');
+      toast(e.response?.data?.error?.message || e.message || 'Export failed', 'error');
     }
   };
 

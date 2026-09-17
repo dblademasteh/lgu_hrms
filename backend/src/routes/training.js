@@ -10,6 +10,8 @@ import {
   deleteProgramSchema,
   listEnrollmentsSchema,
   createEnrollmentSchema,
+  enrollmentIdSchema,
+  updateEnrollmentSchema,
 } from '../shared/contracts/training.js';
 
 const router = Router();
@@ -23,5 +25,7 @@ router.patch('/programs/:id', validate(updateProgramSchema), ctrl.updateProgramH
 router.delete('/programs/:id', validate(deleteProgramSchema), ctrl.deleteProgramHandler);
 router.get('/enrollments', validate(listEnrollmentsSchema), ctrl.listEnrollmentsHandler);
 router.post('/enrollments', validate(createEnrollmentSchema), ctrl.createEnrollmentHandler);
+router.patch('/enrollments/:id', validate(updateEnrollmentSchema), ctrl.updateEnrollmentHandler);
+router.delete('/enrollments/:id', validate(enrollmentIdSchema), ctrl.deleteEnrollmentHandler);
 
 export default router;
