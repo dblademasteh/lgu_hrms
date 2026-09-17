@@ -2,7 +2,7 @@ import { prisma } from '../lib/prisma.js';
 import { withTenant, stampTenant } from '../middleware/tenant.js';
 import { getDepartmentScope, assertDepartmentAccess } from '../middleware/departmentScope.js';
 
-export async function findEmployees(req, { page = 1, limit = 50, search, departmentId, status }) {
+export async function findEmployees(req, { page = 1, limit = 50, search, departmentId, status, keyPosition }) {
   const where = withTenant(req, { deletedAt: null });
   if (search) {
     where.OR = [
@@ -12,6 +12,7 @@ export async function findEmployees(req, { page = 1, limit = 50, search, departm
     ];
   }
   if (status) where.status = status;
+  if (keyPosition === 'true') where.keyPosition = { not: null };
 
   // Enforce department scoping: DEPARTMENT_HEAD sees only their department.
   const deptScope = getDepartmentScope(req);

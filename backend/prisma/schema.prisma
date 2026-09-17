@@ -7,397 +7,390 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ── Multi-tenancy (shared-schema + tenantId) ─────────────────────────────
-// Every LGU is a Tenant. All business tables carry tenantId; every query is
-// scoped by tenantScope(req) in repositories. Cross-tenant access fails
-// closed unless the user is a SUPER_ADMIN (platform operator).
 model Tenant {
-  id        String   @id @default(uuid())
-  code      String   @unique
-  name      String
-  domain    String?  @unique
-  lguLevel  LguLevel @default(PROVINCIAL)
-  isActive  Boolean  @default(true)
-  // On-premise enforcement: source IP/CIDR allowlist for session-establishing
-  // auth (login/login-pin/refresh). Empty = use global ALLOWED_IPS env;
-  // both empty = no restriction.
-  allowedIps String[]  @default([])
-  createdAt DateTime @default(now()) @db.Timestamptz(6)
-  updatedAt DateTime @updatedAt @db.Timestamptz(6)
-  users       User[]
-  roles       Role[]
-  rolePermissions RolePermission[]
-  departments Department[]
-  syncRequests SyncRequest[]
-  positions   Position[]
-  employees   Employee[]
-  familyMembers FamilyMember[]
-  educationRecords EducationRecord[]
-  awards     Award[]
-  employmentHistory EmploymentHistory[]
-  payrollPeriods PayrollPeriod[]
-  payrollRuns PayrollRun[]
-  payrollItems PayrollItem[]
-  payrollDeductionLines PayrollDeductionLine[]
-  payslips   Payslip[]
-  ledgerEntries LedgerEntry[]
-  auditLogs  AuditLog[]
-  userSessions UserSession[]
-  loginEvents LoginEvent[]
-  delegations Delegation[]
-  leaveRequests LeaveRequest[]
-  leaveCredits LeaveCredit[]
-  attendances Attendance[]
-  appointments Appointment[]
-  performanceReviews PerformanceReview[]
-  plantillaItems PlantillaItem[]
-  vacancyPublications VacancyPublication[]
-  designationOrders DesignationOrder[]
-  trainingPrograms TrainingProgram[]
-  trainingEnrollments TrainingEnrollment[]
-  eligibilities Eligibility[]
-  disqualifications Disqualification[]
-  applicants Applicant[]
-  interviews Interview[]
-  msbMinutes MSBMinutes[]
-  contributionRules ContributionRule[]
-  taxBrackets TaxBracket[]
-  leaveRuleConfigs LeaveRuleConfig[]
-  bonuses Bonus[]
-  idps IDP[]
-  competencies Competency[]
-  loans Loan[]
-  loanAmortizations LoanAmortization[]
-  attendanceRules AttendanceRule[]
-  biometricCredentials BiometricCredential[]
-  vacancies   Vacancy[]
-  performanceCompetencies PerformanceCompetency[]
-  apiKeys ApiKey[]
-  webhooks WebhookSubscription[]
-  externalSystems ExternalSystem[]
-  biometricDevices BiometricDevice[]
-  overtimeRequests OvertimeRequest[]
-  allowanceRules AllowanceRule[]
-  documents Document[]
-  stepIncrementRules StepIncrementRule[]
+  id                       String                    @id @default(uuid())
+  code                     String                    @unique
+  name                     String
+  domain                   String?                   @unique
+  isActive                 Boolean                   @default(true)
+  createdAt                DateTime                  @default(now()) @db.Timestamptz(6)
+  updatedAt                DateTime                  @updatedAt @db.Timestamptz(6)
+  lguLevel                 LguLevel                  @default(PROVINCIAL)
+  allowedIps               String[]                  @default([])
+  allowanceRules           AllowanceRule[]
+  apiKeys                  ApiKey[]
+  applicants               Applicant[]
+  appointments             Appointment[]
+  attendances              Attendance[]
+  attendanceRules          AttendanceRule[]
+  auditLogs                AuditLog[]
+  awards                   Award[]
+  biometricCredentials     BiometricCredential[]
+  biometricDevices         BiometricDevice[]
+  bonuses                  Bonus[]
+  competencies             Competency[]
+  contributionRules        ContributionRule[]
+  delegations              Delegation[]
+  departments              Department[]
+  designationOrders        DesignationOrder[]
+  disqualifications        Disqualification[]
+  documentAccessLogs       DocumentAccessLog[]
+  documents                Document[]
+  educationRecords         EducationRecord[]
+  eligibilities            Eligibility[]
+  employees                Employee[]
+  employmentHistory        EmploymentHistory[]
+  externalSystems          ExternalSystem[]
+  familyMembers            FamilyMember[]
+  idps                     IDP[]
+  interviews               Interview[]
+  ldPlans                  LdPlan[]
+  leaveCredits             LeaveCredit[]
+  leaveRequests            LeaveRequest[]
+  leaveRuleConfigs         LeaveRuleConfig[]
+  ledgerEntries            LedgerEntry[]
+  loans                    Loan[]
+  loanAmortizations        LoanAmortization[]
+  loginEvents              LoginEvent[]
+  msbMinutes               MSBMinutes[]
+  overtimeRequests         OvertimeRequest[]
+  payrollDeductionLines    PayrollDeductionLine[]
+  payrollItems             PayrollItem[]
+  payrollPeriods           PayrollPeriod[]
+  payrollRuns              PayrollRun[]
+  payslips                 Payslip[]
+  performanceCompetencies  PerformanceCompetency[]
+  performanceReviews       PerformanceReview[]
+  plantillaItems           PlantillaItem[]
+  positions                Position[]
+  roles                    Role[]
+  rolePermissions          RolePermission[]
+  stepIncrementRules       StepIncrementRule[]
+  syncRequests             SyncRequest[]
+  taxBrackets              TaxBracket[]
+  trainingEnrollments      TrainingEnrollment[]
+  trainingEvaluations      TrainingEvaluation[]
   trainingNeedsAssessments TrainingNeedsAssessment[]
-  ldPlans LdPlan[]
-  trainingEvaluations TrainingEvaluation[]
+  trainingPrograms         TrainingProgram[]
+  users                    User[]
+  userSessions             UserSession[]
+  vacancies                Vacancy[]
+  vacancyPublications      VacancyPublication[]
+  webhooks                 WebhookSubscription[]
 }
 
 model User {
-  id               String    @id @default(uuid())
-  tenantId         String?
-  username         String    @unique
-  passwordHash     String
-  pinHash          String?
-  role             String
-  departmentId     String?
-  externalId       String?
-  idpProvider      String?
-  displayName      String?
-  email            String?
-  contactNumber    String?
-  emergencyContact String?
-  passwordChangedAt DateTime? @db.Timestamptz(6)
-  twoFactorEnabled Boolean   @default(false)
-  twoFactorSecret  String?
-  displayPrefs     Json?
-  avatarPath       String?
-  signaturePath    String?
-  status           String    @default("ACTIVE")
-  createdAt        DateTime  @default(now()) @db.Timestamptz(6)
-  updatedAt        DateTime  @updatedAt @db.Timestamptz(6)
-  department       Department? @relation(fields: [departmentId], references: [id])
-  linkedEmployee   Employee?   @relation("UserEmployeeLink", fields: [externalId], references: [employeeNumber])
-  tenant           Tenant?     @relation(fields: [tenantId], references: [id])
-  auditLogs        AuditLog[]
-  sessions         UserSession[]
-  loginEvents      LoginEvent[]
-  delegationsFrom  Delegation[] @relation("delegator")
-  delegationsTo    Delegation[] @relation("delegatee")
+  id                String        @id @default(uuid())
+  username          String        @unique
+  passwordHash      String
+  departmentId      String?
+  externalId        String?
+  passwordChangedAt DateTime?     @db.Timestamptz(6)
+  twoFactorEnabled  Boolean       @default(false)
+  twoFactorSecret   String?
+  displayPrefs      Json?
+  avatarPath        String?
+  signaturePath     String?
+  createdAt         DateTime      @default(now()) @db.Timestamptz(6)
+  updatedAt         DateTime      @updatedAt @db.Timestamptz(6)
+  contactNumber     String?
+  displayName       String?
+  email             String?
+  emergencyContact  String?
+  status            String        @default("ACTIVE")
+  pinHash           String?
+  tenantId          String?
+  idpProvider       String?
+  role              String
+  auditLogs         AuditLog[]
+  delegationsTo     Delegation[]  @relation("delegatee")
+  delegationsFrom   Delegation[]  @relation("delegator")
+  loginEvents       LoginEvent[]
+  department        Department?   @relation(fields: [departmentId], references: [id])
+  linkedEmployee    Employee?     @relation("UserEmployeeLink", fields: [externalId], references: [employeeNumber])
+  tenant            Tenant?       @relation(fields: [tenantId], references: [id])
+  sessions          UserSession[]
 }
 
 model Department {
-  id        String   @id @default(uuid())
-  tenantId  String?
-  code      String   @unique
-  name      String
-  parentId  String?
-  level     Int      @default(0)
-  unitType  DepartmentUnitType @default(DEPARTMENT)
-  lguOfficeCategory LguOfficeCategory?
-  isMandatory Boolean @default(false)
-  isOptional Boolean @default(false)
-  isHrmOffice Boolean @default(false)
-  headTitle String?
-  sanggunianConcurrence Boolean @default(false)
-  concurrenceDate DateTime? @db.Date
+  id                    String             @id @default(uuid())
+  code                  String             @unique
+  name                  String
+  parentId              String?
+  level                 Int                @default(0)
+  createdAt             DateTime           @default(now()) @db.Timestamptz(6)
+  tenantId              String?
+  unitType              DepartmentUnitType @default(DEPARTMENT)
+  isMandatory           Boolean            @default(false)
+  isOptional            Boolean            @default(false)
+  isHrmOffice           Boolean            @default(false)
+  headTitle             String?
+  sanggunianConcurrence Boolean            @default(false)
+  concurrenceDate       DateTime?          @db.Date
   concurrenceResolution String?
-  cscSubmissionDate DateTime? @db.Date
-  remarks String?
-  createdAt DateTime @default(now()) @db.Timestamptz(6)
-  users     User[]
-  employees Employee[]
-  tenant    Tenant?  @relation(fields: [tenantId], references: [id])
-  parent    Department? @relation("DeptHierarchy", fields: [parentId], references: [id])
-  children  Department[] @relation("DeptHierarchy")
-  plantillaItems PlantillaItem[]
-  applicants Applicant[]
+  cscSubmissionDate     DateTime?          @db.Date
+  remarks               String?
+  lguOfficeCategory     LguOfficeCategory?
+  applicants            Applicant[]
+  parent                Department?        @relation("DeptHierarchy", fields: [parentId], references: [id])
+  children              Department[]       @relation("DeptHierarchy")
+  tenant                Tenant?            @relation(fields: [tenantId], references: [id])
+  employees             Employee[]
+  plantillaItems        PlantillaItem[]
+  users                 User[]
 }
 
 model Position {
-  id          String   @id @default(uuid())
-  tenantId    String?
-  title       String
-  parentheticalTitle String?
-  iosLguCode  String?
-  salaryGrade Int
-  step        Int?
-  isMandatory Boolean @default(false)
-  isCoterminous Boolean @default(false)
+  id                     String          @id @default(uuid())
+  title                  String
+  salaryGrade            Int
+  step                   Int?
+  createdAt              DateTime        @default(now()) @db.Timestamptz(6)
+  tenantId               String?
+  parentheticalTitle     String?
+  iosLguCode             String?
+  isMandatory            Boolean         @default(false)
+  isCoterminous          Boolean         @default(false)
   qualificationStandards String?
-  createdAt   DateTime  @default(now()) @db.Timestamptz(6)
-  tenant      Tenant?   @relation(fields: [tenantId], references: [id])
-  employees   Employee[]
-  plantillaItems PlantillaItem[]
-  applicants  Applicant[]
+  applicants             Applicant[]
+  employees              Employee[]
+  plantillaItems         PlantillaItem[]
+  tenant                 Tenant?         @relation(fields: [tenantId], references: [id])
 }
 
 model StepIncrementRule {
-  id            String    @id @default(uuid())
-  tenantId      String?
-  salaryGrade   Int
-  fromStep      Int
-  toStep        Int
-  incrementAmount Decimal @db.Decimal(12,2)
-  effectiveFrom DateTime  @db.Date
-  effectiveTo   DateTime? @db.Date
-  createdAt     DateTime  @default(now()) @db.Timestamptz(6)
-  tenant        Tenant?   @relation(fields: [tenantId], references: [id])
+  id              String    @id @default(uuid())
+  tenantId        String?
+  salaryGrade     Int
+  fromStep        Int
+  toStep          Int
+  incrementAmount Decimal   @db.Decimal(12, 2)
+  effectiveFrom   DateTime  @db.Date
+  effectiveTo     DateTime? @db.Date
+  createdAt       DateTime  @default(now()) @db.Timestamptz(6)
+  tenant          Tenant?   @relation(fields: [tenantId], references: [id])
 
   @@index([tenantId, salaryGrade])
 }
 
 model Employee {
-  id               String   @id @default(uuid())
-  tenantId         String?
-  employeeNumber   String   @unique
-  firstName        String
-  lastName         String
-  middleName       String?
-  birthDate        DateTime @db.Date
-  gender           String
-  civilStatus      String
-  address          String
-  contactNumber    String?
-  email            String?
-  sssNumber        String?
-  philhealthNumber String?
-  pagibigNumber    String?
-  tinNumber        String?
-  bankAccount      String?
-  bankName         String?
-  status           EmploymentStatus @default(ACTIVE)
-  monthlySalary    Decimal   @default(0) @db.Decimal(12,2)
-  departmentId     String
-  positionId       String
-  hiredDate        DateTime @db.Date
-  deletedAt        DateTime? @db.Timestamptz(6)
-  createdAt        DateTime @default(now()) @db.Timestamptz(6)
-  updatedAt        DateTime @updatedAt @db.Timestamptz(6)
-  department       Department @relation(fields: [departmentId], references: [id])
-  position         Position @relation(fields: [positionId], references: [id])
-  employmentHistory EmploymentHistory[]
-  payrollItems     PayrollItem[]
-  leaveRequests    LeaveRequest[]
-  leaveCredits     LeaveCredit[]
-  attendances      Attendance[]
-  appointments     Appointment[]
-  performanceReviews PerformanceReview[]
-  designationOrders DesignationOrder[]
-  trainingEnrollments TrainingEnrollment[]
-  eligibilities    Eligibility[]
-  bonuses          Bonus[]
-  loans            Loan[]
-  idps             IDP[]
-  familyMembers    FamilyMember[]
-  educationRecords EducationRecord[]
-  awards           Award[]
-  linkedUsers      User[] @relation("UserEmployeeLink")
-  disqualifications Disqualification[]
-  tenant      Tenant?   @relation(fields: [tenantId], references: [id])
-  biometricCredentials BiometricCredential[]
-  overtimeRequests OvertimeRequest[]
-  biometricDeviceUsers BiometricDeviceUser[]
+  id                       String                    @id @default(uuid())
+  employeeNumber           String                    @unique
+  firstName                String
+  lastName                 String
+  middleName               String?
+  birthDate                DateTime                  @db.Date
+  gender                   String
+  civilStatus              String
+  address                  String
+  contactNumber            String?
+  email                    String?
+  status                   EmploymentStatus          @default(ACTIVE)
+  departmentId             String
+  positionId               String
+  hiredDate                DateTime                  @db.Date
+  createdAt                DateTime                  @default(now()) @db.Timestamptz(6)
+  updatedAt                DateTime                  @updatedAt @db.Timestamptz(6)
+  deletedAt                DateTime?                 @db.Timestamptz(6)
+  tenantId                 String?
+  monthlySalary            Decimal                   @default(0) @db.Decimal(12, 2)
+  keyPosition              String?
+  sssNumber                String?
+  philhealthNumber         String?
+  pagibigNumber            String?
+  tinNumber                String?
+  bankAccount              String?
+  bankName                 String?
+  appointments             Appointment[]
+  attendances              Attendance[]
+  awards                   Award[]
+  biometricCredentials     BiometricCredential[]
+  biometricDeviceUsers     BiometricDeviceUser[]
+  bonuses                  Bonus[]
+  designationOrders        DesignationOrder[]
+  disqualifications        Disqualification[]
+  documents                Document[]
+  educationRecords         EducationRecord[]
+  eligibilities            Eligibility[]
+  department               Department                @relation(fields: [departmentId], references: [id])
+  position                 Position                  @relation(fields: [positionId], references: [id])
+  tenant                   Tenant?                   @relation(fields: [tenantId], references: [id])
+  employmentHistory        EmploymentHistory[]
+  familyMembers            FamilyMember[]
+  idps                     IDP[]
+  leaveCredits             LeaveCredit[]
+  leaveRequests            LeaveRequest[]
+  loans                    Loan[]
+  overtimeRequests         OvertimeRequest[]
+  payrollItems             PayrollItem[]
+  performanceReviews       PerformanceReview[]
+  trainingEnrollments      TrainingEnrollment[]
   trainingNeedsAssessments TrainingNeedsAssessment[]
+  linkedUsers              User[]                    @relation("UserEmployeeLink")
 
   @@index([tenantId])
   @@index([tenantId, status])
 }
 
 model FamilyMember {
-  id          String   @id @default(uuid())
-  tenantId    String?
-  employeeId  String
+  id           String    @id @default(uuid())
+  employeeId   String
   relationship String
-  firstName   String
-  lastName    String
-  middleName  String?
-  birthDate   DateTime? @db.Date
-  occupation  String?
-  isDependent Boolean  @default(false)
-  createdAt   DateTime @default(now()) @db.Timestamptz(6)
-  employee    Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  tenant      Tenant?   @relation(fields: [tenantId], references: [id])
+  firstName    String
+  lastName     String
+  middleName   String?
+  birthDate    DateTime? @db.Date
+  occupation   String?
+  isDependent  Boolean   @default(false)
+  createdAt    DateTime  @default(now()) @db.Timestamptz(6)
+  tenantId     String?
+  employee     Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  tenant       Tenant?   @relation(fields: [tenantId], references: [id])
 }
 
 model EducationRecord {
-  id          String   @id @default(uuid())
-  tenantId    String?
-  employeeId  String
-  level       String
-  school      String
-  degree      String?
-  fromDate    DateTime? @db.Date
-  toDate      DateTime? @db.Date
-  unitsEarned Float?
+  id            String    @id @default(uuid())
+  employeeId    String
+  level         String
+  school        String
+  degree        String?
+  fromDate      DateTime? @db.Date
+  toDate        DateTime? @db.Date
+  unitsEarned   Float?
   yearGraduated Int?
-  scholarships String?
-  honors      String?
-  createdAt   DateTime @default(now()) @db.Timestamptz(6)
-  employee    Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  tenant      Tenant?   @relation(fields: [tenantId], references: [id])
+  scholarships  String?
+  honors        String?
+  createdAt     DateTime  @default(now()) @db.Timestamptz(6)
+  tenantId      String?
+  employee      Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  tenant        Tenant?   @relation(fields: [tenantId], references: [id])
 }
 
 model Award {
-  id          String   @id @default(uuid())
-  tenantId    String?
-  employeeId  String
-  title       String
-  issuer      String?
-  dateGiven   DateTime? @db.Date
-  remarks     String?
-  createdAt   DateTime @default(now()) @db.Timestamptz(6)
-  employee    Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  tenant      Tenant?   @relation(fields: [tenantId], references: [id])
+  id         String    @id @default(uuid())
+  employeeId String
+  title      String
+  issuer     String?
+  dateGiven  DateTime? @db.Date
+  remarks    String?
+  createdAt  DateTime  @default(now()) @db.Timestamptz(6)
+  tenantId   String?
+  employee   Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  tenant     Tenant?   @relation(fields: [tenantId], references: [id])
 }
 
 model EmploymentHistory {
-  id         String   @id @default(uuid())
-  tenantId    String?
-  employeeId String
+  id           String    @id @default(uuid())
+  employeeId   String
   departmentId String
-  positionId String
-  startDate  DateTime @db.Date
-  endDate    DateTime? @db.Date
-  createdAt  DateTime @default(now()) @db.Timestamptz(6)
-  employee   Employee @relation(fields: [employeeId], references: [id])
-  tenant      Tenant?   @relation(fields: [tenantId], references: [id])
+  positionId   String
+  startDate    DateTime  @db.Date
+  endDate      DateTime? @db.Date
+  createdAt    DateTime  @default(now()) @db.Timestamptz(6)
+  tenantId     String?
+  employee     Employee  @relation(fields: [employeeId], references: [id])
+  tenant       Tenant?   @relation(fields: [tenantId], references: [id])
 }
 
 model PayrollPeriod {
-  id        String   @id @default(uuid())
-  tenantId    String?
-  name      String
-  startDate DateTime @db.Date
-  endDate   DateTime @db.Date
+  id         String              @id @default(uuid())
+  name       String
+  startDate  DateTime            @db.Date
+  endDate    DateTime            @db.Date
   fiscalYear Int
-  status    PayrollPeriodStatus @default(OPEN)
-  createdAt DateTime @default(now()) @db.Timestamptz(6)
-  runs      PayrollRun[]
-  tenant      Tenant?   @relation(fields: [tenantId], references: [id])
+  createdAt  DateTime            @default(now()) @db.Timestamptz(6)
+  tenantId   String?
+  status     PayrollPeriodStatus @default(OPEN)
+  tenant     Tenant?             @relation(fields: [tenantId], references: [id])
+  runs       PayrollRun[]
 
   @@unique([tenantId, name])
   @@index([tenantId])
 }
 
 model PayrollRun {
-  id          String   @id @default(uuid())
-  tenantId    String?
-  periodId    String
-  runDate     DateTime @db.Date
-  status      PayrollStatus @default(DRAFT)
-  createdBy   String
-  generatedAt DateTime?
-  postedAt    DateTime?
-  createdAt   DateTime @default(now()) @db.Timestamptz(6)
-  period      PayrollPeriod @relation(fields: [periodId], references: [id])
-  items       PayrollItem[]
+  id            String        @id @default(uuid())
+  periodId      String
+  runDate       DateTime      @db.Date
+  status        PayrollStatus @default(DRAFT)
+  createdBy     String
+  createdAt     DateTime      @default(now()) @db.Timestamptz(6)
+  tenantId      String?
+  generatedAt   DateTime?
+  postedAt      DateTime?
   ledgerEntries LedgerEntry[]
-  tenant      Tenant?   @relation(fields: [tenantId], references: [id])
+  items         PayrollItem[]
+  period        PayrollPeriod @relation(fields: [periodId], references: [id])
+  tenant        Tenant?       @relation(fields: [tenantId], references: [id])
 
   @@index([tenantId, periodId])
   @@index([tenantId, createdAt])
 }
 
 model PayrollItem {
-  id          String   @id @default(uuid())
-  tenantId    String?
-  employeeId  String
-  runId       String
-  basicPay    Decimal  @db.Decimal(12,2)
-  allowances  Decimal  @db.Decimal(12,2)
-  deductions  Decimal  @db.Decimal(12,2)
-  netPay      Decimal  @db.Decimal(12,2)
-  createdAt   DateTime @default(now()) @db.Timestamptz(6)
-  employee    Employee @relation(fields: [employeeId], references: [id])
-  run         PayrollRun @relation(fields: [runId], references: [id])
+  id             String                 @id @default(uuid())
+  employeeId     String
+  runId          String
+  basicPay       Decimal                @db.Decimal(12, 2)
+  allowances     Decimal                @db.Decimal(12, 2)
+  deductions     Decimal                @db.Decimal(12, 2)
+  netPay         Decimal                @db.Decimal(12, 2)
+  createdAt      DateTime               @default(now()) @db.Timestamptz(6)
+  tenantId       String?
   deductionLines PayrollDeductionLine[]
-  payslip Payslip?
-  tenant      Tenant?   @relation(fields: [tenantId], references: [id])
+  employee       Employee               @relation(fields: [employeeId], references: [id])
+  run            PayrollRun             @relation(fields: [runId], references: [id])
+  tenant         Tenant?                @relation(fields: [tenantId], references: [id])
+  payslip        Payslip?
 
   @@index([tenantId, runId])
 }
 
 model PayrollDeductionLine {
-  id          String   @id @default(uuid())
-  tenantId    String?
+  id            String      @id @default(uuid())
   payrollItemId String
-  code        String
-  description String?
-  employeeShare Decimal @db.Decimal(12,2) @default(0)
-  employerShare Decimal @db.Decimal(12,2) @default(0)
-  // Units for ATTD lines (VL days charged) and OT lines (approved hours);
-  // used by POST to settle leave credits idempotently.
-  quantity    Decimal? @db.Decimal(8,2)
-  payrollItem PayrollItem @relation(fields: [payrollItemId], references: [id])
-  tenant      Tenant?   @relation(fields: [tenantId], references: [id])
+  code          String
+  description   String?
+  employeeShare Decimal     @default(0) @db.Decimal(12, 2)
+  employerShare Decimal     @default(0) @db.Decimal(12, 2)
+  tenantId      String?
+  quantity      Decimal?    @db.Decimal(8, 2)
+  payrollItem   PayrollItem @relation(fields: [payrollItemId], references: [id])
+  tenant        Tenant?     @relation(fields: [tenantId], references: [id])
 
   @@index([tenantId, payrollItemId])
 }
 
 model Payslip {
-  id          String   @id @default(uuid())
-  tenantId    String?
-  payrollItemId String @unique
-  generatedAt DateTime @default(now()) @db.Timestamptz(6)
-  pdfUrl      String?
-  payrollItem PayrollItem @relation(fields: [payrollItemId], references: [id])
-  tenant      Tenant?   @relation(fields: [tenantId], references: [id])
+  id            String      @id @default(uuid())
+  payrollItemId String      @unique
+  generatedAt   DateTime    @default(now()) @db.Timestamptz(6)
+  pdfUrl        String?
+  tenantId      String?
+  payrollItem   PayrollItem @relation(fields: [payrollItemId], references: [id])
+  tenant        Tenant?     @relation(fields: [tenantId], references: [id])
 
   @@index([tenantId, payrollItemId])
 }
 
 model LedgerEntry {
-  id        String   @id @default(uuid())
-  tenantId    String?
-  runId     String
+  id         String     @id @default(uuid())
+  runId      String
   employeeId String
-  type      LedgerType
-  amount    Decimal  @db.Decimal(12,2)
-  balance   Decimal  @db.Decimal(12,2)
-  reference String?
-  createdAt DateTime @default(now()) @db.Timestamptz(6)
-  run       PayrollRun @relation(fields: [runId], references: [id])
-  tenant      Tenant?   @relation(fields: [tenantId], references: [id])
+  type       LedgerType
+  amount     Decimal    @db.Decimal(12, 2)
+  balance    Decimal    @db.Decimal(12, 2)
+  reference  String?
+  createdAt  DateTime   @default(now()) @db.Timestamptz(6)
+  tenantId   String?
+  run        PayrollRun @relation(fields: [runId], references: [id])
+  tenant     Tenant?    @relation(fields: [tenantId], references: [id])
 
   @@index([tenantId, runId])
 }
 
 model AuditLog {
   id        String   @id @default(uuid())
-  tenantId    String?
   userId    String
   action    String
   entity    String
@@ -406,15 +399,15 @@ model AuditLog {
   after     Json?
   ip        String?
   timestamp DateTime @default(now()) @db.Timestamptz(6)
-  user      User @relation(fields: [userId], references: [id])
-  tenant      Tenant?   @relation(fields: [tenantId], references: [id])
+  tenantId  String?
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id])
+  user      User     @relation(fields: [userId], references: [id])
 
   @@index([tenantId, timestamp])
 }
 
 model UserSession {
   id         String    @id @default(uuid())
-  tenantId    String?
   userId     String
   deviceHash String
   ip         String?
@@ -422,144 +415,138 @@ model UserSession {
   lastActive DateTime  @default(now()) @db.Timestamptz(6)
   revokedAt  DateTime? @db.Timestamptz(6)
   createdAt  DateTime  @default(now()) @db.Timestamptz(6)
+  tenantId   String?
+  tenant     Tenant?   @relation(fields: [tenantId], references: [id])
   user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tenant      Tenant?   @relation(fields: [tenantId], references: [id])
 }
 
 model LoginEvent {
   id        String   @id @default(uuid())
-  tenantId    String?
   userId    String
   ip        String?
   userAgent String?
   success   Boolean
   createdAt DateTime @default(now()) @db.Timestamptz(6)
+  tenantId  String?
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id])
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tenant      Tenant?   @relation(fields: [tenantId], references: [id])
 }
 
 model Delegation {
-  id         String   @id @default(uuid())
-  tenantId    String?
+  id          String   @id @default(uuid())
   delegatorId String
   delegateeId String
-  scope      String?
-  reason     String?
-  startsAt   DateTime @db.Timestamptz(6)
-  endsAt     DateTime @db.Timestamptz(6)
-  createdAt  DateTime @default(now()) @db.Timestamptz(6)
-  delegator  User     @relation("delegator", fields: [delegatorId], references: [id])
-  delegatee  User     @relation("delegatee", fields: [delegateeId], references: [id])
-  tenant      Tenant?   @relation(fields: [tenantId], references: [id])
+  scope       String?
+  reason      String?
+  startsAt    DateTime @db.Timestamptz(6)
+  endsAt      DateTime @db.Timestamptz(6)
+  createdAt   DateTime @default(now()) @db.Timestamptz(6)
+  tenantId    String?
+  delegatee   User     @relation("delegatee", fields: [delegateeId], references: [id])
+  delegator   User     @relation("delegator", fields: [delegatorId], references: [id])
+  tenant      Tenant?  @relation(fields: [tenantId], references: [id])
 }
 
 model LeaveRequest {
-  id          String   @id @default(uuid())
-  tenantId    String?
-  employeeId  String
-  type        LeaveType
-  fromDate    DateTime @db.Date
-  toDate      DateTime @db.Date
-  days        Float
-  status      LeaveStatus @default(PENDING)
-  reason      String?
-  isHalfDay   Boolean  @default(false)
-  isLwop      Boolean  @default(false)
-  isTerminal  Boolean  @default(false)
-  isForced    Boolean  @default(false)
+  id              String      @id @default(uuid())
+  employeeId      String
+  type            LeaveType
+  fromDate        DateTime    @db.Date
+  toDate          DateTime    @db.Date
+  days            Float
+  status          LeaveStatus @default(PENDING)
+  reason          String?
+  createdAt       DateTime    @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime    @updatedAt @db.Timestamptz(6)
+  tenantId        String?
+  approvedAt      DateTime?   @db.Timestamptz(6)
+  approvedBy      String?
+  decisionNote    String?
+  deniedAt        DateTime?   @db.Timestamptz(6)
+  deniedBy        String?
+  advanceNoticed  Boolean     @default(false)
+  documentUrl     String?
+  isForced        Boolean     @default(false)
+  isHalfDay       Boolean     @default(false)
+  isLwop          Boolean     @default(false)
+  isTerminal      Boolean     @default(false)
+  recommendedAt   DateTime?   @db.Timestamptz(6)
+  recommendedBy   String?
   studyBondMonths Int?
-  documentUrl String?
-  advanceNoticed Boolean @default(false)
-  monetized Boolean @default(false)
-  monetizedAt DateTime? @db.Timestamptz(6)
-  monetizedAmount Decimal? @db.Decimal(12,2)
-  monetizedDays Float?
-  recommendedBy String?
-  recommendedAt DateTime? @db.Timestamptz(6)
-  approvedBy  String?
-  approvedAt  DateTime? @db.Timestamptz(6)
-  deniedBy    String?
-  deniedAt    DateTime? @db.Timestamptz(6)
-  decisionNote String?
-  createdAt   DateTime @default(now()) @db.Timestamptz(6)
-  updatedAt   DateTime @updatedAt @db.Timestamptz(6)
-  employee    Employee @relation(fields: [employeeId], references: [id])
-  tenant      Tenant?   @relation(fields: [tenantId], references: [id])
+  monetized       Boolean     @default(false)
+  monetizedAmount Decimal?    @db.Decimal(12, 2)
+  monetizedAt     DateTime?   @db.Timestamptz(6)
+  monetizedDays   Float?
+  employee        Employee    @relation(fields: [employeeId], references: [id])
+  tenant          Tenant?     @relation(fields: [tenantId], references: [id])
 }
 
 model LeaveCredit {
-  id         String   @id @default(uuid())
-  tenantId    String?
+  id         String    @id @default(uuid())
   employeeId String
   type       LeaveType
-  balance    Float    @default(0)
+  balance    Float     @default(0)
   year       Int
-  createdAt  DateTime @default(now()) @db.Timestamptz(6)
-  employee   Employee @relation(fields: [employeeId], references: [id])
-  tenant      Tenant?   @relation(fields: [tenantId], references: [id])
+  createdAt  DateTime  @default(now()) @db.Timestamptz(6)
+  tenantId   String?
+  employee   Employee  @relation(fields: [employeeId], references: [id])
+  tenant     Tenant?   @relation(fields: [tenantId], references: [id])
 
   @@unique([tenantId, employeeId, type, year])
 }
 
 model Attendance {
-  id         String   @id @default(uuid())
-  tenantId    String?
+  id         String    @id @default(uuid())
   employeeId String
-  date       DateTime @db.Date
+  date       DateTime  @db.Date
   timeIn     DateTime? @db.Timestamptz(6)
   timeOut    DateTime? @db.Timestamptz(6)
   hours      Float?
   remark     String?
-  // Provenance: MANUAL | IMPORT | PUNCH | DEVICE. deviceRef is
-  // "DEVICE:<deviceId>:<deviceLogId>" for rows written by the biometric sync.
-  source     String?  @default("MANUAL")
+  createdAt  DateTime  @default(now()) @db.Timestamptz(6)
+  tenantId   String?
   deviceRef  String?
-  createdAt  DateTime @default(now()) @db.Timestamptz(6)
-  employee   Employee @relation(fields: [employeeId], references: [id])
-  tenant      Tenant?   @relation(fields: [tenantId], references: [id])
+  source     String?   @default("MANUAL")
+  employee   Employee  @relation(fields: [employeeId], references: [id])
+  tenant     Tenant?   @relation(fields: [tenantId], references: [id])
 
   @@index([tenantId, employeeId, date])
 }
 
 model BiometricDevice {
-  id             String    @id @default(uuid())
-  tenantId       String?
-  name           String
-  model          String?
-  // ZK_TCP = backend pulls via the ZK protocol (port 4370). ADMS push is a
-  // planned follow-up for models that push /iclock/cdata HTTP events.
-  protocol       String    @default("ZK_TCP")
-  host           String
-  port           Int       @default(4370)
-  serial         String?
-  active         Boolean   @default(true)
-  pollIntervalMs Int       @default(30000)
-  lastConnectedAt DateTime? @db.Timestamptz(6)
-  lastSyncAt     DateTime? @db.Timestamptz(6)
-  lastError      String?
-  createdAt      DateTime  @default(now()) @db.Timestamptz(6)
-  updatedAt      DateTime  @updatedAt @db.Timestamptz(6)
-  logs           BiometricDeviceLog[]
-  userMappings   BiometricDeviceUser[]
-  tenant         Tenant?   @relation(fields: [tenantId], references: [id])
+  id              String                @id @default(uuid())
+  tenantId        String?
+  name            String
+  model           String?
+  protocol        String                @default("ZK_TCP")
+  host            String
+  port            Int                   @default(4370)
+  serial          String?
+  active          Boolean               @default(true)
+  pollIntervalMs  Int                   @default(30000)
+  lastConnectedAt DateTime?             @db.Timestamptz(6)
+  lastSyncAt      DateTime?             @db.Timestamptz(6)
+  lastError       String?
+  createdAt       DateTime              @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime              @updatedAt @db.Timestamptz(6)
+  tenant          Tenant?               @relation(fields: [tenantId], references: [id])
+  logs            BiometricDeviceLog[]
+  userMappings    BiometricDeviceUser[]
 
   @@index([tenantId, active])
 }
 
 model BiometricDeviceLog {
-  id           String   @id @default(uuid())
+  id           String          @id @default(uuid())
   tenantId     String?
   deviceId     String
-  // Device-side record index. Dedupes repeated pulls (idempotent sync).
   deviceLogId  String
   userId       String
-  punchedAt    DateTime @db.Timestamptz(6)
+  punchedAt    DateTime        @db.Timestamptz(6)
   verification String?
-  // Linked Employee id when userId matched an employeeNumber, else null.
   employeeId   String?
-  // True when the event created/updated an Attendance row.
-  applied      Boolean  @default(false)
-  createdAt    DateTime @default(now()) @db.Timestamptz(6)
+  applied      Boolean         @default(false)
+  createdAt    DateTime        @default(now()) @db.Timestamptz(6)
   device       BiometricDevice @relation(fields: [deviceId], references: [id], onDelete: Cascade)
 
   @@unique([deviceId, deviceLogId])
@@ -567,15 +554,15 @@ model BiometricDeviceLog {
 }
 
 model BiometricDeviceUser {
-  id           String   @id @default(uuid())
+  id           String          @id @default(uuid())
   tenantId     String?
   deviceId     String
-  deviceUserId String   @db.VarChar(120)
+  deviceUserId String          @db.VarChar(120)
   employeeId   String
-  createdAt    DateTime @default(now()) @db.Timestamptz(6)
-  updatedAt    DateTime @updatedAt @db.Timestamptz(6)
+  createdAt    DateTime        @default(now()) @db.Timestamptz(6)
+  updatedAt    DateTime        @updatedAt @db.Timestamptz(6)
   device       BiometricDevice @relation(fields: [deviceId], references: [id], onDelete: Cascade)
-  employee     Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  employee     Employee        @relation(fields: [employeeId], references: [id], onDelete: Cascade)
 
   @@unique([deviceId, deviceUserId])
   @@index([tenantId, deviceId])
@@ -583,461 +570,341 @@ model BiometricDeviceUser {
 }
 
 model Appointment {
-  id          String   @id @default(uuid())
-  tenantId    String?
-  employeeId  String
-  type        AppointmentType
-  itemNumber  String
-  plantillaItemId String?
-  startDate   DateTime @db.Date
-  endDate     DateTime? @db.Date
-  status      AppointmentStatus @default(PENDING)
-  position    String?
-  dept        String?
-  name        String?
-  signedBy    String?
-  issuedBy    String?
-  approvedBy  String?
-  verifiedBy  String?
-  documentUrl String?
-  oraohraReference String?
-  cscFormNo   String?
-  remarks     String?
-  deletedAt   DateTime? @db.Timestamptz(6)
-  createdAt   DateTime @default(now()) @db.Timestamptz(6)
-  employee    Employee @relation(fields: [employeeId], references: [id])
-  plantillaItem PlantillaItem? @relation(fields: [plantillaItemId], references: [id])
+  id                String             @id @default(uuid())
+  employeeId        String
+  type              AppointmentType
+  itemNumber        String
+  startDate         DateTime           @db.Date
+  endDate           DateTime?          @db.Date
+  status            AppointmentStatus  @default(PENDING)
+  createdAt         DateTime           @default(now()) @db.Timestamptz(6)
+  dept              String?
+  position          String?
+  name              String?
+  tenantId          String?
+  deletedAt         DateTime?          @db.Timestamptz(6)
+  plantillaItemId   String?
+  signedBy          String?
+  issuedBy          String?
+  approvedBy        String?
+  verifiedBy        String?
+  documentUrl       String?
+  oraohraReference  String?
+  cscFormNo         String?
+  remarks           String?
+  employee          Employee           @relation(fields: [employeeId], references: [id])
+  plantillaItem     PlantillaItem?     @relation(fields: [plantillaItemId], references: [id])
+  tenant            Tenant?            @relation(fields: [tenantId], references: [id])
   designationOrders DesignationOrder[]
-  tenant      Tenant?   @relation(fields: [tenantId], references: [id])
 }
 
 model PerformanceReview {
-  id              String   @id @default(uuid())
-  tenantId        String?
-  employeeId      String
-  reviewYear      Int
-  reviewType      String
-  periodStart     DateTime? @db.Timestamptz(6)
-  periodEnd       DateTime? @db.Timestamptz(6)
-  planningDate    DateTime? @db.Timestamptz(6)
-  coreWeight      Decimal  @default(50) @db.Decimal(5,2)
-  strategicWeight Decimal  @default(30) @db.Decimal(5,2)
-  supportWeight   Decimal  @default(20) @db.Decimal(5,2)
-  competencyWeight Decimal @default(30) @db.Decimal(5,2)
-  rating          Decimal? @db.Decimal(3,2)
+  id               String                  @id @default(uuid())
+  employeeId       String
+  reviewYear       Int
+  reviewType       String
+  rating           Decimal?                @db.Decimal(3, 2)
+  comments         String?
+  status           ReviewStatus            @default(PLANNING)
+  reviewedBy       String?
+  reviewedAt       DateTime?               @db.Timestamptz(6)
+  createdAt        DateTime                @default(now()) @db.Timestamptz(6)
+  updatedAt        DateTime                @updatedAt @db.Timestamptz(6)
+  tenantId         String?
   adjectivalRating AdjectivalRating?
-  officeRatingCap Decimal? @db.Decimal(3,2)
-  comments        String?
-  status          ReviewStatus @default(PLANNING)
-  reviewedBy      String?
-  reviewedAt      DateTime? @db.Timestamptz(6)
-  approvedBy      String?
-  approvedAt      DateTime? @db.Timestamptz(6)
-  createdAt       DateTime @default(now()) @db.Timestamptz(6)
-  updatedAt       DateTime @updatedAt @db.Timestamptz(6)
-  employee        Employee @relation(fields: [employeeId], references: [id])
-  tenant          Tenant?   @relation(fields: [tenantId], references: [id])
-  parentReviewId  String?
-  parentReview    PerformanceReview? @relation("ReviewCascade", fields: [parentReviewId], references: [id])
-  childReviews    PerformanceReview[] @relation("ReviewCascade")
-  targets         PerformanceTarget[]
-  competencies    PerformanceCompetency[]
+  approvedAt       DateTime?               @db.Timestamptz(6)
+  approvedBy       String?
+  competencyWeight Decimal                 @default(30) @db.Decimal(5, 2)
+  coreWeight       Decimal                 @default(50) @db.Decimal(5, 2)
+  officeRatingCap  Decimal?                @db.Decimal(3, 2)
+  periodEnd        DateTime?               @db.Timestamptz(6)
+  periodStart      DateTime?               @db.Timestamptz(6)
+  planningDate     DateTime?               @db.Timestamptz(6)
+  strategicWeight  Decimal                 @default(30) @db.Decimal(5, 2)
+  supportWeight    Decimal                 @default(20) @db.Decimal(5, 2)
+  parentReviewId   String?
+  competencies     PerformanceCompetency[]
+  employee         Employee                @relation(fields: [employeeId], references: [id])
+  parentReview     PerformanceReview?      @relation("ReviewCascade", fields: [parentReviewId], references: [id])
+  childReviews     PerformanceReview[]     @relation("ReviewCascade")
+  tenant           Tenant?                 @relation(fields: [tenantId], references: [id])
+  targets          PerformanceTarget[]
 
   @@index([tenantId, reviewYear, status])
 }
 
 model PerformanceTarget {
-  id                  String   @id @default(uuid())
+  id                  String            @id @default(uuid())
   tenantId            String?
   reviewId            String
   kra                 String
   successIndicator    String
-  outputGroup         OutputGroup @default(CORE)
-  weight              Decimal  @db.Decimal(5,2)
-  targetQuantity      Decimal? @db.Decimal(12,2)
+  outputGroup         OutputGroup       @default(CORE)
+  weight              Decimal           @db.Decimal(5, 2)
+  targetQuantity      Decimal?          @db.Decimal(12, 2)
   targetUnit          String?
-  q1Actual           String?
-  q2Actual           String?
-  q3Actual           String?
-  q4Actual           String?
-  annualActual       String?
-  qualityScore       Decimal? @db.Decimal(3,2)
-  efficiencyScore    Decimal? @db.Decimal(3,2)
-  timelinessScore    Decimal? @db.Decimal(3,2)
-  averageScore       Decimal? @db.Decimal(3,2)
-  actualPercent      Decimal? @db.Decimal(5,2)
+  q1Actual            String?
+  q2Actual            String?
+  q3Actual            String?
+  q4Actual            String?
+  annualActual        String?
+  qualityScore        Decimal?          @db.Decimal(3, 2)
+  efficiencyScore     Decimal?          @db.Decimal(3, 2)
+  timelinessScore     Decimal?          @db.Decimal(3, 2)
+  averageScore        Decimal?          @db.Decimal(3, 2)
+  actualPercent       Decimal?          @db.Decimal(5, 2)
   meansOfVerification String?
-  remarks            String?
-  createdAt          DateTime @default(now()) @db.Timestamptz(6)
-  updatedAt          DateTime @updatedAt @db.Timestamptz(6)
-  review             PerformanceReview @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  remarks             String?
+  createdAt           DateTime          @default(now()) @db.Timestamptz(6)
+  updatedAt           DateTime          @updatedAt @db.Timestamptz(6)
+  review              PerformanceReview @relation(fields: [reviewId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, reviewId])
 }
 
 model PlantillaItem {
-  id           String          @id @default(uuid())
-  tenantId    String?
-  itemNumber   String          @unique
-  positionId   String
-  departmentId String
-  status       PlantillaStatus @default(VACANT)
-  itemType     PlantillaItemType @default(OLD_STYLE)
-  isMandatory  Boolean @default(false)
-  isOptional   Boolean @default(false)
-  salaryGrade  String?
-  step         String?
-  sourceOfFund String?
+  id                String            @id @default(uuid())
+  itemNumber        String            @unique
+  positionId        String
+  departmentId      String
+  status            PlantillaStatus   @default(VACANT)
+  createdAt         DateTime          @default(now()) @db.Timestamptz(6)
+  tenantId          String?
+  itemType          PlantillaItemType @default(OLD_STYLE)
+  salaryGrade       String?
+  step              String?
+  sourceOfFund      String?
   appropriationCode String?
-  authorizedSalary Decimal? @db.Decimal(12,2)
-  createdAt    DateTime        @default(now()) @db.Timestamptz(6)
-  position     Position        @relation(fields: [positionId], references: [id])
-  department   Department      @relation(fields: [departmentId], references: [id])
-  vacancies    Vacancy[]
-  appointments Appointment[]
-  tenant      Tenant?   @relation(fields: [tenantId], references: [id])
+  authorizedSalary  Decimal?          @db.Decimal(12, 2)
+  isMandatory       Boolean           @default(false)
+  isOptional        Boolean           @default(false)
+  appointments      Appointment[]
+  department        Department        @relation(fields: [departmentId], references: [id])
+  position          Position          @relation(fields: [positionId], references: [id])
+  tenant            Tenant?           @relation(fields: [tenantId], references: [id])
+  vacancies         Vacancy[]
 }
 
 model Vacancy {
-  id              String        @id @default(uuid())
-  tenantId        String?
-  plantillaItemId String
-  title           String
-  description     String?
-  qualifications  String?
+  id                      String               @id @default(uuid())
+  plantillaItemId         String
+  title                   String
+  description             String?
+  qualifications          String?
+  status                  VacancyStatus        @default(DRAFT)
+  publishedAt             DateTime?            @db.Timestamptz(6)
+  closesAt                DateTime?            @db.Date
+  createdAt               DateTime             @default(now()) @db.Timestamptz(6)
+  tenantId                String?
   eligibilityRequirements String?
-  screeningCriteria String?
-  status          VacancyStatus @default(DRAFT)
-  publishedAt     DateTime?     @db.Timestamptz(6)
-  approvedBy      String?
-  publishedBy     String?
-  closesAt        DateTime?     @db.Date
-  createdAt       DateTime      @default(now()) @db.Timestamptz(6)
-  plantillaItem   PlantillaItem @relation(fields: [plantillaItemId], references: [id])
-  publications     VacancyPublication[]
-  designationOrders DesignationOrder[]
-  applicants       Applicant[]
-  tenant          Tenant?       @relation(fields: [tenantId], references: [id])
+  screeningCriteria       String?
+  approvedBy              String?
+  publishedBy             String?
+  applicants              Applicant[]
+  designationOrders       DesignationOrder[]
+  plantillaItem           PlantillaItem        @relation(fields: [plantillaItemId], references: [id])
+  tenant                  Tenant?              @relation(fields: [tenantId], references: [id])
+  publications            VacancyPublication[]
 }
 
 model VacancyPublication {
-  id           String   @id @default(uuid())
+  id          String   @id @default(uuid())
+  vacancyId   String
+  channel     String
+  publishedAt DateTime @default(now()) @db.Timestamptz(6)
+  link        String?
   tenantId    String?
-  vacancyId    String
-  channel      String
-  publishedAt  DateTime @default(now()) @db.Timestamptz(6)
-  publishedBy  String?
-  link         String?
-  vacancy      Vacancy  @relation(fields: [vacancyId], references: [id])
-  tenant      Tenant?   @relation(fields: [tenantId], references: [id])
+  publishedBy String?
+  tenant      Tenant?  @relation(fields: [tenantId], references: [id])
+  vacancy     Vacancy  @relation(fields: [vacancyId], references: [id])
 }
 
 model DesignationOrder {
-  id            String   @id @default(uuid())
-  tenantId    String?
-  employeeId    String
-  appointmentId String?
-  vacancyId     String?
-  orderNumber   String   @unique
-  issuedDate    DateTime @db.Date
-  effectiveDate DateTime? @db.Date
-  expirationDate DateTime? @db.Date
-  signedBy      String?
-  approvedBy    String?
-  recommendedBy String?
-  status        DesignationStatus @default(DRAFT)
-  documentUrl   String?
-  remarks       String?
-  createdAt     DateTime @default(now()) @db.Timestamptz(6)
-  employee      Employee @relation(fields: [employeeId], references: [id])
-  appointment   Appointment? @relation(fields: [appointmentId], references: [id])
-  vacancy       Vacancy? @relation(fields: [vacancyId], references: [id])
-  tenant      Tenant?   @relation(fields: [tenantId], references: [id])
+  id             String            @id @default(uuid())
+  employeeId     String
+  appointmentId  String?
+  vacancyId      String?
+  orderNumber    String            @unique
+  issuedDate     DateTime          @db.Date
+  signedBy       String?
+  status         DesignationStatus @default(DRAFT)
+  createdAt      DateTime          @default(now()) @db.Timestamptz(6)
+  tenantId       String?
+  effectiveDate  DateTime?         @db.Date
+  expirationDate DateTime?         @db.Date
+  documentUrl    String?
+  remarks        String?
+  approvedBy     String?
+  recommendedBy  String?
+  appointment    Appointment?      @relation(fields: [appointmentId], references: [id])
+  employee       Employee          @relation(fields: [employeeId], references: [id])
+  tenant         Tenant?           @relation(fields: [tenantId], references: [id])
+  vacancy        Vacancy?          @relation(fields: [vacancyId], references: [id])
 }
 
 model TrainingProgram {
-  id           String   @id @default(uuid())
-  tenantId    String?
-  code         String   @unique
-  title        String
-  description  String?
+  id            String               @id @default(uuid())
+  code          String               @unique
+  title         String
+  description   String?
   durationHours Int?
-  createdAt    DateTime @default(now()) @db.Timestamptz(6)
-  enrollments  TrainingEnrollment[]
-  tenant      Tenant?   @relation(fields: [tenantId], references: [id])
+  createdAt     DateTime             @default(now()) @db.Timestamptz(6)
+  tenantId      String?
+  enrollments   TrainingEnrollment[]
+  tenant        Tenant?              @relation(fields: [tenantId], references: [id])
 }
 
 model TrainingEnrollment {
-  id         String   @id @default(uuid())
+  id          String               @id @default(uuid())
+  employeeId  String
+  programId   String
+  status      EnrollmentStatus     @default(ENROLLED)
+  enrolledAt  DateTime             @default(now()) @db.Timestamptz(6)
+  completedAt DateTime?            @db.Timestamptz(6)
   tenantId    String?
-  employeeId String
-  programId  String
-  status     EnrollmentStatus @default(ENROLLED)
-  enrolledAt DateTime @default(now()) @db.Timestamptz(6)
-  completedAt DateTime? @db.Timestamptz(6)
-  employee   Employee @relation(fields: [employeeId], references: [id])
-  program    TrainingProgram @relation(fields: [programId], references: [id])
-  tenant      Tenant?   @relation(fields: [tenantId], references: [id])
+  employee    Employee             @relation(fields: [employeeId], references: [id])
+  program     TrainingProgram      @relation(fields: [programId], references: [id])
+  tenant      Tenant?              @relation(fields: [tenantId], references: [id])
   evaluations TrainingEvaluation[]
 }
 
 model Eligibility {
-  id          String   @id @default(uuid())
-  tenantId    String?
-  employeeId  String
+  id              String          @id @default(uuid())
+  employeeId      String
   eligibilityType EligibilityType
-  rating      String?
-  examDate    DateTime? @db.Date
-  validUntil  DateTime? @db.Date
-  remarks     String?
-  createdAt   DateTime @default(now()) @db.Timestamptz(6)
-  employee    Employee @relation(fields: [employeeId], references: [id])
-  tenant      Tenant?   @relation(fields: [tenantId], references: [id])
-}
-
-// DIBAR - Disqualified, Barred, or Disqualified Individuals
-enum DisqualificationType {
-  VIOLATION_OF_CSC_RULES
-  CRIMINAL_CONVICTION
-  MORAL_TURPITUDE
-  FRAUD
-  MISCONDUCT
-  OTHER
-}
-
-enum DisqualificationReason {
-  GROSS_MISCONDUCT
-  HARRASSMENT
-  EMBEZZLEMENT
-  FRAUDULENT_MISREPRESENTATION
-  SUBSTANCE_ABUSE
-  POLITICAL_PARTISANISM
-  OTHER_GROUNDS
+  rating          String?
+  examDate        DateTime?       @db.Date
+  validUntil      DateTime?       @db.Date
+  remarks         String?
+  createdAt       DateTime        @default(now()) @db.Timestamptz(6)
+  tenantId        String?
+  employee        Employee        @relation(fields: [employeeId], references: [id])
+  tenant          Tenant?         @relation(fields: [tenantId], references: [id])
 }
 
 model Disqualification {
-  id                    String           @id @default(uuid())
-  tenantId    String?
-  employeeId            String
-  applicantId           String?
-  type                  DisqualificationType
-  reason                DisqualificationReason
-  date                  DateTime         @db.Date
-  validity              DateTime?        @db.Date
-  remarks               String?
-  evidenceDocument      String?          // URL or path to supporting document
-  isBarred              Boolean          @default(false)
-  createdAt             DateTime         @default(now()) @db.Timestamptz(6)
-  createdBy             String?
-  employee              Employee         @relation(fields: [employeeId], references: [id])
-  applicant             Applicant?       @relation(fields: [applicantId], references: [id])
-  tenant      Tenant?   @relation(fields: [tenantId], references: [id])
+  id               String                 @id @default(uuid())
+  employeeId       String
+  type             DisqualificationType
+  reason           DisqualificationReason
+  date             DateTime               @db.Date
+  validity         DateTime?              @db.Date
+  remarks          String?
+  evidenceDocument String?
+  isBarred         Boolean                @default(false)
+  createdAt        DateTime               @default(now()) @db.Timestamptz(6)
+  createdBy        String?
+  tenantId         String?
+  applicantId      String?
+  applicant        Applicant?             @relation(fields: [applicantId], references: [id])
+  employee         Employee               @relation(fields: [employeeId], references: [id])
+  tenant           Tenant?                @relation(fields: [tenantId], references: [id])
 }
 
 model Applicant {
-  id            String   @id @default(uuid())
-  tenantId    String?
-  firstName     String
-  lastName      String
-  middleName    String?
-  email         String?
-  phone         String?
-  status        ApplicantStatus @default(APPLIED)
-  vacancyId     String?
-  appliedPositionId String?
+  id                  String             @id @default(uuid())
+  firstName           String
+  lastName            String
+  middleName          String?
+  email               String?
+  phone               String?
+  status              ApplicantStatus    @default(APPLIED)
+  appliedPositionId   String?
   appliedDepartmentId String?
-  eligibilityScore Int?
-  screeningScore Int?
-  interviewScore Int?
+  resumeUrl           String?
+  createdAt           DateTime           @default(now()) @db.Timestamptz(6)
+  tenantId            String?
+  vacancyId           String?
+  eligibilityScore    Int?
+  screeningScore      Int?
+  interviewScore      Int?
   selectionBoardNotes String?
-  hiredEmployeeId String?
-  resumeUrl     String?
-  createdAt     DateTime @default(now()) @db.Timestamptz(6)
-  position      Position? @relation(fields: [appliedPositionId], references: [id])
-  department    Department? @relation(fields: [appliedDepartmentId], references: [id])
-  vacancy       Vacancy? @relation(fields: [vacancyId], references: [id])
-  interviews    Interview[]
-  disqualifications Disqualification[]
-  tenant      Tenant?   @relation(fields: [tenantId], references: [id])
+  hiredEmployeeId     String?
+  department          Department?        @relation(fields: [appliedDepartmentId], references: [id])
+  position            Position?          @relation(fields: [appliedPositionId], references: [id])
+  tenant              Tenant?            @relation(fields: [tenantId], references: [id])
+  vacancy             Vacancy?           @relation(fields: [vacancyId], references: [id])
+  disqualifications   Disqualification[]
+  interviews          Interview[]
 }
 
 model ContributionRule {
-  id          String   @id @default(uuid())
-  tenantId    String?
-  type        String
-  employeeRate Decimal @db.Decimal(5,4)
-  employerRate Decimal @db.Decimal(5,4)
-  effectiveFrom DateTime @db.Date
-  effectiveTo DateTime? @db.Date
-  createdAt   DateTime @default(now()) @db.Timestamptz(6)
-  tenant      Tenant?   @relation(fields: [tenantId], references: [id])
+  id            String    @id @default(uuid())
+  type          String
+  employeeRate  Decimal   @db.Decimal(5, 4)
+  employerRate  Decimal   @db.Decimal(5, 4)
+  effectiveFrom DateTime  @db.Date
+  effectiveTo   DateTime? @db.Date
+  createdAt     DateTime  @default(now()) @db.Timestamptz(6)
+  tenantId      String?
+  tenant        Tenant?   @relation(fields: [tenantId], references: [id])
 
   @@index([tenantId, effectiveFrom])
 }
 
 model TaxBracket {
-  id          String   @id @default(uuid())
-  tenantId    String?
-  minIncome   Decimal @db.Decimal(12,2)
-  maxIncome   Decimal? @db.Decimal(12,2)
-  rate        Decimal @db.Decimal(5,4)
-  effectiveFrom DateTime @db.Date
-  effectiveTo DateTime? @db.Date
-  createdAt   DateTime @default(now()) @db.Timestamptz(6)
-  tenant      Tenant?   @relation(fields: [tenantId], references: [id])
+  id            String    @id @default(uuid())
+  minIncome     Decimal   @db.Decimal(12, 2)
+  maxIncome     Decimal?  @db.Decimal(12, 2)
+  rate          Decimal   @db.Decimal(5, 4)
+  effectiveFrom DateTime  @db.Date
+  effectiveTo   DateTime? @db.Date
+  createdAt     DateTime  @default(now()) @db.Timestamptz(6)
+  tenantId      String?
+  tenant        Tenant?   @relation(fields: [tenantId], references: [id])
 
   @@index([tenantId, minIncome])
 }
 
 model AllowanceRule {
-  id            String   @id @default(uuid())
+  id            String    @id @default(uuid())
   tenantId      String?
   type          String
-  amount        Decimal  @db.Decimal(12,2)
-  effectiveFrom DateTime @db.Date
+  amount        Decimal   @db.Decimal(12, 2)
+  effectiveFrom DateTime  @db.Date
   effectiveTo   DateTime? @db.Date
-  active        Boolean  @default(true)
-  createdAt     DateTime @default(now()) @db.Timestamptz(6)
-  tenant        Tenant?  @relation(fields: [tenantId], references: [id])
+  active        Boolean   @default(true)
+  createdAt     DateTime  @default(now()) @db.Timestamptz(6)
+  tenant        Tenant?   @relation(fields: [tenantId], references: [id])
 
   @@index([tenantId, effectiveFrom])
 }
 
 model LeaveRuleConfig {
-  id          String   @id @default(uuid())
-  tenantId    String?
-  leaveType   LeaveType
-  accrualPerMonth Decimal @db.Decimal(4,2)
-  maxCarryOver Decimal? @db.Decimal(6,2)
-  effectiveFrom DateTime @db.Date
-  effectiveTo DateTime? @db.Date
-  createdAt   DateTime @default(now()) @db.Timestamptz(6)
-  tenant      Tenant?   @relation(fields: [tenantId], references: [id])
-}
-
-enum BonusType {
-  THIRTEENTH_MONTH
-  CASH_GIFT
-  YEAR_END_BONUS
+  id              String    @id @default(uuid())
+  leaveType       LeaveType
+  accrualPerMonth Decimal   @db.Decimal(4, 2)
+  maxCarryOver    Decimal?  @db.Decimal(6, 2)
+  effectiveFrom   DateTime  @db.Date
+  effectiveTo     DateTime? @db.Date
+  createdAt       DateTime  @default(now()) @db.Timestamptz(6)
+  tenantId        String?
+  tenant          Tenant?   @relation(fields: [tenantId], references: [id])
 }
 
 model Bonus {
-  id          String   @id @default(uuid())
-  tenantId    String?
+  id          String    @id @default(uuid())
   employeeId  String
   type        BonusType
-  amount      Decimal @db.Decimal(12,2)
+  amount      Decimal   @db.Decimal(12, 2)
   periodYear  Int
   periodMonth Int?
-  status      String @default("PENDING")
-  createdAt   DateTime @default(now()) @db.Timestamptz(6)
-  employee    Employee @relation(fields: [employeeId], references: [id])
+  status      String    @default("PENDING")
+  createdAt   DateTime  @default(now()) @db.Timestamptz(6)
+  tenantId    String?
+  employee    Employee  @relation(fields: [employeeId], references: [id])
   tenant      Tenant?   @relation(fields: [tenantId], references: [id])
-}
-
-enum ApplicantStatus {
-  NEW
-  APPLIED
-  SCREENED
-  SHORTLISTED
-  INTERVIEWED
-  OFFERED
-  HIRED
-  REJECTED
-  DISQUALIFIED
-}
-
-enum AppointmentStatus {
-  PENDING
-  APPROVED
-  VERIFIED
-  ISSUED
-  EFFECTIVE
-  ENDED
-  SEPARATED
-}
-
-enum DesignationStatus {
-  DRAFT
-  RECOMMENDED
-  APPROVED
-  ISSUED
-  EFFECTIVE
-  REVOKED
-}
-
-enum InterviewStatus {
-  SCHEDULED
-  COMPLETED
-  CANCELLED
-}
-
-enum EligibilityType {
-  CSC
-  PRC
-  BAR
-  OTHER
-}
-
-enum PlantillaItemType {
-  OLD_STYLE
-  NEW_STYLE
-}
-
-enum EnrollmentStatus {
-  ENROLLED
-  COMPLETED
-  CANCELLED
-}
-
-enum PlantillaStatus {
-  VACANT
-  FILLED
-  FROZEN
-  ARCHIVED
-}
-
-enum VacancyStatus {
-  DRAFT
-  PUBLISHED
-  OPEN
-  CLOSED
-  FILLED
-  CANCELLED
-}
-
-enum ReviewStatus {
-  PLANNING
-  MONITORING
-  REVIEW
-  APPROVED
-  REJECTED
-  CANCELLED
-}
-
-enum OutputGroup {
-  CORE
-  STRATEGIC
-  SUPPORT
-}
-
-enum AdjectivalRating {
-  OUTSTANDING
-  VERY_SATISFACTORY
-  SATISFACTORY
-  UNSATISFACTORY
-  POOR
 }
 
 model Role {
-  id          String    @id @default(uuid())
-  name        String
-  description String?
-  isSystem    Boolean   @default(false)
-  tenantId    String?
-  createdAt   DateTime  @default(now()) @db.Timestamptz(6)
-  updatedAt   DateTime  @updatedAt @db.Timestamptz(6)
-  tenant      Tenant?   @relation(fields: [tenantId], references: [id])
+  id              String           @id @default(uuid())
+  name            String
+  description     String?
+  isSystem        Boolean          @default(false)
+  tenantId        String?
+  createdAt       DateTime         @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime         @updatedAt @db.Timestamptz(6)
+  tenant          Tenant?          @relation(fields: [tenantId], references: [id])
   rolePermissions RolePermission[]
 
   @@unique([name, tenantId])
@@ -1057,264 +924,175 @@ model RolePermission {
   @@unique([roleId, key])
 }
 
-enum DepartmentUnitType {
-  DEPARTMENT
-  DIVISION
-  SECTION
-}
-
-enum LguLevel {
-  PROVINCIAL
-  CITY
-  MUNICIPAL
-}
-
-enum LguOfficeCategory {
-  EXECUTIVE
-  LEGISLATIVE
-  LINE_OFFICE
-  SUPPORT_OFFICE
-}
-
-enum EmploymentStatus {
-  ACTIVE
-  INACTIVE
-  RESIGNED
-  RETIRED
-}
-
-enum PayrollStatus {
-  DRAFT
-  APPROVED
-  POSTED
-}
-
-enum PayrollPeriodStatus {
-  OPEN
-  CLOSED
-}
-
-enum LedgerType {
-  PAY
-  DEDUCTION
-  ADJUSTMENT
-}
-
-enum LeaveType {
-  VACATION
-  SICK
-  SPECIAL_PRIVILEGE
-  MATERNITY
-  PATERNITY
-  SOLO_PARENT
-  SPECIAL_WOMEN
-  COMPENSATORY
-}
-
-enum LeaveStatus {
-  PENDING
-  RECOMMENDED
-  APPROVED
-  DENIED
-  CANCELLED
-}
-
-enum AppointmentType {
-  PERMANENT
-  TEMPORARY
-  CASUAL
-  CONTRACTUAL
-  JOB_ORDER
-  COS
-  COTERMINOUS
-}
-
-enum LoanType {
-  SALARY_ADVANCE
-  CASH_LOAN
-  HOUSING_LOAN
-  EDUCATION_LOAN
-}
-
-enum LoanStatus {
-  PENDING
-  APPROVED
-  DISBURSED
-  PAID
-  CANCELLED
-}
-
 model Loan {
-  id          String    @id @default(uuid())
-  tenantId    String?
-  employeeId  String
-  type        LoanType
-  amount      Decimal   @db.Decimal(12,2)
-  termMonths  Int
-  startDate   DateTime  @db.Date
-  status      LoanStatus @default(PENDING)
-  createdAt   DateTime  @default(now()) @db.Timestamptz(6)
-  employee    Employee  @relation(fields: [employeeId], references: [id])
+  id            String             @id @default(uuid())
+  employeeId    String
+  type          LoanType
+  amount        Decimal            @db.Decimal(12, 2)
+  termMonths    Int
+  startDate     DateTime           @db.Date
+  status        LoanStatus         @default(PENDING)
+  createdAt     DateTime           @default(now()) @db.Timestamptz(6)
+  tenantId      String?
+  employee      Employee           @relation(fields: [employeeId], references: [id])
+  tenant        Tenant?            @relation(fields: [tenantId], references: [id])
   amortizations LoanAmortization[]
-  tenant      Tenant?   @relation(fields: [tenantId], references: [id])
 
   @@index([tenantId, status])
 }
 
 model LoanAmortization {
-  id        String   @id @default(uuid())
-  tenantId    String?
-  loanId    String
-  dueDate   DateTime @db.Date
-  amount    Decimal  @db.Decimal(12,2)
-  paid      Boolean  @default(false)
-  loan      Loan     @relation(fields: [loanId], references: [id])
-  tenant      Tenant?   @relation(fields: [tenantId], references: [id])
+  id       String   @id @default(uuid())
+  loanId   String
+  dueDate  DateTime @db.Date
+  amount   Decimal  @db.Decimal(12, 2)
+  paid     Boolean  @default(false)
+  tenantId String?
+  loan     Loan     @relation(fields: [loanId], references: [id])
+  tenant   Tenant?  @relation(fields: [tenantId], references: [id])
 
   @@index([tenantId, paid, dueDate])
 }
 
 model AttendanceRule {
-  id            String  @id @default(uuid())
-  tenantId    String?
-  name          String
-  tardinessMin  Int
-  deductionRate Decimal @db.Decimal(12,2)
-  active        Boolean @default(true)
-  // Daily schedule (minutes since Manila midnight). Defaults: 08:00-17:00
-  // with a 12:00-13:00 unpaid lunch.
-  workStartMins Int @default(480)
-  workEndMins   Int @default(1020)
-  lunchStartMins Int @default(720)
-  lunchEndMins   Int @default(780)
-  tenant      Tenant?   @relation(fields: [tenantId], references: [id])
+  id             String  @id @default(uuid())
+  name           String
+  tardinessMin   Int
+  deductionRate  Decimal @db.Decimal(12, 2)
+  active         Boolean @default(true)
+  tenantId       String?
+  lunchEndMins   Int     @default(780)
+  lunchStartMins Int     @default(720)
+  workEndMins    Int     @default(1020)
+  workStartMins  Int     @default(480)
+  tenant         Tenant? @relation(fields: [tenantId], references: [id])
 
   @@index([tenantId, active])
 }
 
 model BiometricCredential {
-  id            String   @id @default(uuid())
-  tenantId       String?
-  employeeId     String
-  credentialId   String   @unique
-  publicKey      String
-  counter        Int      @default(0)
-  deviceName     String?
-  enrolledAt     DateTime @default(now()) @db.Timestamptz(6)
-  lastUsedAt     DateTime? @db.Timestamptz(6)
-  employee       Employee @relation(fields: [employeeId], references: [id])
-  tenant         Tenant?  @relation(fields: [tenantId], references: [id])
+  id           String    @id @default(uuid())
+  tenantId     String?
+  employeeId   String
+  credentialId String    @unique
+  publicKey    String
+  counter      Int       @default(0)
+  deviceName   String?
+  enrolledAt   DateTime  @default(now()) @db.Timestamptz(6)
+  lastUsedAt   DateTime? @db.Timestamptz(6)
+  employee     Employee  @relation(fields: [employeeId], references: [id])
+  tenant       Tenant?   @relation(fields: [tenantId], references: [id])
 }
 
 model Competency {
-  id          String @id @default(uuid())
-  tenantId    String?
+  id          String                  @id @default(uuid())
   code        String
   name        String
   description String?
-  tenant      Tenant?   @relation(fields: [tenantId], references: [id])
+  tenantId    String?
+  tenant      Tenant?                 @relation(fields: [tenantId], references: [id])
   reviewItems PerformanceCompetency[]
 
   @@unique([tenantId, code])
 }
 
 model PerformanceCompetency {
-  id         String   @id @default(uuid())
-  tenantId   String?
-  reviewId   String
+  id           String            @id @default(uuid())
+  tenantId     String?
+  reviewId     String
   competencyId String
-  score      Decimal? @db.Decimal(3,2)
-  maxScore   Decimal  @default(5) @db.Decimal(3,2)
-  weight     Decimal  @default(10) @db.Decimal(5,2)
-  comments   String?
-  createdAt  DateTime @default(now()) @db.Timestamptz(6)
-  updatedAt  DateTime @updatedAt @db.Timestamptz(6)
-  review     PerformanceReview @relation(fields: [reviewId], references: [id], onDelete: Cascade)
-  competency Competency @relation(fields: [competencyId], references: [id])
-  tenant     Tenant?   @relation(fields: [tenantId], references: [id])
+  score        Decimal?          @db.Decimal(3, 2)
+  maxScore     Decimal           @default(5) @db.Decimal(3, 2)
+  comments     String?
+  createdAt    DateTime          @default(now()) @db.Timestamptz(6)
+  updatedAt    DateTime          @updatedAt @db.Timestamptz(6)
+  weight       Decimal           @default(10) @db.Decimal(5, 2)
+  competency   Competency        @relation(fields: [competencyId], references: [id])
+  review       PerformanceReview @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  tenant       Tenant?           @relation(fields: [tenantId], references: [id])
 
   @@unique([reviewId, competencyId])
   @@index([tenantId, reviewId])
 }
 
 model IDP {
-  id          String   @id @default(uuid())
-  tenantId    String?
-  employeeId  String
-  year        Int
-  goals       Json?
-  createdAt   DateTime @default(now()) @db.Timestamptz(6)
-  employee    Employee @relation(fields: [employeeId], references: [id])
-  tenant      Tenant?   @relation(fields: [tenantId], references: [id])
+  id         String   @id @default(uuid())
+  employeeId String
+  year       Int
+  goals      Json?
+  createdAt  DateTime @default(now()) @db.Timestamptz(6)
+  tenantId   String?
+  employee   Employee @relation(fields: [employeeId], references: [id])
+  tenant     Tenant?  @relation(fields: [tenantId], references: [id])
 }
 
 model TrainingNeedsAssessment {
-  id          String   @id @default(uuid())
+  id          String    @id @default(uuid())
   tenantId    String?
   employeeId  String
   year        Int
   answers     Json?
   submittedAt DateTime? @db.Timestamptz(6)
-  createdAt   DateTime @default(now()) @db.Timestamptz(6)
-  employee    Employee @relation(fields: [employeeId], references: [id])
+  createdAt   DateTime  @default(now()) @db.Timestamptz(6)
+  employee    Employee  @relation(fields: [employeeId], references: [id])
   tenant      Tenant?   @relation(fields: [tenantId], references: [id])
 
   @@index([tenantId, employeeId, year])
 }
 
 model LdPlan {
-  id          String   @id @default(uuid())
-  tenantId    String?
-  year        Int
-  programs    Json?
-  budget      Decimal? @db.Decimal(12,2)
-  createdAt   DateTime @default(now()) @db.Timestamptz(6)
-  updatedAt   DateTime @updatedAt @db.Timestamptz(6)
-  tenant      Tenant?   @relation(fields: [tenantId], references: [id])
+  id        String   @id @default(uuid())
+  tenantId  String?
+  year      Int
+  programs  Json?
+  budget    Decimal? @db.Decimal(12, 2)
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id])
 
   @@index([tenantId, year])
 }
 
 model TrainingEvaluation {
-  id              String   @id @default(uuid())
-  tenantId        String?
-  enrollmentId    String
-  reaction        Int?
-  learning        Int?
-  behavior        Int?
-  results         Int?
-  comments        String?
-  createdAt       DateTime @default(now()) @db.Timestamptz(6)
-  enrollment      TrainingEnrollment @relation(fields: [enrollmentId], references: [id])
-  tenant          Tenant?   @relation(fields: [tenantId], references: [id])
+  id           String             @id @default(uuid())
+  tenantId     String?
+  enrollmentId String
+  reaction     Int?
+  learning     Int?
+  behavior     Int?
+  results      Int?
+  comments     String?
+  createdAt    DateTime           @default(now()) @db.Timestamptz(6)
+  enrollment   TrainingEnrollment @relation(fields: [enrollmentId], references: [id])
+  tenant       Tenant?            @relation(fields: [tenantId], references: [id])
 
   @@index([tenantId, enrollmentId])
 }
 
 model Interview {
-  id          String   @id @default(uuid())
-  tenantId    String?
+  id          String          @id @default(uuid())
   applicantId String
-  scheduledAt DateTime @db.Timestamptz(6)
+  scheduledAt DateTime        @db.Timestamptz(6)
   status      InterviewStatus @default(SCHEDULED)
   notes       String?
-  applicant   Applicant @relation(fields: [applicantId], references: [id])
-  tenant      Tenant?   @relation(fields: [tenantId], references: [id])
+  tenantId    String?
+  applicant   Applicant       @relation(fields: [applicantId], references: [id])
+  tenant      Tenant?         @relation(fields: [tenantId], references: [id])
   msbMinutes  MSBMinutes[]
 }
 
 model MSBMinutes {
-  id              String   @id @default(uuid())
-  tenantId        String?
-  interviewId     String
-  deliberationDate DateTime @db.Date
-  minutes         String?
-  resolution      String?
-  attendees       String[]
-  createdAt       DateTime @default(now()) @db.Timestamptz(6)
-  updatedAt       DateTime @updatedAt @db.Timestamptz(6)
-  interview       Interview @relation(fields: [interviewId], references: [id], onDelete: Cascade)
-  tenant          Tenant?   @relation(fields: [tenantId], references: [id])
+  id               String    @id @default(uuid())
+  tenantId         String?
+  interviewId      String
+  deliberationDate DateTime  @db.Date
+  minutes          String?
+  resolution       String?
+  attendees        String[]
+  createdAt        DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt        DateTime  @updatedAt @db.Timestamptz(6)
+  interview        Interview @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+  tenant           Tenant?   @relation(fields: [tenantId], references: [id])
 
   @@index([tenantId, interviewId])
 }
@@ -1383,6 +1161,288 @@ model SyncRequest {
   @@index([status])
 }
 
+model OvertimeRequest {
+  id         String         @id @default(uuid())
+  tenantId   String?
+  employeeId String
+  date       DateTime       @db.Date
+  startMins  Int            @default(0)
+  endMins    Int            @default(0)
+  hours      Decimal        @db.Decimal(12, 2)
+  type       OvertimeType   @default(WORKDAY)
+  status     OvertimeStatus @default(PENDING)
+  approvedBy String?
+  approvedAt DateTime?      @db.Timestamptz(6)
+  notes      String?
+  createdAt  DateTime       @default(now()) @db.Timestamptz(6)
+  employee   Employee       @relation(fields: [employeeId], references: [id])
+  tenant     Tenant?        @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, status])
+  @@index([tenantId, employeeId, date])
+}
+
+model Document {
+  id                String         @id @default(uuid())
+  tenantId          String?
+  title             String
+  type              DocumentType
+  url               String?
+  version           String?
+  effectiveDate     DateTime?      @db.Date
+  publishedBy       String?
+  tags              String[]
+  createdAt         DateTime       @default(now()) @db.Timestamptz(6)
+  updatedAt         DateTime       @updatedAt @db.Timestamptz(6)
+  description       String?
+  fileSize          Int?
+  mimeType          String?
+  publishedAt       DateTime?      @db.Timestamptz(6)
+  approvedBy        String?
+  approvedAt        DateTime?      @db.Timestamptz(6)
+  rejectedBy        String?
+  rejectedAt        DateTime?      @db.Timestamptz(6)
+  archivedBy        String?
+  archivedAt        DateTime?      @db.Timestamptz(6)
+  creatorId         String?
+  retentionClass    String?
+  seriesCode        String?
+  relatedEmployeeId String?
+  status            DocumentStatus @default(DRAFT)
+  relatedEmployee   Employee?      @relation(fields: [relatedEmployeeId], references: [id])
+  tenant            Tenant?        @relation(fields: [tenantId], references: [id])
+  accessLogs        DocumentAccessLog[]
+
+  @@index([tenantId, type])
+  @@index([tenantId, status])
+  @@index([tenantId, relatedEmployeeId])
+  @@index([tenantId, seriesCode])
+}
+
+model DocumentAccessLog {
+  id         String                @id @default(uuid())
+  tenantId   String?
+  documentId String
+  userId     String?
+  action     DocumentAccessAction
+  ip         String?
+  userAgent  String?
+  createdAt  DateTime              @default(now()) @db.Timestamptz(6)
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  tenant   Tenant?  @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, documentId, createdAt])
+  @@index([tenantId, userId, createdAt])
+  @@index([tenantId, action, createdAt])
+}
+
+enum DisqualificationType {
+  VIOLATION_OF_CSC_RULES
+  CRIMINAL_CONVICTION
+  MORAL_TURPITUDE
+  FRAUD
+  MISCONDUCT
+  OTHER
+}
+
+enum DisqualificationReason {
+  GROSS_MISCONDUCT
+  HARRASSMENT
+  EMBEZZLEMENT
+  FRAUDULENT_MISREPRESENTATION
+  SUBSTANCE_ABUSE
+  POLITICAL_PARTISANISM
+  OTHER_GROUNDS
+}
+
+enum BonusType {
+  THIRTEENTH_MONTH
+  CASH_GIFT
+  YEAR_END_BONUS
+}
+
+enum ApplicantStatus {
+  APPLIED
+  SCREENED
+  SHORTLISTED
+  INTERVIEWED
+  OFFERED
+  HIRED
+  REJECTED
+  NEW
+  DISQUALIFIED
+}
+
+enum AppointmentStatus {
+  PENDING
+  APPROVED
+  VERIFIED
+  ISSUED
+  EFFECTIVE
+  ENDED
+  SEPARATED
+}
+
+enum DesignationStatus {
+  DRAFT
+  RECOMMENDED
+  APPROVED
+  ISSUED
+  EFFECTIVE
+  REVOKED
+}
+
+enum InterviewStatus {
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+}
+
+enum EligibilityType {
+  CSC
+  PRC
+  BAR
+  OTHER
+}
+
+enum PlantillaItemType {
+  OLD_STYLE
+  NEW_STYLE
+}
+
+enum EnrollmentStatus {
+  ENROLLED
+  COMPLETED
+  CANCELLED
+}
+
+enum PlantillaStatus {
+  VACANT
+  FILLED
+  FROZEN
+  ARCHIVED
+}
+
+enum VacancyStatus {
+  OPEN
+  CLOSED
+  CANCELLED
+  DRAFT
+  PUBLISHED
+  FILLED
+}
+
+enum ReviewStatus {
+  PLANNING
+  MONITORING
+  REVIEW
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum OutputGroup {
+  CORE
+  STRATEGIC
+  SUPPORT
+}
+
+enum AdjectivalRating {
+  OUTSTANDING
+  VERY_SATISFACTORY
+  SATISFACTORY
+  UNSATISFACTORY
+  POOR
+}
+
+enum DepartmentUnitType {
+  DEPARTMENT
+  DIVISION
+  SECTION
+}
+
+enum LguLevel {
+  PROVINCIAL
+  CITY
+  MUNICIPAL
+}
+
+enum LguOfficeCategory {
+  EXECUTIVE
+  LEGISLATIVE
+  LINE_OFFICE
+  SUPPORT_OFFICE
+}
+
+enum EmploymentStatus {
+  ACTIVE
+  INACTIVE
+  RESIGNED
+  RETIRED
+}
+
+enum PayrollStatus {
+  DRAFT
+  APPROVED
+  POSTED
+}
+
+enum PayrollPeriodStatus {
+  OPEN
+  CLOSED
+}
+
+enum LedgerType {
+  PAY
+  DEDUCTION
+  ADJUSTMENT
+}
+
+enum LeaveType {
+  VACATION
+  SICK
+  SPECIAL_PRIVILEGE
+  MATERNITY
+  PATERNITY
+  SOLO_PARENT
+  SPECIAL_WOMEN
+  COMPENSATORY
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  DENIED
+  CANCELLED
+  RECOMMENDED
+}
+
+enum AppointmentType {
+  PERMANENT
+  TEMPORARY
+  CASUAL
+  CONTRACTUAL
+  JOB_ORDER
+  COS
+  COTERMINOUS
+}
+
+enum LoanType {
+  SALARY_ADVANCE
+  CASH_LOAN
+  HOUSING_LOAN
+  EDUCATION_LOAN
+}
+
+enum LoanStatus {
+  PENDING
+  APPROVED
+  DISBURSED
+  PAID
+  CANCELLED
+}
+
 enum OvertimeType {
   WORKDAY
   REST_DAY
@@ -1395,31 +1455,6 @@ enum OvertimeStatus {
   REJECTED
 }
 
-// Overtime services (CSC-DBM JC No. 2 s. 2015): authorized extra hours beyond
-// the 40-hour week. Pay = hours x HR x 1.25 (regular day) / 1.5 (rest/holiday),
-// HR = monthlySalary / (22 workdays * 8 hours). Min 2 hours, on-time only.
-// Approved entries feed the payroll engine; rejected/pending are excluded.
-model OvertimeRequest {
-  id         String        @id @default(uuid())
-  tenantId   String?
-  employeeId String
-  date       DateTime      @db.Date
-  startMins  Int           @default(0)
-  endMins    Int           @default(0)
-  hours      Decimal       @db.Decimal(12,2)
-  type       OvertimeType  @default(WORKDAY)
-  status     OvertimeStatus @default(PENDING)
-  approvedBy String?
-  approvedAt DateTime?     @db.Timestamptz(6)
-  notes      String?
-  createdAt  DateTime      @default(now()) @db.Timestamptz(6)
-  employee   Employee      @relation(fields: [employeeId], references: [id])
-  tenant     Tenant?       @relation(fields: [tenantId], references: [id])
-
-  @@index([tenantId, status])
-  @@index([tenantId, employeeId, date])
-}
-
 enum DocumentType {
   OFFICE_ORDER
   POLICY
@@ -1427,23 +1462,25 @@ enum DocumentType {
   LD_PLAN
   MINUTES
   OTHER
+  RESOLUTION
+  MEMO
+  AGREEMENT_MOA
+  SERVICE_RECORD
+  PAYSLIP
 }
 
-model Document {
-  id            String        @id @default(uuid())
-  tenantId      String?
-  title         String
-  type          DocumentType
-  url           String?
-  version       String?
-  effectiveDate DateTime?     @db.Date
-  publishedBy   String?
-  tags          String[]
-  createdAt     DateTime      @default(now()) @db.Timestamptz(6)
-  updatedAt     DateTime      @updatedAt @db.Timestamptz(6)
-  tenant        Tenant?       @relation(fields: [tenantId], references: [id])
-
-  @@index([tenantId, type])
+enum DocumentStatus {
+  DRAFT
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+  PUBLISHED
+  ARCHIVED
 }
 
-
+enum DocumentAccessAction {
+  VIEWED
+  DOWNLOADED
+  PRINTED
+  EXPORTED
+}

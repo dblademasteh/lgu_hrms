@@ -104,7 +104,7 @@ export default function Users() {
   useEffect(() => {
     usersApi.list().then(r => setList(r.data)).catch(()=>toast('Failed to load users','error'));
     departmentsApi.list().then(r => setDeptList(r.data)).catch(()=>{});
-    listEmployees({ page: 1, limit: 200 }).then(({ items = [] }) => setEmployees(items)).catch(()=>{});
+    listEmployees({ page: 1, limit: 200, keyPosition: 'true' }).then(({ items = [] }) => setEmployees(items)).catch(()=>{});
     if (myRole === 'SUPER_ADMIN') databaseApi.tenants().then(setTenants).catch(()=>setTenants([]));
     rolesApi.list().then(r => setRoles(r.data?.roles || [])).catch(()=>{}).finally(() => setRolesLoading(false));
     rolesApi.capabilities().then(r => setCaps(r.data?.capabilities || [])).catch(()=>{});
@@ -495,13 +495,16 @@ export default function Users() {
             <label htmlFor="u-employee" className="block text-sm font-medium text-ink mb-1">Linked employee (ESS access)</label>
             <select id="u-employee" className="select" value={form.externalId || ''} onChange={e => setForm(f => ({ ...f, externalId: e.target.value || null }))}>
               <option value="">None (staff account only)</option>
+              {form.externalId && !employees.some(emp => emp.employeeNumber === form.externalId) && (
+                <option value={form.externalId}>{form.externalId} · currently linked</option>
+              )}
               {employees.map(emp => (
                 <option key={emp.id} value={emp.employeeNumber}>
-                  {emp.employeeNumber} · {emp.lastName}, {emp.firstName}
+                  {emp.employeeNumber} · {emp.lastName}, {emp.firstName}{emp.keyPosition ? ` · ${emp.keyPosition}` : ''}
                 </option>
               ))}
             </select>
-            <p className="text-xs text-muted mt-1">Links this account to an employee record so they can use the ESS portal (payslips, leave filing, attendance).</p>
+            <p className="text-xs text-muted mt-1">Only employees tagged to a key position can be linked. Linking gives ESS access (payslips, leave filing, attendance).</p>
             {form.externalId && (
               <div className="mt-2 p-3 bg-bg rounded-lg border border-line">
                 <div className="flex items-center justify-between">

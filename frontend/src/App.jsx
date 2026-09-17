@@ -28,6 +28,8 @@ import Recruitment from './pages/Recruitment.jsx';
 import ESS from './pages/ESS.jsx';
 import IPCR from './pages/IPCR.jsx';
 import Disqualifications from './pages/Disqualifications.jsx';
+import Documents from './pages/Documents.jsx';
+import DocumentsTracking from './pages/DocumentsTracking.jsx';
 import Help from './pages/Help.jsx';
 import NotFound from './components/NotFound.jsx';
 import ErrorBoundary from './components/ErrorBoundary.jsx';
@@ -92,6 +94,8 @@ function createAppRouter() {
         { path: '/attendance-portal', element: <Protected roles={['EMPLOYEE', 'ADMIN', 'HR_MANAGER', 'PAYROLL_OFFICER', 'DEPARTMENT_HEAD', 'SUPER_ADMIN']}><AttendancePortal /></Protected> },
         { path: '/biometric-devices', element: <Protected roles={['ADMIN', 'SUPER_ADMIN']}><Devices /></Protected> },
         { path: '/appointments', element: <Protected roles={['ADMIN', 'HR_MANAGER', 'SUPER_ADMIN']} capability="appointmentsCRUD"><Appointments /></Protected> },
+        { path: '/documents', element: <Protected roles={['ADMIN', 'HR_MANAGER', 'SUPER_ADMIN']} capability="documentsCRUD"><Documents /></Protected> },
+  { path: '/documents/tracking', element: <Protected roles={['ADMIN', 'HR_MANAGER', 'AUDITOR', 'SUPER_ADMIN']} capability="documentsTrack"><DocumentsTracking /></Protected> },
         { path: '/performance', element: <Protected roles={['ADMIN', 'HR_MANAGER', 'DEPARTMENT_HEAD', 'SUPER_ADMIN']}><Performance /></Protected> },
         { path: '/plantilla', element: <Protected roles={['ADMIN', 'HR_MANAGER', 'SUPER_ADMIN']} capability="employeeRecordsCRUD"><Plantilla /></Protected> },
         { path: '/vacancy', element: <Protected roles={['ADMIN', 'HR_MANAGER', 'SUPER_ADMIN']} capability="recruitmentCRUD"><Navigate to="/recruitment?tab=vacancies" replace /></Protected> },

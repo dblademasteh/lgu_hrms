@@ -196,6 +196,7 @@ export default function DetailPane({ employee, onEdit, refreshKey = 0 }) {
             ['Email', employee.email || '—','font-mono'],
             ['Contact', employee.contact || '—','font-mono'],
             ['Position', employee.position,''],
+            ['Key Position', employee.raw?.keyPosition || '—',''],
           ].map(([k,v,cls])=>(
             <div key={k} className="flex justify-between gap-4 py-2 border-b border-line last:border-0">
               <span className="text-xs uppercase tracking-wide text-muted">{k}</span>

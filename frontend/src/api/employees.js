@@ -1,10 +1,11 @@
 import { api } from './client.js';
 
-export async function listEmployees({ page = 1, limit = 50, search, departmentId, status }) {
+export async function listEmployees({ page = 1, limit = 50, search, departmentId, status, keyPosition }) {
   const params = new URLSearchParams({ page, limit });
   if (search) params.append('search', search);
   if (departmentId) params.append('departmentId', departmentId);
   if (status) params.append('status', status);
+  if (keyPosition) params.append('keyPosition', keyPosition);
   const { data } = await api.get(`/employees?${params.toString()}`);
   return data;
 }

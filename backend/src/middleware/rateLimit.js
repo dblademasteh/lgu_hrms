@@ -57,3 +57,24 @@ export const punchLimiter = rateLimit({
   max: 120,
   message: 'Too many punch attempts — slow down',
 });
+
+/** Upload bucket — prevent abuse of disk space. */
+export const uploadLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10,
+  message: 'Too many uploads — slow down',
+});
+
+/** Public download bucket — prevent enumeration/abuse. */
+export const publicDownloadLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  message: 'Too many downloads — slow down',
+});
+
+/** Authenticated download bucket — generous but bounded. */
+export const downloadLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 120,
+  message: 'Too many downloads — slow down',
+});

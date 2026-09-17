@@ -15,9 +15,12 @@ router.post('/refresh', authLimiter, requireOnPremise, validate(refreshSchema), 
 // SSO (OIDC): opt-in via OIDC_* env. Status endpoint is public so the
 // login page can decide whether to show the SSO button.
 router.get('/oidc/status', authController.oidcStatus);
-router.get('/oidc/login', authLimiter, authController.oidcLogin);
-router.get('/oidc/callback', authController.oidcCallback);
-router.post('/oidc/consume', authLimiter, authController.oidcConsume);
+// /oidc/login and /oidc/callback establish a session, so they must pass the
+// on-premise gate too — otherwise SSO logins bypass the office-network
+// allowlist. /login pre-fetches the tenant via query param.
+router.get('/oidc/login', authLimiter, requireOnPremise, authController.oidcLogin);
+router.get('/oidc/callback', authLimiter, requireOnPremise, authController.oidcCallback);
+router.post('/oidc/consume', authLimiter, requireOnPremise, authController.oidcConsume);
 // NOTE: /auth is public — PIN management is per-route protected.
 router.post('/pin/setup', requireAuth, validate(pinSetupSchema), authController.setupPin);
 router.delete('/pin', requireAuth, authController.removePin);

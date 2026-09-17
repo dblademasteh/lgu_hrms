@@ -84,11 +84,19 @@ const groups = [
     ]
   },
   {
+    label: 'Documents',
+    items: [
+      { name: 'Documents', path: '/documents', icon: File, roles: ['ADMIN', 'HR_MANAGER', 'SUPER_ADMIN'], capability: 'documentsCRUD', collapsible: true, children: [
+        { name: 'All Documents', path: '/documents', icon: FileText, roles: ['ADMIN', 'HR_MANAGER', 'SUPER_ADMIN'], capability: 'documentsCRUD' },
+        { name: 'Access Tracking', path: '/documents/tracking', icon: ShieldCheck, roles: ['ADMIN', 'HR_MANAGER', 'AUDITOR'], capability: 'documentsTrack' },
+      ]},
+    ]
+  },
+  {
     label: 'Administration',
     items: [
       { name: 'Users & Roles', path: '/users', icon: UserCog, roles: ['ADMIN', 'SUPER_ADMIN'], capability: 'manageUsersAndRoles' },
       { name: 'Biometric Devices', path: '/biometric-devices', icon: Fingerprint, roles: ['ADMIN'] },
-      { name: 'Documents', path: '/documents', icon: File, roles: ['ADMIN', 'SUPER_ADMIN'] },
       { name: 'Settings', path: '/settings', icon: SettingsIcon },
     ]
   },
@@ -113,14 +121,21 @@ export function canSee(role, item, capabilities) {
 
 export function filterVisible(items, role, capabilities) {
   const capsLoaded = Object.keys(capabilities).length > 0;
-  return items.filter(item => {
-    if (!canSee(role, item, { map: capabilities, loaded: capsLoaded })) return false;
-    if (item.children) {
-      const visibleChildren = filterVisible(item.children, role, capabilities);
-      return visibleChildren.length > 0;
+  const ctx = { map: capabilities, loaded: capsLoaded };
+  return items.reduce((acc, item) => {
+    const visibleChildren = item.children && item.children.length
+      ? filterVisible(item.children, role, capabilities)
+      : null;
+    const parentVisible = canSee(role, item, ctx);
+    if (!parentVisible) {
+      if (item.collapsible && visibleChildren && visibleChildren.length > 0) {
+        acc.push({ ...item, children: visibleChildren });
+      }
+      return acc;
     }
-    return true;
-  });
+    acc.push(visibleChildren ? { ...item, children: visibleChildren } : item);
+    return acc;
+  }, []);
 }
 
 export function filterGroups(groups, role, capabilities) {
@@ -138,6 +153,7 @@ const GROUP_ICONS = {
   'Performance & L&D': BarChart3,
   'Payroll & Benefits': Banknote,
   'Compliance & Audit': ShieldCheck,
+  'Documents': FileText,
   'Administration': UserCog,
   'Support': HelpCircle,
 };
@@ -157,6 +173,14 @@ function groupIndexForPath(visibleGroups, pathname) {
 }
 
 function ClassicSidebar({ collapsed, visibleGroups, expanded }) {
+  const location = useLocation();
+  const [openBranches, setOpenBranches] = useState({});
+  const branchOpen = (item) => {
+    if (!item.collapsible) return true;
+    if (openBranches[item.path] !== undefined) return openBranches[item.path];
+    return (item.children || []).some(c => location.pathname === c.path || location.pathname.startsWith(c.path + '/'));
+  };
+  const toggleBranch = (item) => setOpenBranches(p => ({ ...p, [item.path]: !branchOpen(item) }));
   return (
     <aside className={`bg-surface border-r border-line hidden md:flex flex-col shrink-0 transition-[width] duration-200 ${collapsed ? 'w-[72px]' : 'w-[260px]'}`}>
       <div className={`flex items-center gap-3 px-4 py-3 border-b border-line ${!expanded ? 'justify-center' : ''}`}>
@@ -182,27 +206,43 @@ function ClassicSidebar({ collapsed, visibleGroups, expanded }) {
                 const hasChildren = i.children && i.children.length > 0;
                 return (
                   <div key={i.path}>
-                    <NavLink
-                      to={i.path}
-                      title={i.name}
-                      className={({ isActive }) =>
-                        `flex items-center gap-3 px-3 py-2.5 rounded-[10px] transition-colors
-                          ${isActive ? 'bg-accent/10 text-accent font-semibold border-l-2 border-accent' : 'text-ink hover:bg-bg/60 border-l-2 border-transparent'}
-                          ${!expanded ? 'justify-center' : ''}`
-                      }
-                    >
-                      <Icon size={20} strokeWidth={1.75} aria-hidden="true" />
-                      {expanded && <span className="truncate text-sm flex-1">{i.name}</span>}
-                    </NavLink>
-                    {hasChildren && expanded && (
+                    {hasChildren && i.collapsible ? (
+                      <button
+                        type="button"
+                        title={i.name}
+                        aria-expanded={branchOpen(i)}
+                        onClick={() => toggleBranch(i)}
+                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-[10px] transition-colors text-ink hover:bg-bg/60 border-l-2 border-transparent
+                          ${!expanded ? 'justify-center' : ''}`}
+                      >
+                        <Icon size={20} strokeWidth={1.75} aria-hidden="true" />
+                        {expanded && <span className="truncate text-sm flex-1 text-left">{i.name}</span>}
+                        {expanded && <ChevronDown size={15} className={`shrink-0 text-muted/70 transition-transform duration-200 ${branchOpen(i) ? 'rotate-180' : ''}`} aria-hidden="true" />}
+                      </button>
+                    ) : (
+                      <NavLink
+                        to={i.path}
+                        title={i.name}
+                        className={({ isActive }) =>
+                          `flex items-center gap-3 px-3 py-2.5 rounded-[10px] transition-colors
+                            ${isActive ? 'bg-accent/10 text-accent font-semibold border-l-2 border-accent' : 'text-ink hover:bg-bg/60 border-l-2 border-transparent'}
+                            ${!expanded ? 'justify-center' : ''}`
+                        }
+                      >
+                        <Icon size={20} strokeWidth={1.75} aria-hidden="true" />
+                        {expanded && <span className="truncate text-sm flex-1">{i.name}</span>}
+                      </NavLink>
+                    )}
+                    {hasChildren && expanded && branchOpen(i) && (
                       <div className="ml-6 pl-3 border-l border-line/60 space-y-0.5 mt-0.5">
                         {i.children.map(child => (
                           <NavLink
+                            end
                             key={child.path}
                             to={child.path}
                             title={child.name}
                             className={({ isActive }) =>
-                              `flex items-center gap-2 px-2.5 py-1.5 rounded-lg transition-colors text-xs
+                              `flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg transition-colors text-xs
                                 ${isActive ? 'text-accent font-semibold bg-accent/5' : 'text-muted hover:text-ink hover:bg-bg/60'}`
                             }
                           >
@@ -241,6 +281,13 @@ function DockSidebar({ collapsed, visibleGroups, role }) {
   const safeSelected = Math.min(selected, Math.max(visibleGroups.length - 1, 0));
   const activeGroup = visibleGroups[safeSelected];
   const panelOpen = !collapsed;
+  const [openBranches, setOpenBranches] = useState({});
+  const branchOpen = (item) => {
+    if (!item.collapsible) return true;
+    if (openBranches[item.path] !== undefined) return openBranches[item.path];
+    return (item.children || []).some(c => location.pathname === c.path || location.pathname.startsWith(c.path + '/'));
+  };
+  const toggleBranch = (item) => setOpenBranches(p => ({ ...p, [item.path]: !branchOpen(item) }));
 
   return (
     <aside className="bg-surface border-r border-line hidden md:flex shrink-0 overflow-hidden">
@@ -293,7 +340,7 @@ function DockSidebar({ collapsed, visibleGroups, role }) {
           <div className="px-4 pt-4 pb-3 border-b border-line/60">
             <p className="font-display font-bold text-ink text-[15px] leading-tight truncate">{activeGroup.label}</p>
             <p className="mono-label text-[10px] mt-1">
-              {activeGroup.items.reduce((acc, i) => acc + 1 + (i.children?.length || 0), 0)} ITEMS · {role || 'STAFF'}
+                   {activeGroup.items.reduce((acc, i) => acc + 1 + (i.children?.length || 0), 0)} MODULES · {role || 'STAFF'}
             </p>
           </div>
 
@@ -303,22 +350,38 @@ function DockSidebar({ collapsed, visibleGroups, role }) {
               const hasChildren = i.children && i.children.length > 0;
               return (
                 <div key={i.path}>
-                  <NavLink
-                    to={i.path}
-                    title={i.name}
-                    className={({ isActive }) =>
-                      `group flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-150 border
-                        ${isActive
-                          ? 'bg-accent/10 text-accent font-semibold border-accent/20 shadow-sm'
-                          : 'text-ink border-transparent hover:bg-bg hover:border-line/60'}`
-                    }
-                  >
-                    <span className="w-8 h-8 rounded-lg bg-bg border border-line/60 grid place-items-center shrink-0">
-                      <Icon size={16} strokeWidth={1.75} aria-hidden="true" />
-                    </span>
-                    <span className="truncate text-[13px] leading-snug">{i.name}</span>
-                  </NavLink>
-                  {hasChildren && (
+                  {hasChildren && i.collapsible ? (
+                    <button
+                      type="button"
+                      title={i.name}
+                      aria-expanded={branchOpen(i)}
+                      onClick={() => toggleBranch(i)}
+                      className="w-full group flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-150 border text-ink border-transparent hover:bg-bg hover:border-line/60"
+                    >
+                      <span className="w-8 h-8 rounded-lg bg-bg border border-line/60 grid place-items-center shrink-0">
+                        <Icon size={16} strokeWidth={1.75} aria-hidden="true" />
+                      </span>
+                      <span className="truncate text-[13px] leading-snug flex-1 text-left">{i.name}</span>
+                      <ChevronDown size={15} className={`shrink-0 text-muted/70 transition-transform duration-200 ${branchOpen(i) ? 'rotate-180' : ''}`} aria-hidden="true" />
+                    </button>
+                  ) : (
+                    <NavLink
+                      to={i.path}
+                      title={i.name}
+                      className={({ isActive }) =>
+                        `group flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-150 border
+                          ${isActive
+                            ? 'bg-accent/10 text-accent font-semibold border-accent/20 shadow-sm'
+                            : 'text-ink border-transparent hover:bg-bg hover:border-line/60'}`
+                      }
+                    >
+                      <span className="w-8 h-8 rounded-lg bg-bg border border-line/60 grid place-items-center shrink-0">
+                        <Icon size={16} strokeWidth={1.75} aria-hidden="true" />
+                      </span>
+                      <span className="truncate text-[13px] leading-snug">{i.name}</span>
+                    </NavLink>
+                  )}
+                  {hasChildren && branchOpen(i) && (
                     <div className="ml-10 pl-2.5 border-l border-line/60 space-y-0.5 mt-0.5">
                       {i.children.map(child => (
                         <NavLink
@@ -405,6 +468,13 @@ function AccordionSidebar({ collapsed, visibleGroups, role }) {
     return o;
   };
   const [open, setOpen] = useState(defaultOpen);
+  const [openBranches, setOpenBranches] = useState({});
+  const branchOpen = (item) => {
+    if (!item.collapsible) return true;
+    if (openBranches[item.path] !== undefined) return openBranches[item.path];
+    return (item.children || []).some(c => activePath === c.path || activePath.startsWith(c.path + '/'));
+  };
+  const toggleBranch = (item) => setOpenBranches(p => ({ ...p, [item.path]: !branchOpen(item) }));
 
   useEffect(() => {
     setOpen(prev => {
@@ -496,7 +566,7 @@ function AccordionSidebar({ collapsed, visibleGroups, role }) {
                 </span>
                 <span className="flex-1 min-w-0">
                   <span className="block truncate text-[13px] font-semibold">{g.label}</span>
-                  <span className="mono-label text-[10px] opacity-70">{g.items.reduce((acc, i) => acc + 1 + (i.children?.length || 0), 0)} ITEMS</span>
+                    <span className="mono-label text-[10px] opacity-70">{g.items.reduce((acc, i) => acc + 1 + (i.children?.length || 0), 0)} MODULES</span>
                 </span>
                 <ChevronDown size={15} className={`text-muted/70 shrink-0 transition-transform duration-200 ${isOpen ? 'rotate-180 text-ink' : ''}`} aria-hidden="true" />
               </button>
@@ -507,22 +577,37 @@ function AccordionSidebar({ collapsed, visibleGroups, role }) {
                     const hasChildren = i.children && i.children.length > 0;
                     return (
                       <div key={i.path}>
-                        <NavLink
-                          to={i.path}
-                          title={i.name}
-                          className={({ isActive }) =>
-                            `flex items-center gap-2.5 px-3 py-2 rounded-lg transition-all duration-155 text-[13px]
-                              ${isActive
-                                ? 'bg-accent/10 text-accent font-semibold border-l-2 border-accent'
-                                : 'text-ink hover:bg-bg/60 border-l-2 border-transparent'}`}
-                        >
-                          <Icon size={15} strokeWidth={1.75} aria-hidden="true" className="shrink-0 text-muted/60" />
-                          <span className="truncate">{i.name}</span>
-                        </NavLink>
-                        {hasChildren && (
+                        {hasChildren && i.collapsible ? (
+                          <button
+                            type="button"
+                            title={i.name}
+                            aria-expanded={branchOpen(i)}
+                            onClick={() => toggleBranch(i)}
+                            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg transition-all duration-155 text-[13px] text-ink hover:bg-bg/60 border-l-2 border-transparent"
+                          >
+                            <Icon size={15} strokeWidth={1.75} aria-hidden="true" className="shrink-0 text-muted/60" />
+                            <span className="truncate flex-1 text-left">{i.name}</span>
+                            <ChevronDown size={14} className={`shrink-0 text-muted/70 transition-transform duration-200 ${branchOpen(i) ? 'rotate-180' : ''}`} aria-hidden="true" />
+                          </button>
+                        ) : (
+                          <NavLink
+                            to={i.path}
+                            title={i.name}
+                            className={({ isActive }) =>
+                              `flex items-center gap-2.5 px-3 py-2 rounded-lg transition-all duration-155 text-[13px]
+                                ${isActive
+                                  ? 'bg-accent/10 text-accent font-semibold border-l-2 border-accent'
+                                  : 'text-ink hover:bg-bg/60 border-l-2 border-transparent'}`}
+                          >
+                            <Icon size={15} strokeWidth={1.75} aria-hidden="true" className="shrink-0 text-muted/60" />
+                            <span className="truncate">{i.name}</span>
+                          </NavLink>
+                        )}
+                        {hasChildren && branchOpen(i) && (
                           <div className="ml-6 pl-3 border-l border-line/60 space-y-0.5 mt-0.5">
                             {i.children.map(child => (
                               <NavLink
+                                end
                                 key={child.path}
                                 to={child.path}
                                 title={child.name}

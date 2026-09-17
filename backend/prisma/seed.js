@@ -549,6 +549,7 @@ async function seedTenant(tenantId, tenantCode, lguLevel, hash) {
       positionId: posHRMO.id,
       hiredDate: new Date('2015-01-15'),
       monthlySalary: 46000,
+      keyPosition: 'HRMO',
     },
     {
       employeeNumber: `EMP-${tenantCode}-0002`,
@@ -625,7 +626,7 @@ async function seedTenant(tenantId, tenantCode, lguLevel, hash) {
   for (const emp of employeesData) {
     const employee = await prisma.employee.upsert({
       where: { employeeNumber: emp.employeeNumber },
-      update: { tenantId, monthlySalary: emp.monthlySalary },
+      update: { tenantId, monthlySalary: emp.monthlySalary, keyPosition: emp.keyPosition ?? null },
       create: { ...emp, tenantId },
     });
 

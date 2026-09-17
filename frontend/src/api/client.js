@@ -16,6 +16,12 @@ api.interceptors.request.use((config) => {
     const activeTenantId = localStorage.getItem('lgu-active-tenant');
     if (activeTenantId) config.headers['X-Tenant-Id'] = activeTenantId;
   }
+  if (config.params) {
+    const cleaned = Object.fromEntries(
+      Object.entries(config.params).filter(([_, v]) => v !== '' && v !== undefined && v !== null)
+    );
+    config.params = cleaned;
+  }
   return config;
 });
 

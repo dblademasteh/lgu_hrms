@@ -18,18 +18,21 @@ export const usersService = {
     });
   },
 
-  /** Validate externalId points to a real, active employee not already linked. */
-  async assertLinkable(externalId, excludeUserId) {
+  /** Validate externalId is a real, active, key-position employee of this tenant, not already linked. */
+  async assertLinkable(req, externalId, excludeUserId) {
     if (!externalId) return;
     const employee = await prisma.employee.findFirst({
-      where: { employeeNumber: externalId, deletedAt: null, status: 'ACTIVE' },
-      select: { id: true, employeeNumber: true },
+      where: withTenant(req, { employeeNumber: externalId, deletedAt: null, status: 'ACTIVE' }),
+      select: { id: true, employeeNumber: true, keyPosition: true },
     });
     if (!employee) {
       throw new AppError(`Employee "${externalId}" not found or inactive`, 400, 'INVALID_LINK');
     }
+    if (!employee.keyPosition?.trim()) {
+      throw new AppError(`Employee "${externalId}" is not tagged to a key position — only key positions can be linked`, 400, 'NOT_KEY_POSITION');
+    }
     const clash = await prisma.user.findFirst({
-      where: { externalId, ...(excludeUserId ? { id: { not: excludeUserId } } : {}) },
+      where: withTenant(req, { externalId, ...(excludeUserId ? { id: { not: excludeUserId } } : {}) }),
       select: { id: true, username: true },
     });
     if (clash) {
@@ -61,12 +64,12 @@ export const usersService = {
 
   async create(req, data) {
     const { username, role, departmentId, displayName, email, contactNumber, externalId } = data;
-    await this.assertLinkable(externalId);
+    await this.assertLinkable(req, externalId);
     await this.assertRoleExists(role, req.tenantId);
     await this.assertDepartmentExists(departmentId, req.tenantId);
     const plain = randomPassword();
     const passwordHash = await bcrypt.hash(plain, 12);
-    const stamped = stampTenant(req, { username, role, departmentId, displayName, email, contactNumber, passwordHash, passwordChangedAt: new Date() });
+    const stamped = stampTenant(req, { username, role, departmentId, displayName, email, contactNumber, passwordHash, passwordChangedAt: null });
     const link = externalId ? { linkedEmployee: { connect: { employeeNumber: externalId } } } : {};
     const user = await userRepository.create(req, { ...stamped, ...link });
     const { passwordHash: _ph, pinHash: _pin, ...safe } = user;
@@ -77,7 +80,7 @@ export const usersService = {
     const { passwordHash, pinHash, tenantId, ...rest } = data;
     if ('externalId' in rest) {
       const ext = rest.externalId?.trim();
-      await this.assertLinkable(ext, id);
+      await this.assertLinkable(req, ext, id);
       rest.linkedEmployee = ext
         ? { connect: { employeeNumber: ext } }
         : { disconnect: true };

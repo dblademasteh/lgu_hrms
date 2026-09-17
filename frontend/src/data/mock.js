@@ -37,5 +37,3 @@ export function badgeTone(status) {
       return 'badge-neutral';
   }
 }
-
-export const roleMatrix = [];

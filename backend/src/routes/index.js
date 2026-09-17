@@ -41,6 +41,7 @@ import disqualificationsRouter from './disqualifications.js';
 import integrationsRouter from './integrations.js';
 import integrationRequestsRouter from './integrationRequests.js';
 import devRouter from './dev.js';
+import documentsRouter, { publicDownloadRouter } from './documents.js';
 
 const router = Router();
 
@@ -49,6 +50,8 @@ router.use('/integrations', integrationsRouter);
 router.use('/integrations/requests', integrationRequestsRouter);
 // Public biometric punch - no JWT required
 router.use('/attendance/public-punch', publicPunchRouter);
+// Public document download - no JWT required (tenant-scoped via subdomain)
+router.use('/doc-download', publicDownloadRouter);
 // Public tenant list for login picker (exact /tenants only; deeper GETs
 // like /tenants/:id fall through to the authenticated router below).
 router.get('/tenants', async (req, res, next) => {
@@ -97,5 +100,6 @@ router.use('/reports', reportsRouter);
 router.use('/database', databaseRouter);
 router.use('/tenants', tenantsRouter);
 router.use('/disqualifications', disqualificationsRouter);
+router.use('/documents', documentsRouter);
 
 export default router;

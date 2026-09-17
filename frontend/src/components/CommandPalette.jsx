@@ -1,27 +1,40 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Badge, Search as SearchIcon, User, Home, BarChart3, FileText, Calendar, ShieldCheck, ShieldAlert, Users, Settings, Clock, Fingerprint } from 'lucide-react';
+import { Badge, Search as SearchIcon, User, Home, BarChart3, FileText, Calendar, ShieldCheck, ShieldAlert, Users, Settings, Clock, Fingerprint, File, Activity } from 'lucide-react';
+import { useAuthStore } from '../stores/authStore.js';
+import { useUserCapabilities } from '../config/permissions.js';
+
+const ALL = ['ADMIN', 'HR_MANAGER', 'PAYROLL_OFFICER', 'DEPARTMENT_HEAD', 'AUDITOR', 'EMPLOYEE', 'SUPER_ADMIN'];
+const HR_LEAD = ['ADMIN', 'HR_MANAGER', 'DEPARTMENT_HEAD', 'SUPER_ADMIN'];
 
 const pages = [
-  { label: 'Dashboard', path: '/dashboard', icon: Home },
-  { label: 'Employees', path: '/employees', icon: Users },
-  { label: 'Organization', path: '/organization', icon: Home },
-  { label: 'Payroll', path: '/payroll', icon: BarChart3 },
-  { label: 'Leave & Appointments', path: '/leave', icon: Calendar },
-  { label: 'Attendance (DTR)', path: '/attendance', icon: Clock },
-  { label: 'Biometric Devices', path: '/biometric-devices', icon: Fingerprint },
-  { label: 'Appointments', path: '/appointments', icon: FileText },
-  { label: 'Plantilla', path: '/plantilla', icon: FileText },
-  { label: 'Designation', path: '/designation', icon: Users },
-  { label: 'Recruitment', path: '/recruitment', icon: Users },
-  { label: 'Performance', path: '/performance', icon: BarChart3 },
-  { label: 'Learning', path: '/learning', icon: Users },
-  { label: 'Audit Trail', path: '/audit', icon: ShieldCheck },
-  { label: 'DIBAR Records', path: '/disqualifications', icon: ShieldAlert },
-  { label: 'Reports', path: '/reports', icon: BarChart3 },
-  { label: 'Users & Roles', path: '/users', icon: Users },
-  { label: 'Settings', path: '/settings', icon: Settings },
+  { label: 'Dashboard', path: '/dashboard', icon: Home, roles: ALL },
+  { label: 'Employees', path: '/employees', icon: Users, roles: ['ADMIN', 'HR_MANAGER', 'DEPARTMENT_HEAD', 'SUPER_ADMIN'] },
+  { label: 'Organization', path: '/organization', icon: Home, roles: ['ADMIN', 'HR_MANAGER', 'DEPARTMENT_HEAD', 'SUPER_ADMIN'] },
+  { label: 'Payroll', path: '/payroll', icon: BarChart3, roles: ['ADMIN', 'HR_MANAGER', 'PAYROLL_OFFICER', 'SUPER_ADMIN'], capability: 'payrollRead' },
+  { label: 'Leave & Appointments', path: '/leave', icon: Calendar, roles: ['ADMIN', 'HR_MANAGER', 'DEPARTMENT_HEAD', 'SUPER_ADMIN'], capability: 'leaveApproval' },
+  { label: 'Attendance (DTR)', path: '/attendance', icon: Clock, roles: HR_LEAD },
+  { label: 'Biometric Devices', path: '/biometric-devices', icon: Fingerprint, roles: ['ADMIN', 'SUPER_ADMIN'] },
+  { label: 'Appointments', path: '/appointments', icon: FileText, roles: ['ADMIN', 'HR_MANAGER', 'SUPER_ADMIN'], capability: 'appointmentsCRUD' },
+  { label: 'Plantilla', path: '/plantilla', icon: FileText, roles: ['ADMIN', 'HR_MANAGER', 'SUPER_ADMIN'], capability: 'employeeRecordsCRUD' },
+  { label: 'Designation', path: '/designation', icon: Users, roles: ['ADMIN', 'HR_MANAGER', 'SUPER_ADMIN'], capability: 'appointmentsCRUD' },
+  { label: 'Recruitment', path: '/recruitment', icon: Users, roles: ['ADMIN', 'HR_MANAGER', 'SUPER_ADMIN'], capability: 'recruitmentCRUD' },
+  { label: 'Performance', path: '/performance', icon: BarChart3, roles: HR_LEAD },
+  { label: 'Learning', path: '/learning', icon: Users, roles: ['ADMIN', 'HR_MANAGER', 'SUPER_ADMIN'], capability: 'trainingCRUD' },
+  { label: 'Documents', path: '/documents', icon: File, roles: ['ADMIN', 'HR_MANAGER', 'SUPER_ADMIN'], capability: 'documentsCRUD' },
+  { label: 'Document Access Tracking', path: '/documents/tracking', icon: Activity, roles: ['ADMIN', 'HR_MANAGER', 'AUDITOR', 'SUPER_ADMIN'], capability: 'documentsTrack' },
+  { label: 'Audit Trail', path: '/audit', icon: ShieldCheck, roles: ['ADMIN', 'AUDITOR', 'SUPER_ADMIN'] },
+  { label: 'DIBAR Records', path: '/disqualifications', icon: ShieldAlert, roles: ['ADMIN', 'HR_MANAGER', 'SUPER_ADMIN'], capability: 'disqualificationCRUD' },
+  { label: 'Reports', path: '/reports', icon: BarChart3, roles: ['ADMIN', 'HR_MANAGER', 'PAYROLL_OFFICER', 'AUDITOR', 'SUPER_ADMIN'] },
+  { label: 'Users & Roles', path: '/users', icon: Users, roles: ['ADMIN', 'SUPER_ADMIN'], capability: 'manageUsersAndRoles' },
+  { label: 'Settings', path: '/settings', icon: Settings, roles: ALL },
 ];
+
+function isVisible(page, role, caps) {
+  if (page.roles && !page.roles.includes(role)) return false;
+  if (page.capability && role !== 'SUPER_ADMIN') return !!caps?.[page.capability];
+  return true;
+}
 
 export default function CommandPalette() {
   const [open, setOpen] = useState(false);
@@ -29,6 +42,8 @@ export default function CommandPalette() {
   const navigate = useNavigate();
   const inputRef = useRef(null);
   const debounceRef = useRef(null);
+  const user = useAuthStore((s) => s.user);
+  const caps = useUserCapabilities();
 
   useEffect(() => {
     const onKey = e => {
@@ -58,10 +73,11 @@ export default function CommandPalette() {
   const results = useMemo(() => {
     const query = q.trim().toLowerCase();
     const pageHits = pages
+      .filter((p) => isVisible(p, user?.role, caps))
       .filter(p => !query || p.label.toLowerCase().includes(query))
       .map(p => ({ type: 'Page', label: p.label, path: p.path, icon: p.icon }));
-    return query ? pageHits : pageHits;
-  }, [q]);
+    return pageHits;
+  }, [q, user?.role, caps]);
 
   if (!open) return null;
   const go = item => {

@@ -4,8 +4,8 @@ export async function listEmployeesHandler(req, res, next) {
   try {
     const page = Number(req.query.page) || 1;
     const limit = Math.min(Number(req.query.limit) || 50, 200);
-    const { search, departmentId, status } = req.query;
-    const data = await listEmployees(req, { page, limit, search, departmentId, status });
+    const { search, departmentId, status, keyPosition } = req.query;
+    const data = await listEmployees(req, { page, limit, search, departmentId, status, keyPosition });
     res.json(data);
   } catch (e) {
     next(e);

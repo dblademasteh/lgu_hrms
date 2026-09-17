@@ -66,6 +66,13 @@
 - [x] **Validate all inputs** — `listEmployeesSchema` (page/limit/search/departmentId/status) on `GET /employees`; new `contracts/employeeSections.js` (param + flat record-body schemas) on section `POST/PATCH`; ESS payslip print param. **Verified**: `limit=5000` → 400, bogus section → 400.
 - [x] **Map Prisma `P2002`/`P2003` → 409/400 AppErrors** — `server.js` `normalizePrismaError` + refined `prismaError` in the section service. **Verified**: duplicate `employeeNumber` → 409 `DUPLICATE`.
 
+### Employee Account hardening (done Sep 2026)
+- [x] **ESS payslips 500 fixed** — `ess.js:38` referenced an undeclared `employeeId` (ReferenceError every load); now uses `employee.id`. **Verified** `node --check` + build.
+- [x] **First-login password change enforced** — `usersService.create` stamps `passwordChangedAt: null` so `authService.passwordAge` reports expired → Login routes to Account → Security (30-day policy unchanged).
+- [x] **Deactivation no longer corrupts the employee link** — `accountService.deactivateAccount` only sets `INACTIVE` (was overwriting `externalId='DEACTIVATED'`); reactivation via `/users` restores ESS without re-linking.
+- [x] **`assertLinkable` tenant-scoped** — employee lookup + duplicate-link clash check now `withTenant(req, …)` on both `create` and `update` (was cross-tenant oracle).
+- [x] **Only key-position employees can be linked** — new `Employee.keyPosition` tag (migration `20260917033551_add_employee_key_position`); `assertLinkable` rejects untagged employees (400 `NOT_KEY_POSITION`), `GET /employees?keyPosition=true` + Users dropdown list only tagged, 201 form Key Position field, seed tags `EMP-{tenant}-0001` as `HRMO`. **Verified live**: filter returns only tagged; untagged link → 400 `NOT_KEY_POSITION`.
+
 ### P2
 - [ ] Departments: compute `level` on create/update, soft-delete (`deletedAt`), `GET /:id`, parent cycle check, employee headcount, blocked-delete with dependents (409 not 500).
 - [ ] Server-side pagination on ESS payslips/leave-requests, `/leave/requests`, and section lists.

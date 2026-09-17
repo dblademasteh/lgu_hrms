@@ -26,6 +26,8 @@ export const CAPABILITIES = [
   { key: 'interviewCRUD', label: 'Manage interviews and selection' },
   { key: 'trainingCRUD', label: 'Manage training programs and enrollments' },
   { key: 'loansCRUD', label: 'Manage employee loans' },
+  { key: 'documentsCRUD', label: 'Manage documents (tracking & workflow)' },
+  { key: 'documentsTrack', label: 'View document access & tracking log' },
 ];
 
 /** route mapping (documentation only) */
@@ -42,6 +44,8 @@ export const CAPABILITY_ROUTES = {
   appointmentsRead: ['/appointments GET'],
   appointmentsCRUD: ['/appointments POST|PATCH|DELETE'],
   disqualificationCRUD: ['/disqualifications'],
+  documentsCRUD: ['/documents POST|PATCH|DELETE|status (tracking workflow)'],
+  documentsTrack: ['/documents/tracking', '/documents/:id/tracking'],
 };
 
 /**
@@ -67,6 +71,8 @@ export const DEFAULT_PERMISSIONS = {
     interviewCRUD: true,
     trainingCRUD: true,
     loansCRUD: true,
+    documentsCRUD: true,
+    documentsTrack: true,
   },
   SUPER_ADMIN: {
     manageUsersAndRoles: true,
@@ -85,6 +91,8 @@ export const DEFAULT_PERMISSIONS = {
     interviewCRUD: true,
     trainingCRUD: true,
     loansCRUD: true,
+    documentsCRUD: true,
+    documentsTrack: true,
   },
   HR_MANAGER: {
     manageUsersAndRoles: false,
@@ -103,6 +111,8 @@ export const DEFAULT_PERMISSIONS = {
     interviewCRUD: true,
     trainingCRUD: true,
     loansCRUD: true,
+    documentsCRUD: true,
+    documentsTrack: true,
   },
   PAYROLL_OFFICER: {
     manageUsersAndRoles: false,
@@ -121,6 +131,8 @@ export const DEFAULT_PERMISSIONS = {
     interviewCRUD: false,
     trainingCRUD: false,
     loansCRUD: false,
+    documentsCRUD: false,
+    documentsTrack: false,
   },
   DEPARTMENT_HEAD: {
     manageUsersAndRoles: false,
@@ -139,6 +151,8 @@ export const DEFAULT_PERMISSIONS = {
     interviewCRUD: false,
     trainingCRUD: false,
     loansCRUD: false,
+    documentsCRUD: false,
+    documentsTrack: false,
   },
   AUDITOR: {
     manageUsersAndRoles: false,
@@ -157,6 +171,8 @@ export const DEFAULT_PERMISSIONS = {
     interviewCRUD: false,
     trainingCRUD: false,
     loansCRUD: false,
+    documentsCRUD: false,
+    documentsTrack: true,
   },
   EMPLOYEE: {
     manageUsersAndRoles: false,
@@ -175,5 +191,7 @@ export const DEFAULT_PERMISSIONS = {
     interviewCRUD: false,
     trainingCRUD: false,
     loansCRUD: false,
+    documentsCRUD: false,
+    documentsTrack: false,
   },
 };

@@ -53,7 +53,7 @@ export const accountService = {
     return userRepository.deleteDelegation(delegationId, userId);
   },
   async deactivateAccount(userId) {
-    await prisma.user.update({ where: { id: userId }, data: { status: 'INACTIVE', externalId: 'DEACTIVATED' } });
+    await prisma.user.update({ where: { id: userId }, data: { status: 'INACTIVE' } });
     return { message: 'Account deactivated' };
   }
 };

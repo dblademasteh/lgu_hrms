@@ -12,6 +12,11 @@ import { prisma } from '../lib/prisma.js';
  * Regular users are pinned to their own tenant. Cross-tenant access fails
  * closed. SUPER_ADMIN (platform role, no tenant) may scope into any tenant.
  */
+// Subdomain → tenantId. The seed creates two tenants: `tenant-default`
+// (code DEFAULT) and `tenant-solana` (code SOLANA). The `tarlac`/`solana`
+// subdomains both resolve to `tenant-solana`. Keep this in sync with
+// `backend/prisma/seed.js` `tenantsData` — a stale key here routes users to a
+// non-existent tenant (open by default, but breaks login flow).
 const SUBDOMAIN_TENANT_MAP = {
   default: 'tenant-default',
   tarlac: 'tenant-solana',

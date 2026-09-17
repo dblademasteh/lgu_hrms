@@ -23,6 +23,10 @@ export const createEmployeeSchema = {
     positionId: z.string().min(1),
     hiredDate: dateField,
     monthlySalary: z.coerce.number().min(0).max(99999999.99).optional(),
+    keyPosition: z.preprocess(
+      (v) => (typeof v === 'string' && v.trim() === '' ? null : v),
+      z.string().max(100).optional().nullable()
+    ),
   }),
 };
 
@@ -46,5 +50,6 @@ export const listEmployeesSchema = {
     search: z.string().max(200).optional().nullable(),
     departmentId: z.string().min(1).optional().nullable(),
     status: z.enum(['ACTIVE', 'INACTIVE', 'RESIGNED', 'RETIRED']).optional().nullable(),
+    keyPosition: z.enum(['true', 'false']).optional().nullable(),
   }),
 };

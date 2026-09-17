@@ -35,7 +35,7 @@ router.get('/payslips', async (req, res, next) => {
     const employee = await prisma.employee.findUnique({ where: { ...withTenant(req), employeeNumber: user.externalId }});
     if (!employee) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Employee not found' }});
     const items = await prisma.payrollItem.findMany({
-      where: withTenant(req, { employeeId, run: { is: { status: 'POSTED' } } }),
+      where: withTenant(req, { employeeId: employee.id, run: { is: { status: 'POSTED' } } }),
       include: { run: { include: { period: true } }, deductionLines: true, payslip: true },
       orderBy: { run: { runDate: 'desc' } }
     });

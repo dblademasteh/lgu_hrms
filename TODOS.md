@@ -75,6 +75,8 @@
 - [ ] **Dependency audit (pre-existing)** — `npm audit` on frontend: react-router-dom 6.x open redirect (CVE-2025-68470, HIGH) + vite≤6 dev-server (esbuild advisory, MODERATE). Fixes are breaking major bumps (react-router-dom@7, vite@8); plan a migration window.
 
 ## Workforce (deep dive Sep 2026 — reference: src/docs/WORKFORCE.md)
+- [x] **Employee Account hardening (done)** — (1) **ESS payslips 500**: `ess.js:38` used undeclared `employeeId` → ReferenceError; now `employee.id`, payslips load. (2) **First-login password change enforced**: `usersService.create` stamps `passwordChangedAt: null` → `authService.passwordAge` reports expired on first login → Login redirects to Account → Security; 30-day policy untouched. (3) **Self-deactivate no longer corrupts link**: `accountService.deactivateAccount` keeps `externalId` (was overwriting `'DEACTIVATED'`); reactivation via `/users` restores ESS. (4) **`assertLinkable` tenant-scoped**: employee ACTIVE lookup + duplicate-link clash both `withTenant` on create/update (was a cross-tenant oracle). Verified: `node --check` all pass, frontend build passes.
+- [x] **Only key-position employees can be linked (new)** — added `Employee.keyPosition String?` (migration `20260917033551_add_employee_key_position`) as a tag (e.g. `Mayor`, `HRMO`); `usersService.assertLinkable` rejects links to untagged employees (400 `NOT_KEY_POSITION`); `GET /employees?keyPosition=true` filter + Users.jsx dropdown lists only tagged; EmployeeForm **Key Position** field + DetailPane display; seed tags `EMP-{tenant}-0001` as `HRMO` so the seeded link stays valid. Verified: migration applied + client generated, `node --check` + build pass, key-position query returns both tenants' tagged employees. Cleanup migration `20260917034000_unlink_non_key_position_links` unlinks legacy non-key links + the `DEACTIVATED` sentinel (scoped to externalIds that resolve to a real employee, so OIDC `sub` values are untouched); dev DB had 0 violations, both seeded links intact.
 - [x] **Critical — tenant isolation violation in `/employees/:id/sections/*`** (`employeeSectionService.js`): all 13 section models read/written unscoped; `assertEmployee` is a cross-tenant oracle (line 109); `create` omits `stampTenant` → sub-records get `tenantId=NULL` (153-155); update/remove by bare id (165-184); audit before-snapshot inherits the unscoped reads — **fixed**: service now threads `req`, reads via `withTenant` + writes via `stampTenant`, strict existence checks are tenant-scoped; controllers + `audit.js` pass `req`. **Verified live**: family create now stamps `tenantId="tenant-default"`, section reads 200 under tenant
 - [x] **High — unvalidated inputs → 500:** `GET /employees` query raw (`employeeController.js:5-7`), section `POST/PATCH` bodies (params only; non-P2xxx errors → 500), `GET /ess/payslips/:itemId/print` param (`ess.js:98`) — **fixed**: `listEmployeesSchema` (page/limit/search/departmentId/status) wired on `GET /`; new `contracts/employeeSections.js` (AGENTS drift closed) with section/record param schemas + flat record-body schema on POST/PATCH; ESS print param validated. **Verified live**: `limit=5000` → 400, valid list → 200, bogus section → 400
 - [x] **High — Prisma `P2002`/`P2003` → generic 500:** global-unique keys (`employeeNumber`, `department.code`, `username`) collide cross-tenant; FK violations and department hard-delete-with-children all 500 — map to 409/400 AppErrors — **fixed**: `server.js` centralized `normalizePrismaError` (P2002→409 DUPLICATE, P2003→400, P2025→404, P2000→400) + `employeeSectionService.prismaError` refined (P2002→409, P2003→400, P2025→404). **Verified live**: duplicate `employeeNumber` POST → 409 `DUPLICATE`
@@ -164,6 +166,17 @@
 - [ ] Bulk import employees from CSV
 - [ ] Role-based dashboard widgets per user role
 
+## Hardening Pass (Sep 2026 — verify-and-update)
+- [x] ✅ **Subdomain map drift closed**: `SUBDOMAIN_TENANT_MAP` in `backend/src/middleware/tenant.js` now maps `tarlac`/`solana` → `tenant-solana` (matches seed DB). Comment updated to warn keeping in sync with `prisma/seed.js` `tenantsData`. (Previously mapped `tarlac` → non-existent `tenant-tarlac`.)
+- [x] ✅ **On-premise SSO gap closed**: `/oidc/login`, `/oidc/callback`, `/oidc/consume` now pass `requireOnPremise` (session-establishing paths were ungated, allowing SSO to bypass office-network allowlist). `/oidc/status` stays public for the login button.
+- [x] ✅ **Mock leak audit (negative)**: `useNotifications.js` `fallbackNotifications` is an empty `[]`; when live sources return empty it shows a honest empty feed, never static mock rows. The TODOS note about mock fallback was stale.
+- [x] ✅ **Dead mock exports removed**: `frontend/src/data/mock.js` now exports only `badgeTone()` (consumed by badge components). Removed the unused `roleMatrix` export (was never imported anywhere).
+- [x] ✅ **Audit `safeBody` cap verified**: `backend/src/middleware/audit.js` `safeBody` caps bodies at 64KB and falls back to `summarizeObject({count})` for large arrays/objects. Failed audit writes go to stderr and never block responses — confirmed no mock leak.
+- [ ] **Performance route shadowing**: confirmed NOT shadowing — `/competencies` (line 24) is registered before `/:id` (line 32) in `backend/src/routes/performance.js`. TODOS already marked done.
+- [ ] **CORS allowlist**: verified — `server.js` CORS config uses explicit `WEB_ORIGIN` + localhost ports, never wildcard `*`, never reflects arbitrary origins. Hardening confirmed.
+- [ ] **Settings.jsx accent hex literals**: `frontend/src/pages/Settings.jsx:41,580` uses hex strings (`#1d4ed8` etc.) for the accent preset picker. These are the actual token values the user selects (applied to `--accent` via inline style), not hardcoded component colors. The "refactor to `var(--accent-*)`" todo is a non-issue — changing them would remove color choice. Marked as design decision.
+- [ ] **Attendance list pagination**: `GET /attendance` (`attendanceRepository.findAll`) still returns all rows without pagination despite `listAttendanceSchema` only allowing `date` filter. Medium gap — daily date scope mitigates at small scale, but needs `page`/`limit` for 1k-employee LGUs.
+
 ## Done
 - [x] Permission matrix made real: RolePermission model + migration `20260913120000_role_permissions` (baselined into migration history), `requirePermission()` middleware (SUPER_ADMIN bypass, DEFAULT_PERMISSIONS fallback), capability catalog in `backend/src/shared/permissions.js`, service in `backend/src/services/permissionService.js`
 - [x] Matrix UI now API-backed: Users.jsx renders capabilities × roles from `GET /roles/permissions` + `/roles/capabilities`, edits PATCH `/roles/:name/permissions`; removed localStorage `permissions-overrides` + `permissions-changed`; custom roles get capability-gated access
@@ -186,3 +199,50 @@
 - [x] Reports stub
 - [x] Employee Self-Service portal
 - [x] Employees page CSC alignment start
+
+## Document Tracking & Management System (DTMS) — Sep 2026
+- [x] Backend schema: expanded `Document` model (`status`, `fileSize`, `mimeType`, `description`, `relatedEmployeeId`/`relation`, `publishedBy`/`publishedAt`) + `DocumentStatus` enum
+- [x] Backend permissions: `documentsCRUD` capability added to DEFAULT_PERMISSIONS
+- [x] Backend middleware: `upload.js` (multer diskStorage to `uploads/documents/`, 25MB limit, fileFilter)
+- [x] Backend repository: `documentRepository.js` (Prisma CRUD with withTenant/stampTenant, paginated findMany, setStatus workflow validation, countByStatus)
+- [x] Backend service: `documentService.js` (create/update, resolveFilePath with existence check, getStats)
+- [x] Backend controller: `documentController.js` (list/get/create/update/remove/setStatus/download/stats)
+- [x] Backend contracts: `documents.js` (Zod schemas)
+- [x] Backend routes: `documents.js` (main router + publicDownloadRouter for pre-auth download)
+- [x] Backend wiring: server.js static `/uploads`, routes/index.js mounts `/doc-download` pre-auth + `/documents` post-auth, auth.js OIDC requireOnPremise
+- [x] Frontend API client: `api/documents.js` (documentsApi object)
+- [x] Frontend routing: App.jsx `/documents` route (Protected + documentsCRUD capability)
+- [x] Frontend navigation: Sidebar + CommandPalette Documents entry
+- [x] Frontend page: `pages/Documents.jsx` (filters, table, create/edit modal with upload, status transitions, download, pagination)
+- [x] Verify: `npm run build` passes, color lint clean, backend `node --check` all pass
+- [x] E2E test: create upload → list → authenticated download → status workflow → public published-only download → archive (36 assertions across two live runs)
+
+### P0 hardening (Sep 2026) — the DTMS was wired but dead in the UI
+- [x] List could never render: repo returns `{items,total,page,limit}` but the page read `data.documents || data.data` → always "No documents found"
+- [x] Download was doubly broken: page gated on `doc.filePath` (real field is `url`); and `path.resolve(cwd, '/uploads/...')` resolved to the drive root on Windows (leading slash) → every `GET` returned `FILE_MISSING`
+- [x] Download is now authenticated: new `GET /documents/:id/download` (staff, any status); the pre-auth `/doc-download/:id/download` is enforced PUBLISHED-only and tenant-scoped via subdomain (fail-closed)
+- [x] Removed the public `express.static('/uploads')` mount — files are only served through the tenant/status-checked API
+- [x] Document type dropdown synced to the real `DocumentType` enum (`OFFICE_ORDER, POLICY, MSB_CONSTITUTION, LD_PLAN, MINUTES, RESOLUTION, MEMO, AGREEMENT_MOA, SERVICE_RECORD, PAYSLIP, OTHER`)
+- [x] Status transitions now role-gated server-side: `PENDING_REVIEW` any capability holder, `APPROVED/REJECTED/PUBLISHED` ADMIN+HR_MANAGER, `ARCHIVED` ADMIN only; `DELETE` delegates to the `ARCHIVED` transition so it can't bypass the state machine
+- [x] "Delete" relabeled Archive (soft delete) with workflow + capability gate; success/confirm copy is honest about retention
+
+### DTMS remaining (not P0 — next session)
+- [x] `fileSize` is stored in bytes but rendered as `${fileSize} KB` in the table — now `formatBytes()`
+- [x] Changing a filter keeps the stale page number (`useEffect [page, filters]`) — `useEffect(() => setPage(1), [filters])`
+- [x] `GET /documents/stats` + `documentsApi.stats` exist but are unused (no dashboard cards) — 6 status cards rendered
+- [ ] No document seed data (dev DB only has ad-hoc test docs, now archived)
+- [x] `CommandPalette` Documents entry is not role-gated (navigation still redirects) — all palette pages now role + capability gated, `Document Access Tracking` added
+- [x] `documentService.js` create/update still stores `url` as `/uploads/...`; normalize storage to a relative path when convenient — stores `uploads/documents/<file>`; migration `20260917060000_document_access_log` also strips legacy leading `/`
+- [ ] Stale benchmark docs still claim "no document model exists": `PRIME_HRM_EVIDENCE.md` L130/165/185, `HRMS_BENCHMARK.md` L44/47/83, `PRIME_HRM_GAP.md` L25
+- [ ] Global audit middleware (`backend/src/middleware/audit.js`) writes `AuditLog` without `tenantId` (always null) — stamp the resolved tenant so audit reads can be tenant-scoped (DTMS timeline currently works around it)
+
+### DTMS feature modules (see `src/docs/modules/dtms/README.md`)
+Planning complete. Implemented so far: **Housekeeping (partial)** + **M4**.
+- [ ] [Housekeeping](src/docs/modules/dtms/08-housekeeping.md) — phase 0; done: bytes, page reset, stats, palette gating, storage path; pending: seed data, stale benchmark docs
+- [x] [M4 Access & Tracking Log](src/docs/modules/dtms/04-access-and-tracking-log.md) — `DocumentAccessLog` + migration, `documentsTrack`, feed/export/timeline endpoints, capture hooks, `/documents/tracking` page (16/16 E2E)
+- [ ] [M1 Taxonomy & Folders](src/docs/modules/dtms/01-taxonomy-and-folders.md)
+- [ ] [M2 Version History](src/docs/modules/dtms/02-version-history.md)
+- [ ] [M3 Routing & Assignment](src/docs/modules/dtms/03-routing-and-assignment.md)
+- [ ] [M5 Retention & Disposal](src/docs/modules/dtms/05-retention-and-disposal.md)
+- [ ] [M6 Notifications & Escalation](src/docs/modules/dtms/06-notifications-and-escalation.md)
+- [ ] [M7 E-Signature](src/docs/modules/dtms/07-e-signature.md)

@@ -444,6 +444,12 @@ export default function EmployeeForm({ formId, initial, submitLabel = 'Save', on
           </div>
 
           <div>
+            <label htmlFor="e-keypos" className="block text-xs font-medium text-ink mb-0.5">Key Position</label>
+            <input id="e-keypos" className="input" value={form.keyPosition ?? ''} onChange={e => set('keyPosition', e.target.value)} placeholder="e.g. Mayor, Vice Mayor, Department Head" />
+            <p className="text-[11px] text-muted mt-0.5">Only employees tagged here can be linked to a user account (ESS).</p>
+          </div>
+
+          <div>
             <label htmlFor="e-contact" className="block text-xs font-medium text-ink mb-0.5">Contact No.</label>
             <input id="e-contact" className="input" value={form.contactNumber ?? ''} onChange={e => set('contactNumber', e.target.value)} placeholder="0917-000-0000" />
           </div>
