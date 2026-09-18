@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import Layout from '../components/Layout.jsx';
 import Modal from '../components/Modal.jsx';
 import ConfirmDialog from '../components/ConfirmDialog.jsx';
@@ -6,6 +6,7 @@ import { useToast } from '../components/Toast.jsx';
 import { badgeTone } from '../data/mock.js';
 import { useUserCapabilities } from '../config/permissions.js';
 import { openHtmlString } from '../lib/print.js';
+import Tabs, { TabList, Tab, TabPanel } from '../components/Tabs.jsx';
 import {
   listPerformanceReviews,
   getPerformanceReview,
@@ -28,14 +29,15 @@ import { listEmployees } from '../api/employees.js';
 import {
   FileText, User, Star, TrendingUp, Save, Plus, Trash2, Printer,
   X, Calculator, RefreshCw, CheckCircle, RotateCcw, Ban, Send,
+  ChevronDown, ChevronUp, Edit, Eye, Target, Award,
 } from 'lucide-react';
 
 const ADJECTIVAL_TONE = {
-  OUTSTANDING: 'text-success',
-  VERY_SATISFACTORY: 'text-success',
-  SATISFACTORY: 'text-accent',
-  UNSATISFACTORY: 'text-warning',
-  POOR: 'text-error',
+  OUTSTANDING: 'badge-success',
+  VERY_SATISFACTORY: 'badge-success',
+  SATISFACTORY: 'badge-accent',
+  UNSATISFACTORY: 'badge-warning',
+  POOR: 'badge-error',
 };
 
 const WEIGHT_FIELDS = [
@@ -47,26 +49,37 @@ const WEIGHT_FIELDS = [
 
 const WORKFLOW = {
   PLANNING: [
-    { label: 'Start Monitoring', to: 'MONITORING', icon: CheckCircle },
-    { label: 'Submit for Review', to: 'REVIEW', icon: Send, primary: true },
-    { label: 'Cancel', to: 'CANCELLED', icon: Ban, danger: true },
+    { label: 'Start Monitoring', to: 'MONITORING', icon: CheckCircle, variant: 'outline' },
+    { label: 'Submit for Review', to: 'REVIEW', icon: Send, variant: 'primary' },
+    { label: 'Cancel', to: 'CANCELLED', icon: Ban, variant: 'danger' },
   ],
   MONITORING: [
-    { label: 'Submit for Review', to: 'REVIEW', icon: Send, primary: true },
-    { label: 'Back to Planning', to: 'PLANNING', icon: RotateCcw },
-    { label: 'Cancel', to: 'CANCELLED', icon: Ban, danger: true },
+    { label: 'Submit for Review', to: 'REVIEW', icon: Send, variant: 'primary' },
+    { label: 'Back to Planning', to: 'PLANNING', icon: RotateCcw, variant: 'outline' },
+    { label: 'Cancel', to: 'CANCELLED', icon: Ban, variant: 'danger' },
   ],
   REVIEW: [
-    { label: 'Approve', to: 'APPROVED', icon: CheckCircle, primary: true },
-    { label: 'Reject', to: 'REJECTED', icon: X },
-    { label: 'Return to Monitoring', to: 'MONITORING', icon: RotateCcw },
+    { label: 'Approve', to: 'APPROVED', icon: CheckCircle, variant: 'primary' },
+    { label: 'Reject', to: 'REJECTED', icon: X, variant: 'outline' },
+    { label: 'Return to Monitoring', to: 'MONITORING', icon: RotateCcw, variant: 'outline' },
   ],
   APPROVED: [],
-  REJECTED: [{ label: 'Reopen', to: 'MONITORING', icon: RotateCcw }],
+  REJECTED: [{ label: 'Reopen', to: 'MONITORING', icon: RotateCcw, variant: 'outline' }],
   CANCELLED: [],
 };
 
 const EDITABLE_STATUSES = ['PLANNING', 'MONITORING', 'REJECTED'];
+
+const OUTPUT_GROUP_OPTIONS = [
+  { value: 'CORE', label: 'Core' },
+  { value: 'STRATEGIC', label: 'Strategic' },
+  { value: 'SUPPORT', label: 'Support' },
+];
+
+const REVIEW_TYPES = [
+  { value: 'IPCR', label: 'IPCR — Individual Performance Commitment and Review' },
+  { value: 'OPCR', label: 'OPCR — Office Performance Commitment and Review' },
+];
 
 const emptyTarget = () => ({
   kra: '',
@@ -97,108 +110,215 @@ function formatDate(value) {
   return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'Asia/Manila' });
 }
 
-function RatingBadge({ rating }) {
-  if (!rating || rating.final == null) return <span className="text-sm text-muted">Not yet rated</span>;
-  const tone = ADJECTIVAL_TONE[rating.adjectival] || 'text-muted';
+function fmt(v) {
+  return v == null || v === '' ? '—' : Number(v).toFixed(2);
+}
+
+function RatingBadge({ rating, size = 'md' }) {
+  if (!rating || rating.final == null) {
+    return <span className="text-sm text-muted">Not yet rated</span>;
+  }
+  const tone = ADJECTIVAL_TONE[rating.adjectival] || 'badge';
+  const sizeClasses = size === 'lg' ? 'text-xl px-3 py-1' : 'text-sm px-2 py-0.5';
   return (
     <div className="flex flex-col items-start gap-0.5">
-      <span className={`font-mono text-lg font-bold ${tone}`}>{Number(rating.final).toFixed(2)}</span>
-      <span className={`mono-label text-xs uppercase ${tone}`}>{(rating.adjectival || '—').replace(/_/g, ' ')}</span>
+      <span className={`font-mono font-bold ${sizeClasses} ${tone.replace('badge-', 'text-')}`}>
+        {Number(rating.final).toFixed(2)}
+      </span>
+      <span className={`mono-label text-xs uppercase ${tone.replace('badge-', 'text-')}`}>
+        {(rating.adjectival || '—').replace(/_/g, ' ')}
+      </span>
     </div>
   );
 }
 
-function TargetRow({ t, onChange, onRemove }) {
+function TargetRow({ target, index, onChange, onRemove, onDuplicate }) {
   const avg = useMemo(() => {
-    const vals = [t.qualityScore, t.efficiencyScore, t.timelinessScore]
+    const vals = [target.qualityScore, target.efficiencyScore, target.timelinessScore]
       .map(v => Number(v))
       .filter(v => Number.isFinite(v));
     if (vals.length === 0) return '';
     return (vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(2);
-  }, [t.qualityScore, t.efficiencyScore, t.timelinessScore]);
+  }, [target.qualityScore, target.efficiencyScore, target.timelinessScore]);
 
-  const set = patch => onChange({ ...t, ...patch, averageScore: avg });
+  const set = patch => onChange(index, { ...target, ...patch, averageScore: avg });
 
   return (
-    <div className="rounded-lg border border-line p-3 space-y-3">
-      <div className="grid md:grid-cols-2 gap-3">
-        <div className="grid grid-cols-2 gap-2">
-          <label className="mono-label text-xs">KRA</label>
-          <input className="input" value={t.kra || ''} onChange={e => set({ kra: e.target.value })} placeholder="Key Result Area" />
-          <label className="mono-label text-xs">Output Group</label>
-          <select className="select" value={t.outputGroup || 'CORE'} onChange={e => set({ outputGroup: e.target.value })}>
-            <option value="CORE">CORE</option>
-            <option value="STRATEGIC">STRATEGIC</option>
-            <option value="SUPPORT">SUPPORT</option>
-          </select>
-          <label className="mono-label text-xs">Success Indicator</label>
-          <input className="input col-span-2" value={t.successIndicator || ''} onChange={e => set({ successIndicator: e.target.value })} placeholder="Target + Measures" />
-          <label className="mono-label text-xs">Weight %</label>
-          <input type="number" min="0" max="100" className="input" value={t.weight ?? ''} onChange={e => set({ weight: e.target.value })} />
-          <label className="mono-label text-xs">Target Qty</label>
-          <input type="number" className="input" value={t.targetQuantity ?? ''} onChange={e => set({ targetQuantity: e.target.value })} />
-          <label className="mono-label text-xs">Unit</label>
-          <input className="input" value={t.targetUnit || ''} onChange={e => set({ targetUnit: e.target.value })} />
+    <div className="rounded-lg border border-line p-4 space-y-4 bg-bg/50">
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex-1 min-w-0">
+          <div className="grid md:grid-cols-3 gap-3">
+            <div className="md:col-span-2">
+              <label className="mono-label text-xs">KRA</label>
+              <input
+                className="input"
+                value={target.kra || ''}
+                onChange={e => set({ kra: e.target.value })}
+                placeholder="Key Result Area"
+                aria-label="Key Result Area"
+              />
+            </div>
+            <div>
+              <label className="mono-label text-xs">Output Group</label>
+              <select
+                className="select"
+                value={target.outputGroup || 'CORE'}
+                onChange={e => set({ outputGroup: e.target.value })}
+                aria-label="Output Group"
+              >
+                {OUTPUT_GROUP_OPTIONS.map(o => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            </div>
+            <div className="md:col-span-2">
+              <label className="mono-label text-xs">Success Indicator</label>
+              <input
+                className="input"
+                value={target.successIndicator || ''}
+                onChange={e => set({ successIndicator: e.target.value })}
+                placeholder="Target + Measures"
+                aria-label="Success Indicator"
+              />
+            </div>
+            <div className="grid grid-cols-3 gap-2 md:col-span-3">
+              <div>
+                <label className="mono-label text-xs">Weight %</label>
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  className="input"
+                  value={target.weight ?? ''}
+                  onChange={e => set({ weight: e.target.value })}
+                  aria-label="Weight percentage"
+                />
+              </div>
+              <div>
+                <label className="mono-label text-xs">Target Qty</label>
+                <input
+                  type="number"
+                  step="any"
+                  className="input"
+                  value={target.targetQuantity ?? ''}
+                  onChange={e => set({ targetQuantity: e.target.value })}
+                  aria-label="Target Quantity"
+                />
+              </div>
+              <div>
+                <label className="mono-label text-xs">Unit</label>
+                <input
+                  className="input"
+                  value={target.targetUnit || ''}
+                  onChange={e => set({ targetUnit: e.target.value })}
+                  aria-label="Unit"
+                />
+              </div>
+            </div>
+          </div>
         </div>
-        <div className="grid grid-cols-2 gap-2">
-          <label className="mono-label text-xs">Q1 Actual</label>
-          <input className="input" value={t.q1Actual || ''} onChange={e => set({ q1Actual: e.target.value })} />
-          <label className="mono-label text-xs">Q2 Actual</label>
-          <input className="input" value={t.q2Actual || ''} onChange={e => set({ q2Actual: e.target.value })} />
-          <label className="mono-label text-xs">Q3 Actual</label>
-          <input className="input" value={t.q3Actual || ''} onChange={e => set({ q3Actual: e.target.value })} />
-          <label className="mono-label text-xs">Q4 Actual</label>
-          <input className="input" value={t.q4Actual || ''} onChange={e => set({ q4Actual: e.target.value })} />
-          <label className="mono-label text-xs">Annual Actual</label>
-          <input className="input col-span-2" value={t.annualActual || ''} onChange={e => set({ annualActual: e.target.value })} />
-          <label className="mono-label text-xs">Means of Verification</label>
-          <input className="input col-span-2" value={t.meansOfVerification || ''} onChange={e => set({ meansOfVerification: e.target.value })} />
+        <div className="flex items-center gap-1 shrink-0">
+          <button className="btn btn-ghost p-2" onClick={() => onDuplicate(index)} aria-label="Duplicate target"><Target size={14} /></button>
+          <button className="btn btn-ghost p-2 text-error" onClick={() => onRemove(index)} aria-label="Remove target"><Trash2 size={14} /></button>
         </div>
       </div>
-      <div className="grid grid-cols-4 gap-2">
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="md:col-span-2">
+          <label className="mono-label text-xs">Means of Verification</label>
+          <input
+            className="input"
+            value={target.meansOfVerification || ''}
+            onChange={e => set({ meansOfVerification: e.target.value })}
+            placeholder="Supporting documents / evidence"
+            aria-label="Means of Verification"
+          />
+        </div>
+        <div>
+          <label className="mono-label text-xs">Annual Actual</label>
+          <input
+            className="input"
+            value={target.annualActual || ''}
+            onChange={e => set({ annualActual: e.target.value })}
+            aria-label="Annual Actual"
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-4 gap-3">
         <div>
           <label className="mono-label text-xs">Quality (1–5)</label>
-          <input type="number" min="1" max="5" step="0.1" className="input" value={t.qualityScore ?? ''} onChange={e => set({ qualityScore: e.target.value })} />
+          <input
+            type="number"
+            min="1"
+            max="5"
+            step="0.1"
+            className="input"
+            value={target.qualityScore ?? ''}
+            onChange={e => set({ qualityScore: e.target.value })}
+            aria-label="Quality score"
+          />
         </div>
         <div>
           <label className="mono-label text-xs">Efficiency (1–5)</label>
-          <input type="number" min="1" max="5" step="0.1" className="input" value={t.efficiencyScore ?? ''} onChange={e => set({ efficiencyScore: e.target.value })} />
+          <input
+            type="number"
+            min="1"
+            max="5"
+            step="0.1"
+            className="input"
+            value={target.efficiencyScore ?? ''}
+            onChange={e => set({ efficiencyScore: e.target.value })}
+            aria-label="Efficiency score"
+          />
         </div>
         <div>
           <label className="mono-label text-xs">Timeliness (1–5)</label>
-          <input type="number" min="1" max="5" step="0.1" className="input" value={t.timelinessScore ?? ''} onChange={e => set({ timelinessScore: e.target.value })} />
+          <input
+            type="number"
+            min="1"
+            max="5"
+            step="0.1"
+            className="input"
+            value={target.timelinessScore ?? ''}
+            onChange={e => set({ timelinessScore: e.target.value })}
+            aria-label="Timeliness score"
+          />
         </div>
         <div>
           <label className="mono-label text-xs">Average Score</label>
-          <input className="input" readOnly value={avg} />
+          <input className="input" readOnly value={avg} aria-label="Average score" />
         </div>
       </div>
-      <div className="flex justify-between items-center">
-        <span className="mono-label text-xs text-muted">{t.outputGroup} · Weight {t.weight || 0}%</span>
-        <button className="btn btn-ghost text-error" onClick={onRemove}><Trash2 size={14} /> Remove</button>
+
+      <div className="flex items-center justify-between pt-2 border-t border-line/50">
+        <span className="mono-label text-xs text-muted">
+          {target.outputGroup} · Weight {target.weight || 0}%
+        </span>
+        <div className="flex items-center gap-1 text-xs text-muted">
+          Q1: {target.q1Actual || '—'} · Q2: {target.q2Actual || '—'} · Q3: {target.q3Actual || '—'} · Q4: {target.q4Actual || '—'}
+        </div>
       </div>
     </div>
   );
 }
 
-function CompetencyRow({ c, onSave, onRemove, saving }) {
+function CompetencyRow({ competency, onSave, onRemove, onEdit, isEditing, saving }) {
   const [draft, setDraft] = useState({
-    score: c.score ?? '',
-    maxScore: c.maxScore ?? 5,
-    weight: c.weight ?? 10,
-    comments: c.comments ?? '',
+    score: competency.score ?? '',
+    maxScore: competency.maxScore ?? 5,
+    weight: competency.weight ?? 10,
+    comments: competency.comments ?? '',
   });
-  const [editing, setEditing] = useState(false);
 
   useEffect(() => {
     setDraft({
-      score: c.score ?? '',
-      maxScore: c.maxScore ?? 5,
-      weight: c.weight ?? 10,
-      comments: c.comments ?? '',
+      score: competency.score ?? '',
+      maxScore: competency.maxScore ?? 5,
+      weight: competency.weight ?? 10,
+      comments: competency.comments ?? '',
     });
-    setEditing(false);
-  }, [c.id, c.score, c.maxScore, c.weight, c.comments]);
+  }, [competency.id, competency.score, competency.maxScore, competency.weight, competency.comments]);
 
   const save = () => {
     const payload = {
@@ -208,49 +328,95 @@ function CompetencyRow({ c, onSave, onRemove, saving }) {
       comments: draft.comments || undefined,
     };
     onSave(payload);
-    setEditing(false);
+    onEdit(false);
   };
 
   return (
-    <div className="rounded-lg border border-line p-3 space-y-3">
+    <div className="rounded-lg border border-line p-4 space-y-3 bg-bg/50">
       <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <div className="font-medium text-sm">{c.competencyName || '—'}</div>
-          <div className="text-xs text-muted">{c.competencyCode}</div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <div className="font-medium text-sm text-ink">{competency.competencyName || '—'}</div>
+            <span className="mono-label text-xs text-muted">{competency.competencyCode}</span>
+          </div>
+          <div className="text-xs text-muted mt-0.5">
+            {competency.description || 'No description'}
+          </div>
         </div>
-        <button className="btn btn-ghost text-error px-2" onClick={onRemove} aria-label="Remove competency"><Trash2 size={14} /></button>
+        <div className="flex items-center gap-1 shrink-0">
+          {isEditing ? (
+            <>
+              <button className="btn btn-ghost p-2" onClick={() => onEdit(false)} aria-label="Cancel edit"><X size={14} /></button>
+              <button className="btn btn-primary p-2" onClick={save} disabled={saving} aria-label="Save competency"><Save size={14} /></button>
+            </>
+          ) : (
+            <button className="btn btn-ghost p-2 text-accent" onClick={() => onEdit(true)} aria-label="Edit competency"><Edit size={14} /></button>
+          )}
+          <button className="btn btn-ghost p-2 text-error" onClick={onRemove} aria-label="Remove competency"><Trash2 size={14} /></button>
+        </div>
       </div>
-      <div className="grid grid-cols-3 gap-2">
+
+      <div className="grid grid-cols-3 gap-3">
         <div>
           <label className="mono-label text-xs">Score (1–5)</label>
-          <input type="number" min="1" max="5" step="0.1" className="input" value={draft.score} onChange={e => setDraft(d => ({ ...d, score: e.target.value }))} disabled={!editing} />
+          <input
+            type="number"
+            min="1"
+            max="5"
+            step="0.1"
+            className="input"
+            value={draft.score}
+            onChange={e => setDraft(d => ({ ...d, score: e.target.value }))}
+            disabled={!isEditing}
+            aria-label="Competency score"
+          />
         </div>
         <div>
-          <label className="mono-label text-xs">Max</label>
-          <input type="number" min="1" max="100" className="input" value={draft.maxScore} onChange={e => setDraft(d => ({ ...d, maxScore: e.target.value }))} disabled={!editing} />
+          <label className="mono-label text-xs">Max Score</label>
+          <input
+            type="number"
+            min="1"
+            max="100"
+            className="input"
+            value={draft.maxScore}
+            onChange={e => setDraft(d => ({ ...d, maxScore: e.target.value }))}
+            disabled={!isEditing}
+            aria-label="Max score"
+          />
         </div>
         <div>
           <label className="mono-label text-xs">Weight %</label>
-          <input type="number" min="0" max="100" className="input" value={draft.weight} onChange={e => setDraft(d => ({ ...d, weight: e.target.value }))} disabled={!editing} />
+          <input
+            type="number"
+            min="0"
+            max="100"
+            className="input"
+            value={draft.weight}
+            onChange={e => setDraft(d => ({ ...d, weight: e.target.value }))}
+            disabled={!isEditing}
+            aria-label="Competency weight"
+          />
         </div>
       </div>
-      <div className="flex items-center justify-end gap-2">
-        {editing ? (
-          <>
-            <button className="btn btn-ghost" onClick={() => { setEditing(false); }}><X size={14} /> Cancel</button>
-            <button className="btn btn-primary" onClick={save} disabled={saving}><Save size={14} /> Save</button>
-          </>
-        ) : (
-          <button className="btn btn-ghost text-accent" onClick={() => setEditing(true)}><Calculator size={14} /> Edit</button>
-        )}
-      </div>
+
+      {isEditing && draft.comments !== undefined && (
+        <div>
+          <label className="mono-label text-xs">Comments</label>
+          <textarea
+            className="input min-h-[60px]"
+            value={draft.comments}
+            onChange={e => setDraft(d => ({ ...d, comments: e.target.value }))}
+            placeholder="Optional remarks"
+            aria-label="Competency comments"
+          />
+        </div>
+      )}
     </div>
   );
 }
 
 function buildIPCRFHtml(review, targets, competencies, computed) {
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const fmt = v => (v == null || v === '' ? '—' : Number(v).toFixed(2));
   const emp = review.employee || {};
   const name = esc(`${emp.lastName || '—'}, ${emp.firstName || '—'}`);
   const dept = esc(emp.department?.name || '—');
@@ -385,6 +551,7 @@ export default function IPCR() {
   const [weightDraft, setWeightDraft] = useState({ coreWeight: 50, strategicWeight: 30, supportWeight: 20, competencyWeight: 30 });
   const [commentsDraft, setCommentsDraft] = useState('');
   const [statusSaving, setStatusSaving] = useState(false);
+  const [activeTab, setActiveTab] = useState('targets');
 
   const [createOpen, setCreateOpen] = useState(false);
   const [createForm, setCreateForm] = useState({});
@@ -397,12 +564,13 @@ export default function IPCR() {
 
   const [compAddOpen, setCompAddOpen] = useState(false);
   const [compForm, setCompForm] = useState({ competencyId: '', score: '', maxScore: 5, weight: 10 });
+  const [editingCompetencyId, setEditingCompetencyId] = useState(null);
 
   const [confirm, setConfirm] = useState({ open: false, title: '', message: '', danger: false, action: async () => {} });
 
   const computed = useMemo(() => selected?.computed || null, [selected]);
 
-  const fetchDetail = async id => {
+  const fetchDetail = useCallback(async (id) => {
     const [rev, comps] = await Promise.all([
       getPerformanceReview(id),
       listReviewCompetencies(id),
@@ -410,9 +578,9 @@ export default function IPCR() {
     setSelected(rev);
     setTargets((rev.targets ?? []).map(t => ({ ...t })));
     setCompetencies(comps.competencies ?? []);
-  };
+  }, []);
 
-  const loadDetail = async id => {
+  const loadDetail = useCallback(async (id) => {
     setDetailLoading(true);
     try {
       await fetchDetail(id);
@@ -421,9 +589,9 @@ export default function IPCR() {
     } finally {
       setDetailLoading(false);
     }
-  };
+  }, [fetchDetail, toast]);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     try {
       const res = await listPerformanceReviews({ page: 1, limit: 100 });
@@ -433,10 +601,9 @@ export default function IPCR() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [toast]);
 
-  useEffect(() => { load(); }, []);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { load(); }, [load]);
   useEffect(() => {
     if (!selectedId) {
       setSelected(null);
@@ -445,7 +612,7 @@ export default function IPCR() {
       return;
     }
     loadDetail(selectedId);
-  }, [selectedId]);
+  }, [selectedId, loadDetail]);
 
   useEffect(() => {
     if (!selected) return;
@@ -456,6 +623,7 @@ export default function IPCR() {
       competencyWeight: selected.competencyWeight ?? 30,
     });
     setCommentsDraft(selected.comments ?? '');
+    setActiveTab('targets');
   }, [selected]);
 
   const handleRefresh = async () => {
@@ -522,7 +690,7 @@ export default function IPCR() {
     .filter(o => o.reviewYear === Number(createForm.reviewYear))
     .sort((a, b) => (a.employee?.lastName || '').localeCompare(b.employee?.lastName || ''));
 
-  const changeStatus = async to => {
+  const changeStatus = async (to) => {
     if (!selected || statusSaving) return;
     setStatusSaving(true);
     try {
@@ -602,6 +770,8 @@ export default function IPCR() {
   };
 
   const addTargetRow = () => setTargets(list => [...list, emptyTarget()]);
+
+  const duplicateTargetRow = (idx) => setTargets(list => [...list.slice(0, idx + 1), { ...list[idx], id: undefined }, ...list.slice(idx + 1)]);
 
   const updateTargetRow = (idx, upd) => setTargets(list => list.map((x, i) => (i === idx ? upd : x)));
 
@@ -697,7 +867,7 @@ export default function IPCR() {
     }
   };
 
-  const catalogRemove = c => {
+  const catalogRemove = (c) => {
     setConfirm({
       open: true,
       title: 'Remove competency?',
@@ -757,7 +927,7 @@ export default function IPCR() {
     }
   };
 
-  const removeCompetencyItem = item => {
+  const removeCompetencyItem = (item) => {
     setConfirm({
       open: true,
       title: 'Remove competency?',
@@ -776,10 +946,11 @@ export default function IPCR() {
   };
 
   const targetsEditable = canEdit && selected && EDITABLE_STATUSES.includes(selected.status);
+  const competenciesEditable = canEdit && selected && EDITABLE_STATUSES.includes(selected.status);
 
   return (
     <Layout>
-      <div className="flex flex-wrap items-end justify-between gap-4 mb-4">
+      <div className="flex flex-wrap items-end justify-between gap-4 mb-6">
         <div>
           <h1 className="font-display text-xl font-bold text-ink flex items-center gap-2">
             <FileText size={20} className="text-accent" />
@@ -793,8 +964,8 @@ export default function IPCR() {
         </div>
       </div>
 
-      <div className="grid lg:grid-cols-3 gap-4">
-        <div className="lg:col-span-1 card p-4 h-fit">
+      <div className="grid lg:grid-cols-12 gap-4">
+        <aside className="lg:col-span-4 card p-4 h-fit sticky top-24">
           <div className="flex items-center justify-between mb-3">
             <span className="mono-label uppercase text-xs text-muted">Reviews</span>
             <span className="mono-label text-xs">{reviews.length}</span>
@@ -804,17 +975,17 @@ export default function IPCR() {
           ) : reviews.length === 0 ? (
             <p className="text-sm text-muted">No reviews yet. Create one to begin.</p>
           ) : (
-            <div className="space-y-2 max-h-[60vh] overflow-auto pr-1">
+            <div className="space-y-2 max-h-[65vh] overflow-auto pr-1">
               {reviews.map(r => (
                 <button
                   key={r.id}
                   className={`w-full text-left p-3 rounded-lg border transition ${selectedId === r.id ? 'border-accent bg-accent/10' : 'border-line hover:border-accent/40'}`}
                   onClick={() => setSelectedId(r.id)}
                 >
-                  <div className="font-medium text-sm text-ink">
+                  <div className="font-medium text-sm text-ink truncate">
                     {r.employee ? `${r.employee.lastName}, ${r.employee.firstName}` : '—'}
                   </div>
-                  <div className="text-xs text-muted mt-0.5">
+                  <div className="text-xs text-muted mt-0.5 truncate">
                     {r.employee?.department?.name || '—'}
                   </div>
                   <div className="flex items-center justify-between mt-2">
@@ -825,45 +996,59 @@ export default function IPCR() {
               ))}
             </div>
           )}
-        </div>
+        </aside>
 
-        <div className="lg:col-span-2 space-y-4">
+        <main className="lg:col-span-8 space-y-4">
           {!selectedId ? (
             <div className="card p-10 text-center text-muted">
-              Select a review to edit its IPCRF.
+              <FileText size={48} className="mx-auto text-line mb-3" aria-hidden="true" />
+              <p className="text-lg font-medium">Select a review</p>
+              <p className="text-sm mt-1">Choose a review from the list to view and edit its IPCRF.</p>
             </div>
           ) : detailLoading ? (
-            <div className="card p-10 text-center text-muted">Loading review…</div>
+            <div className="card p-10 text-center text-muted">
+              <div className="skeleton h-4 w-48 mx-auto mb-2" />
+              <div className="skeleton h-4 w-32 mx-auto" />
+              <p className="mt-3">Loading review…</p>
+            </div>
           ) : !selected ? (
-            <div className="card p-10 text-center text-muted">Review not found.</div>
+            <div className="card p-10 text-center text-muted">
+              <p>Review not found.</p>
+            </div>
           ) : (
             <>
               <div className="card p-5">
                 <div className="flex flex-wrap items-start justify-between gap-4">
-                  <div className="min-w-0">
-                    <h2 className="font-display text-lg font-bold text-ink">
+                  <div className="min-w-0 flex-1">
+                    <h2 className="font-display text-lg font-bold text-ink truncate">
                       {selected.employee ? `${selected.employee.lastName}, ${selected.employee.firstName}` : '—'} · {selected.reviewType} {selected.reviewYear}
                     </h2>
-                    <div className="text-sm text-muted mt-1">
-                      {selected.employee?.department?.name || '—'} · {selected.employee?.position?.title || '—'}
+                    <div className="flex flex-wrap items-center gap-3 mt-2 text-sm text-muted">
+                      <span>{selected.employee?.department?.name || '—'}</span>
+                      <span>·</span>
+                      <span>{selected.employee?.position?.title || '—'}</span>
+                      <span>·</span>
+                      <span>Period: {formatDate(selected.periodStart)} – {formatDate(selected.periodEnd)}</span>
                     </div>
-                    <div className="flex flex-wrap items-center gap-3 mt-2">
+                  </div>
+                  <div className="flex flex-wrap items-center gap-3 shrink-0">
+                    <div className="flex items-center gap-2">
                       <span className={`badge ${badgeTone(selected.status)}`}>{selected.status}</span>
                       <RatingBadge rating={{ final: computed?.rating, adjectival: computed?.adjectival }} />
                     </div>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {canEdit && <button className="btn btn-primary gap-2" onClick={handleCompute}><Calculator size={15} /> Compute</button>}
-                    <button className="btn btn-ghost gap-2" onClick={handlePrint}><Printer size={15} /> Print</button>
-                    {canEdit && selected.status !== 'APPROVED' && (
-                      <button className="btn btn-ghost gap-2 text-error" onClick={confirmDeleteReview}><Trash2 size={15} /> Delete</button>
-                    )}
+                    <div className="flex flex-wrap gap-2">
+                      {canEdit && <button className="btn btn-primary gap-2" onClick={handleCompute}><Calculator size={15} /> Compute</button>}
+                      <button className="btn btn-outline gap-2" onClick={handlePrint}><Printer size={15} /> Print</button>
+                      {canEdit && selected.status !== 'APPROVED' && (
+                        <button className="btn btn-ghost gap-2 text-error" onClick={confirmDeleteReview}><Trash2 size={15} /> Delete</button>
+                      )}
+                    </div>
                   </div>
                 </div>
 
                 <div className="mt-4 grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
                   {WEIGHT_FIELDS.map(w => (
-                    <div key={w.key} className="p-3 rounded-lg border border-line">
+                    <div key={w.key} className="p-3 rounded-lg border border-line bg-bg/50">
                       <div className="mono-label text-xs uppercase text-muted">{w.label} Weight %</div>
                       {canEdit ? (
                         <input
@@ -873,6 +1058,7 @@ export default function IPCR() {
                           className="input mt-1"
                           value={weightDraft[w.key] ?? ''}
                           onChange={e => setWeightDraft(d => ({ ...d, [w.key]: e.target.value }))}
+                          aria-label={`${w.label} weight percentage`}
                         />
                       ) : (
                         <div className="font-mono text-lg text-ink">{selected[w.key] ?? 0}%</div>
@@ -894,6 +1080,7 @@ export default function IPCR() {
                       value={commentsDraft}
                       onChange={e => setCommentsDraft(e.target.value)}
                       placeholder="Rating notes and remarks…"
+                      aria-label="Review comments"
                     />
                     <div className="mt-2 flex justify-end">
                       <button className="btn btn-outline gap-2" onClick={saveComments}><Save size={15} /> Save Comments</button>
@@ -901,16 +1088,17 @@ export default function IPCR() {
                   </div>
                 )}
 
-                {(WORKFLOW[selected.status] || []).length > 0 && (
+                {(WORKFLOW[selected.status] || []).length > 0 && canEdit && (
                   <div className="mt-4 pt-4 border-t border-line flex flex-wrap gap-2">
                     {(WORKFLOW[selected.status] || []).map(a => {
                       const Icon = a.icon;
+                      const variantClass = a.variant === 'primary' ? 'btn-primary' : a.variant === 'danger' ? 'btn-danger' : 'btn-outline';
                       return (
                         <button
                           key={a.label}
-                          className={`btn gap-2 ${a.danger ? 'btn-danger' : a.primary ? 'btn-primary' : 'btn-outline'}`}
+                          className={`btn gap-2 ${variantClass}`}
                           onClick={() => changeStatus(a.to)}
-                          disabled={statusSaving || !canEdit}
+                          disabled={statusSaving}
                         >
                           <Icon size={15} /> {a.label}
                         </button>
@@ -923,111 +1111,204 @@ export default function IPCR() {
                 )}
               </div>
 
-              <div className="card p-5">
-                <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
-                  <h3 className="font-display font-semibold flex items-center gap-2 text-ink"><Star size={18} className="text-accent" /> Part I — Performance Targets</h3>
-                  {targetsEditable && (
-                    <button className="btn btn-ghost text-xs" onClick={addTargetRow}><Plus size={14} /> Add Target</button>
-                  )}
-                </div>
-                <div className="space-y-3">
-                  {targets.length === 0 && <p className="text-sm text-muted">No targets added yet.</p>}
-                  {targets.map((t, idx) => (
-                    <TargetRow
-                      key={t.id || `new-${idx}`}
-                      t={t}
-                      onChange={upd => updateTargetRow(idx, upd)}
-                      onRemove={() => handleRemoveTarget(t, idx)}
-                    />
-                  ))}
-                </div>
-                {targetsEditable && (
-                  <div className="mt-4 flex justify-end">
-                    <button className="btn btn-primary gap-2" onClick={saveTargets}><Save size={16} /> Save Targets</button>
-                  </div>
-                )}
+              <div className="card p-0 overflow-hidden">
+                <Tabs defaultValue={activeTab} onValueChange={setActiveTab} className="w-full">
+                  <TabList className="border-b border-line p-1 bg-bg/50" aria-label="IPCRF Sections">
+                    <Tab value="targets" className="gap-2">
+                      <Target size={16} />
+                      <span>Part I — Targets</span>
+                    </Tab>
+                    <Tab value="competencies" className="gap-2">
+                      <Award size={16} />
+                      <span>Part II — Competencies</span>
+                    </Tab>
+                    <Tab value="summary" className="gap-2">
+                      <TrendingUp size={16} />
+                      <span>Part III — Summary</span>
+                    </Tab>
+                  </TabList>
+
+                  <TabPanel value="targets" className="p-5">
+                    <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                      <h3 className="font-display font-semibold flex items-center gap-2 text-ink">
+                        <Target size={18} className="text-accent" /> Performance Targets
+                      </h3>
+                      {targetsEditable && (
+                        <button className="btn btn-primary gap-2" onClick={addTargetRow}><Plus size={14} /> Add Target</button>
+                      )}
+                    </div>
+                    <div className="space-y-4">
+                      {targets.length === 0 ? (
+                        <div className="text-center py-12 text-muted">
+                          <Target size={48} className="mx-auto text-line mb-3" aria-hidden="true" />
+                          <p className="text-lg font-medium">No targets added yet.</p>
+                          <p className="text-sm mt-1">Add your first performance target to begin.</p>
+                          {targetsEditable && (
+                            <button className="btn btn-primary mt-4 gap-2" onClick={addTargetRow}><Plus size={14} /> Add First Target</button>
+                          )}
+                        </div>
+                      ) : (
+                        targets.map((t, idx) => (
+                          <TargetRow
+                            key={t.id || `new-${idx}`}
+                            target={t}
+                            index={idx}
+                            onChange={updateTargetRow}
+                            onRemove={handleRemoveTarget}
+                            onDuplicate={duplicateTargetRow}
+                          />
+                        ))
+                      )}
+                    </div>
+                    {targetsEditable && targets.length > 0 && (
+                      <div className="mt-6 pt-4 border-t border-line flex justify-end">
+                        <button className="btn btn-primary gap-2" onClick={saveTargets}><Save size={16} /> Save All Targets</button>
+                      </div>
+                    )}
+                  </TabPanel>
+
+                  <TabPanel value="competencies" className="p-5">
+                    <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                      <h3 className="font-display font-semibold flex items-center gap-2 text-ink">
+                        <Award size={18} className="text-accent" /> Competency Assessment
+                      </h3>
+                      <div className="flex gap-2">
+                        {competenciesEditable && <button className="btn btn-primary gap-2" onClick={openAddCompetency}><Plus size={14} /> Add Competency</button>}
+                        <button className="btn btn-outline gap-2" onClick={openCatalog}><RefreshCw size={14} /> Catalog</button>
+                      </div>
+                    </div>
+
+                    {compAddOpen && (
+                      <div className="rounded-lg border border-accent/30 bg-accent/5 p-4 space-y-3 mb-4" role="dialog" aria-labelledby="add-comp-title">
+                        <h4 id="add-comp-title" className="font-semibold text-ink">Add Competency from Catalog</h4>
+                        <div className="grid md:grid-cols-4 gap-3">
+                          <div className="md:col-span-2">
+                            <label className="mono-label text-xs">Competency</label>
+                            <select
+                              className="select"
+                              value={compForm.competencyId}
+                              onChange={e => setCompForm(f => ({ ...f, competencyId: e.target.value }))}
+                              aria-label="Select competency"
+                            >
+                              <option value="">Select competency…</option>
+                              {catalogList.map(c => (
+                                <option key={c.id} value={c.id}>{c.code} — {c.name}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="mono-label text-xs">Score (1–5)</label>
+                            <input type="number" min="1" max="5" step="0.1" className="input" value={compForm.score} onChange={e => setCompForm(f => ({ ...f, score: e.target.value }))} aria-label="Score" />
+                          </div>
+                          <div>
+                            <label className="mono-label text-xs">Weight %</label>
+                            <input type="number" min="0" max="100" className="input" value={compForm.weight} onChange={e => setCompForm(f => ({ ...f, weight: e.target.value }))} aria-label="Weight" />
+                          </div>
+                        </div>
+                        <div className="flex justify-end gap-2">
+                          <button className="btn btn-ghost" onClick={() => setCompAddOpen(false)}><X size={14} /> Cancel</button>
+                          <button className="btn btn-primary" onClick={submitAddCompetency}><Plus size={14} /> Add</button>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="space-y-3">
+                      {competencies.length === 0 ? (
+                        <div className="text-center py-12 text-muted">
+                          <Award size={48} className="mx-auto text-line mb-3" aria-hidden="true" />
+                          <p className="text-lg font-medium">No competencies added.</p>
+                          <p className="text-sm mt-1">Use the catalog to attach competencies to this review.</p>
+                          {competenciesEditable && (
+                            <button className="btn btn-primary mt-4 gap-2" onClick={openAddCompetency}><Plus size={14} /> Add First Competency</button>
+                          )}
+                        </div>
+                      ) : (
+                        competencies.map(c => (
+                          <CompetencyRow
+                            key={c.id}
+                            competency={c}
+                            onSave={payload => saveCompetencyItem(c, payload)}
+                            onRemove={() => removeCompetencyItem(c)}
+                            onEdit={editing => editing ? setEditingCompetencyId(c.id) : setEditingCompetencyId(null)}
+                            isEditing={editingCompetencyId === c.id}
+                            saving={false}
+                          />
+                        ))
+                      )}
+                    </div>
+                  </TabPanel>
+
+                  <TabPanel value="summary" className="p-5">
+                    {computed ? (
+                      <div className="space-y-4">
+                        <div className="grid md:grid-cols-3 gap-4">
+                          <div className="card p-5 text-center">
+                            <div className="mono-label text-xs uppercase text-muted">Part I — Performance</div>
+                            <div className="font-mono text-3xl font-bold text-ink mt-1">{fmt(computed.partI)}</div>
+                            <div className="text-xs text-muted mt-1">Weighted average of output groups</div>
+                          </div>
+                          <div className="card p-5 text-center">
+                            <div className="mono-label text-xs uppercase text-muted">Part II — Competency</div>
+                            <div className="font-mono text-3xl font-bold text-ink mt-1">{fmt(computed.partII)}</div>
+                            <div className="text-xs text-muted mt-1">Weighted average of competencies</div>
+                          </div>
+                          <div className="card p-5 text-center">
+                            <div className="mono-label text-xs uppercase text-muted">Final Rating</div>
+                            <RatingBadge rating={{ final: computed.rating, adjectival: computed.adjectival }} size="lg" />
+                          </div>
+                        </div>
+
+                        <div className="card p-4">
+                          <h4 className="font-display font-semibold mb-3 flex items-center gap-2 text-ink">
+                            <Star size={18} className="text-accent" /> Output Group Breakdown
+                          </h4>
+                          <div className="grid md:grid-cols-3 gap-3">
+                            {WEIGHT_FIELDS.filter(w => w.key !== 'competencyWeight').map(w => (
+                              <div key={w.key} className="p-3 rounded border border-line bg-bg/50 text-center">
+                                <div className="mono-label text-xs uppercase text-muted">{w.label}</div>
+                                <div className="font-mono text-xl text-ink mt-1">{computed.groupAverages?.[w.key] != null ? fmt(computed.groupAverages[w.key]) : '—'}</div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="card p-4">
+                          <h4 className="font-display font-semibold mb-3 flex items-center gap-2 text-ink">
+                            <User size={18} className="text-accent" /> Weight Allocation
+                          </h4>
+                          <div className="grid md:grid-cols-4 gap-3">
+                            {WEIGHT_FIELDS.map(w => (
+                              <div key={w.key} className="p-3 rounded border border-line bg-bg/50 text-center">
+                                <div className="mono-label text-xs uppercase text-muted">{w.label}</div>
+                                <div className="font-mono text-xl text-ink mt-1">{selected[w.key] ?? 0}%</div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        {review.comments && (
+                          <div className="card p-4">
+                            <h4 className="font-display font-semibold mb-2 flex items-center gap-2 text-ink">
+                              <FileText size={18} className="text-accent" /> Comments
+                            </h4>
+                            <p className="text-sm text-ink whitespace-pre-wrap">{review.comments}</p>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="text-center py-12 text-muted">
+                        <Calculator size={48} className="mx-auto text-line mb-3" aria-hidden="true" />
+                        <p className="text-lg font-medium">No computed ratings yet.</p>
+                        <p className="text-sm mt-1">Click <strong>Compute</strong> after saving targets and competencies to calculate ratings.</p>
+                        {canEdit && <button className="btn btn-primary mt-4 gap-2" onClick={handleCompute}><Calculator size={14} /> Compute Review</button>}
+                      </div>
+                    )}
+                  </TabPanel>
+                </Tabs>
               </div>
-
-              <div className="card p-5">
-                <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
-                  <h3 className="font-display font-semibold flex items-center gap-2 text-ink"><User size={18} className="text-accent" /> Part II — Competency Assessment</h3>
-                  <div className="flex gap-2">
-                    {canEdit && <button className="btn btn-ghost text-xs" onClick={openAddCompetency}><Plus size={14} /> Add Competency</button>}
-                    <button className="btn btn-ghost text-xs" onClick={openCatalog}><RefreshCw size={14} /> Catalog</button>
-                  </div>
-                </div>
-
-                {compAddOpen && (
-                  <div className="rounded-lg border border-line p-3 space-y-3 mb-4">
-                    <div className="grid md:grid-cols-4 gap-2">
-                      <div className="md:col-span-2">
-                        <label className="mono-label text-xs">Competency</label>
-                        <select className="select" value={compForm.competencyId} onChange={e => setCompForm(f => ({ ...f, competencyId: e.target.value }))}>
-                          <option value="">Select competency…</option>
-                          {catalogList.map(c => (
-                            <option key={c.id} value={c.id}>{c.code} — {c.name}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="mono-label text-xs">Score (1–5)</label>
-                        <input type="number" min="1" max="5" step="0.1" className="input" value={compForm.score} onChange={e => setCompForm(f => ({ ...f, score: e.target.value }))} />
-                      </div>
-                      <div>
-                        <label className="mono-label text-xs">Weight %</label>
-                        <input type="number" min="0" max="100" className="input" value={compForm.weight} onChange={e => setCompForm(f => ({ ...f, weight: e.target.value }))} />
-                      </div>
-                    </div>
-                    <div className="flex justify-end gap-2">
-                      <button className="btn btn-ghost" onClick={() => setCompAddOpen(false)}><X size={14} /> Cancel</button>
-                      <button className="btn btn-primary" onClick={submitAddCompetency}><Plus size={14} /> Add</button>
-                    </div>
-                  </div>
-                )}
-
-                <div className="space-y-2">
-                  {competencies.length === 0 && <p className="text-sm text-muted">No competencies added. Use the catalog to attach competencies.</p>}
-                  {competencies.map(c => (
-                    <CompetencyRow
-                      key={c.id}
-                      c={c}
-                      onSave={payload => saveCompetencyItem(c, payload)}
-                      onRemove={() => removeCompetencyItem(c)}
-                    />
-                  ))}
-                </div>
-              </div>
-
-              {computed && (
-                <div className="card p-5">
-                  <h3 className="font-display font-semibold mb-3 flex items-center gap-2 text-ink"><TrendingUp size={18} className="text-accent" /> Part III — Summary of Ratings</h3>
-                  <div className="grid md:grid-cols-3 gap-4">
-                    <div className="p-4 rounded-lg border border-line">
-                      <div className="mono-label text-xs uppercase text-muted">Part I (Performance)</div>
-                      <div className="font-mono text-2xl text-ink">{computed.partI != null ? Number(computed.partI).toFixed(2) : '—'}</div>
-                    </div>
-                    <div className="p-4 rounded-lg border border-line">
-                      <div className="mono-label text-xs uppercase text-muted">Part II (Competency)</div>
-                      <div className="font-mono text-2xl text-ink">{computed.partII != null ? Number(computed.partII).toFixed(2) : '—'}</div>
-                    </div>
-                    <div className="p-4 rounded-lg border border-line">
-                      <div className="mono-label text-xs uppercase text-muted">Final Rating</div>
-                      <RatingBadge rating={{ final: computed.rating, adjectival: computed.adjectival }} />
-                    </div>
-                  </div>
-                  <div className="mt-4 grid md:grid-cols-3 gap-3 text-sm">
-                    {WEIGHT_FIELDS.filter(w => w.key !== 'competencyWeight').map(w => (
-                      <div key={w.key} className="p-3 rounded border border-line">
-                        <div className="mono-label text-xs uppercase text-muted">{w.label}</div>
-                        <div className="font-mono text-ink">{computed.groupAverages?.[w.key] != null ? Number(computed.groupAverages[w.key]).toFixed(2) : '—'}</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
             </>
           )}
-        </div>
+        </main>
       </div>
 
       <Modal
@@ -1037,15 +1318,20 @@ export default function IPCR() {
         size="lg"
         footer={
           <>
-            <button className="btn btn-ghost" onClick={() => setCreateOpen(false)}>Cancel</button>
+            <button className="btn btn-ghost" onClick={() => setCreateOpen(false)}><X size={15} /> Cancel</button>
             <button className="btn btn-primary" onClick={submitCreate}><Plus size={15} /> Create Review</button>
           </>
         }
       >
-        <div className="grid sm:grid-cols-2 gap-3">
+        <div className="grid sm:grid-cols-2 gap-4">
           <div className="sm:col-span-2">
             <label className="mono-label text-xs">Employee</label>
-            <select className="select" value={createForm.employeeId || ''} onChange={e => setCreateForm(f => ({ ...f, employeeId: e.target.value }))}>
+            <select
+              className="select"
+              value={createForm.employeeId || ''}
+              onChange={e => setCreateForm(f => ({ ...f, employeeId: e.target.value }))}
+              aria-label="Select employee"
+            >
               <option value="">Select employee…</option>
               {employees.map(e => (
                 <option key={e.id} value={e.id}>{e.lastName}, {e.firstName}</option>
@@ -1054,27 +1340,36 @@ export default function IPCR() {
           </div>
           <div>
             <label className="mono-label text-xs">Review Type</label>
-            <select className="select" value={createForm.reviewType || 'IPCR'} onChange={e => setCreateForm(f => ({ ...f, reviewType: e.target.value }))}>
-              <option value="IPCR">IPCR</option>
-              <option value="OPCR">OPCR</option>
+            <select
+              className="select"
+              value={createForm.reviewType || 'IPCR'}
+              onChange={e => setCreateForm(f => ({ ...f, reviewType: e.target.value }))}
+              aria-label="Review type"
+            >
+              {REVIEW_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
             </select>
           </div>
           <div>
             <label className="mono-label text-xs">Review Year</label>
-            <input type="number" min="1900" max="2100" className="input" value={createForm.reviewYear ?? ''} onChange={e => setCreateForm(f => ({ ...f, reviewYear: e.target.value }))} />
+            <input type="number" min="1900" max="2100" className="input" value={createForm.reviewYear ?? ''} onChange={e => setCreateForm(f => ({ ...f, reviewYear: e.target.value }))} aria-label="Review year" />
           </div>
           <div>
             <label className="mono-label text-xs">Period Start</label>
-            <input type="date" className="input" value={createForm.periodStart || ''} onChange={e => setCreateForm(f => ({ ...f, periodStart: e.target.value }))} />
+            <input type="date" className="input" value={createForm.periodStart || ''} onChange={e => setCreateForm(f => ({ ...f, periodStart: e.target.value }))} aria-label="Period start date" />
           </div>
           <div>
             <label className="mono-label text-xs">Period End</label>
-            <input type="date" className="input" value={createForm.periodEnd || ''} onChange={e => setCreateForm(f => ({ ...f, periodEnd: e.target.value }))} />
+            <input type="date" className="input" value={createForm.periodEnd || ''} onChange={e => setCreateForm(f => ({ ...f, periodEnd: e.target.value }))} aria-label="Period end date" />
           </div>
           {createForm.reviewType === 'IPCR' && (
             <div className="sm:col-span-2">
               <label className="mono-label text-xs">Parent OPCR (optional)</label>
-              <select className="select" value={createForm.parentReviewId || ''} onChange={e => setCreateForm(f => ({ ...f, parentReviewId: e.target.value }))}>
+              <select
+                className="select"
+                value={createForm.parentReviewId || ''}
+                onChange={e => setCreateForm(f => ({ ...f, parentReviewId: e.target.value }))}
+                aria-label="Parent OPCR"
+              >
                 <option value="">No parent OPCR</option>
                 {parentOptions.map(o => (
                   <option key={o.id} value={o.id}>
@@ -1088,13 +1383,13 @@ export default function IPCR() {
             {WEIGHT_FIELDS.map(w => (
               <div key={w.key}>
                 <label className="mono-label text-xs">{w.label} Weight %</label>
-                <input type="number" min="0" max="100" className="input" value={createForm[w.key] ?? ''} onChange={e => setCreateForm(f => ({ ...f, [w.key]: e.target.value }))} />
+                <input type="number" min="0" max="100" className="input" value={createForm[w.key] ?? ''} onChange={e => setCreateForm(f => ({ ...f, [w.key]: e.target.value }))} aria-label={`${w.label} weight`} />
               </div>
             ))}
           </div>
           <div className="sm:col-span-2">
             <label className="mono-label text-xs">Comments</label>
-            <textarea className="input min-h-24" value={createForm.comments || ''} onChange={e => setCreateForm(f => ({ ...f, comments: e.target.value }))} placeholder="Optional notes" />
+            <textarea className="input min-h-24" value={createForm.comments || ''} onChange={e => setCreateForm(f => ({ ...f, comments: e.target.value }))} placeholder="Optional notes" aria-label="Comments" />
           </div>
         </div>
       </Modal>
@@ -1106,12 +1401,12 @@ export default function IPCR() {
         </div>
         <ul className="max-h-64 overflow-auto divide-y divide-line border border-line rounded-lg">
           {catalogList.map(c => (
-            <li key={c.id} className="flex items-center justify-between gap-3 py-2 px-3">
+            <li key={c.id} className="flex items-center justify-between gap-3 py-2 px-3 hover:bg-accent/5 transition-colors">
               <div className="min-w-0">
                 <div className="text-sm font-medium text-ink">{c.name}</div>
                 <div className="text-xs text-muted">{c.code}{c.description ? ` — ${c.description}` : ''}</div>
               </div>
-              <button className="btn btn-ghost text-error px-2" onClick={() => catalogRemove(c)} aria-label="Remove competency"><Trash2 size={14} /></button>
+              <button className="btn btn-ghost text-error px-2" onClick={() => catalogRemove(c)} aria-label={`Remove ${c.name}`}><Trash2 size={14} /></button>
             </li>
           ))}
           {catalogList.length === 0 && <li className="text-sm text-muted py-6 text-center">No competencies in catalog.</li>}
@@ -1119,9 +1414,9 @@ export default function IPCR() {
         <div className="mt-4 pt-4 border-t border-line">
           <div className="mono-label text-xs text-muted mb-2">Add new competency</div>
           <div className="grid md:grid-cols-[1fr_1fr_2fr] gap-2">
-            <input className="input" placeholder="Code" value={catalogDraft.code} onChange={e => setCatalogDraft(d => ({ ...d, code: e.target.value }))} />
-            <input className="input" placeholder="Name" value={catalogDraft.name} onChange={e => setCatalogDraft(d => ({ ...d, name: e.target.value }))} />
-            <input className="input" placeholder="Description (optional)" value={catalogDraft.description} onChange={e => setCatalogDraft(d => ({ ...d, description: e.target.value }))} />
+            <input className="input" placeholder="Code" value={catalogDraft.code} onChange={e => setCatalogDraft(d => ({ ...d, code: e.target.value }))} aria-label="Competency code" />
+            <input className="input" placeholder="Name" value={catalogDraft.name} onChange={e => setCatalogDraft(d => ({ ...d, name: e.target.value }))} aria-label="Competency name" />
+            <input className="input" placeholder="Description (optional)" value={catalogDraft.description} onChange={e => setCatalogDraft(d => ({ ...d, description: e.target.value }))} aria-label="Description" />
           </div>
           <div className="mt-3 flex justify-end">
             <button className="btn btn-primary gap-2" onClick={catalogAdd}><Plus size={14} /> Add Competency</button>
