@@ -101,8 +101,8 @@ export default function Recruitment() {
   };
 
   const loadRefs = async () => {
-    try { const { data } = await positionsApi.list(); setPositions(data || []); } catch { setPositions([]); }
-    try { const { data } = await departmentsApi.list(); setDepartments(data || []); } catch { setDepartments([]); }
+    try { const { data } = await positionsApi.list(); setPositions(data?.items || []); } catch { setPositions([]); }
+    try { const { data } = await departmentsApi.list(); setDepartments(data?.items || []); } catch { setDepartments([]); }
   };
 
   const loadInterviews = async () => {
@@ -571,7 +571,7 @@ export default function Recruitment() {
 
       <div className="card p-3 mb-4">
         <div className="flex flex-wrap gap-1.5">
-          {[{ key: 'ALL', label: 'All' }, ...STAGES, { key: 'HIRED', label: 'Hired' }, { key: 'CLOSED', label: 'Closed' }].map(s => {
+          {[{ key: 'ALL', label: 'All' }, ...STAGES, { key: 'CLOSED', label: 'Closed' }].map(s => {
             const active = stage === s.key;
             const count = s.key === 'ALL' ? applicants.length : stageCount(s.key);
             return (

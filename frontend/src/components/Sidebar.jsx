@@ -44,7 +44,6 @@ const groups = [
       { name: 'Plantilla', path: '/plantilla', icon: FileBadge, roles: ['HR_MANAGER', 'ADMIN'] },
       { name: 'Designation', path: '/designation', icon: UserCog, roles: ['HR_MANAGER', 'ADMIN'] },
       { name: 'Recruitment', path: '/recruitment', icon: UserCog, roles: ['HR_MANAGER', 'ADMIN'] },
-      { name: 'MSB Minutes', path: '/msb-minutes', icon: ClipboardList, roles: ['HR_MANAGER', 'ADMIN'], capability: 'interviewCRUD' },
     ]
   },
   {

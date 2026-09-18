@@ -130,13 +130,16 @@ export default function Help() {
           title: 'Payroll & Benefits',
           icon: Calendar,
           items: [
-            { label: 'Payroll - New Period', description: 'Click Payroll. New Period. Set month and pay date.' },
-            { label: 'Payroll - Generate Run', description: 'Open period. View employees in run. Generate payslips.' },
-            { label: 'Payroll - Approve Run', description: 'Review run. Click Approve. Status becomes APPROVED.' },
-            { label: 'Payslips - Download', description: 'Navigate to Payslips page. Download as PDF.' },
-            { label: 'Bonuses - Add', description: 'Click Bonuses. Plus button. Select period. Enter amount.' },
-            { label: 'Loans - Create', description: 'Click Loans. New loan. Set amount, duration, interest rate.' },
-            { label: 'Loans - Repay', description: 'Loan appears on payslip as deduction. Track balance.' },
+            { label: 'Payroll - New Period', description: 'Set name, startDate, endDate, fiscalYear. Starts in DRAFT state.' },
+            { label: 'Payroll - Generate Run', description: 'Computes earnings, tardiness, loans, taxes per employee. Run listed by date.' },
+            { label: 'Payroll - Approve Run', description: 'DRAFT → APPROVED. Required before posting. Check items, click Approve.' },
+            { label: 'Payroll - Post Run', description: 'APPROVED → POSTED. Creates LedgerEntry, Payslip rows, marks loans paid. Irreversible.' },
+            { label: 'Payslips - Download', description: 'Print HTML via /payroll/payslips/:id/print or download from each row.' },
+            { label: 'Payroll - Bank Export', description: 'Export bank file from run detail. POSTED runs only.' },
+            { label: 'Bonuses - Add', description: 'Create bonus entry. Select period, enter amount and reason.' },
+            { label: 'Loans - Create', description: 'Define employee loan. Amount, duration, interest rate, terms.' },
+            { label: 'Loans - Repay', description: 'Deductions appear on payslips. Track principal and interest separately.' },
+            { label: 'Reports - Payroll Summary', description: 'Aggregated totals per POSTED run. CSV export available.' },
           ]
         },
         {
@@ -146,8 +149,11 @@ export default function Help() {
             { label: 'Audit - View Log', description: 'All changes logged: WHO did WHAT to WHAT and WHEN.' },
             { label: 'Audit - Filter by User', description: 'See all actions performed by a specific user.' },
             { label: 'DIBAR - Disqualification', description: 'Record employee disqualifications. Set status to DISEMPOWERED.' },
-            { label: 'Reports - Generate', description: 'Payroll summary, CSV exports, compliance reports.' },
-            { label: 'Reports - Preview', description: 'Click Preview to open report viewer modal. Generate uses pdfmake/ExcelJS.' },
+            { label: 'Reports - Payroll Summary', description: 'Aggregated totals per run. Only POSTED runs shown by default.' },
+            { label: 'Reports - COA Payroll Register', description: 'Per-employee register with deduction breakdown. Export CSV.' },
+            { label: 'Reports - Payroll Journal', description: 'Ledger entries per run. Export CSV for reconciliation.' },
+            { label: 'Reports - Employee Master List', description: 'Full personnel directory export as CSV.' },
+            { label: 'Reports - Service Record', description: 'Employee service history. PDF rendering in progress.' },
           ]
         },
         {

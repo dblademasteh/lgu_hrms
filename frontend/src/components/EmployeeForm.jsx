@@ -92,8 +92,8 @@ export default function EmployeeForm({ formId, initial, submitLabel = 'Save', on
   const posName = useMemo(() => Object.fromEntries(positions.map(p => [p.id, p.title])), [positions]);
 
   useEffect(() => {
-    departmentsApi.list().then(r => setDepartments(r.data ?? r)).catch(() => {});
-    api.get('/positions').then(r => setPositions(r.data ?? [])).catch(() => {});
+    departmentsApi.list().then(r => setDepartments(r.data?.items ?? [])).catch(() => {});
+    api.get('/positions').then(r => setPositions(r.data?.items ?? [])).catch(() => {});
   }, []);
 
   useEffect(() => {

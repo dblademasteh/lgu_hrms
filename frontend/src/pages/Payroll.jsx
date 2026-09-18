@@ -49,7 +49,7 @@ export default function Payroll() {
   const loadPeriods = async () => {
     try {
       const r = await payrollApi.listPeriods();
-      setPeriods(Array.isArray(r.data) ? r.data : []);
+      setPeriods(r.data?.items ?? r.data ?? []);
     } catch {
       /* periods degrade silently */
     }

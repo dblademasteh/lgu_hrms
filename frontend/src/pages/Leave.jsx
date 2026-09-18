@@ -135,7 +135,7 @@ export default function Leave() {
 
   useEffect(() => {
     leaveApi.listRequests()
-      .then(r => setRequests(r.data))
+      .then(r => setRequests(r.data?.items ?? r.data ?? []))
       .catch(() => toast('Failed to load leave requests', 'error'))
       .finally(() => setLoading(false));
   }, []);
@@ -337,7 +337,7 @@ export default function Leave() {
                         <div className="flex flex-col gap-1">
                           <span className={`badge ${badgeTone(r.status)}`}>{r.status}</span>
                           <div className="flex flex-wrap gap-1">
-                            {flags.map(f => flagBadge(f))}
+                            {flags.map(f => <span key={f}>{flagBadge(f)}</span>)}
                           </div>
                         </div>
                       </td>

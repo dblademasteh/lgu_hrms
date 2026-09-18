@@ -12,6 +12,8 @@ import Employees from './pages/Employees.jsx';
 import Organization from './pages/Organization.jsx';
 import Payroll from './pages/Payroll.jsx';
 import Leave from './pages/Leave.jsx';
+import Loans from './pages/Loans.jsx';
+import Bonus from './pages/Bonus.jsx';
 import Audit from './pages/Audit.jsx';
 import Reports from './pages/Reports.jsx';
 import Users from './pages/Users.jsx';
@@ -79,6 +81,8 @@ function createAppRouter() {
         { path: '/organization', element: <Protected roles={['ADMIN', 'HR_MANAGER', 'DEPARTMENT_HEAD', 'SUPER_ADMIN']}><Organization /></Protected> },
         { path: '/payroll', element: <Protected roles={['ADMIN', 'HR_MANAGER', 'PAYROLL_OFFICER', 'SUPER_ADMIN']} capability="payrollRead"><Payroll /></Protected> },
         { path: '/leave', element: <Protected roles={['ADMIN', 'HR_MANAGER', 'DEPARTMENT_HEAD', 'SUPER_ADMIN']} capability="leaveApproval"><Leave /></Protected> },
+        { path: '/loans', element: <Protected roles={['ADMIN', 'HR_MANAGER', 'PAYROLL_OFFICER', 'SUPER_ADMIN']} capability="loansCRUD"><Loans /></Protected> },
+        { path: '/bonus', element: <Protected roles={['ADMIN', 'HR_MANAGER', 'PAYROLL_OFFICER', 'SUPER_ADMIN']} capability="payrollRuns"><Bonus /></Protected> },
         { path: '/audit', element: <Protected roles={['ADMIN', 'AUDITOR', 'SUPER_ADMIN']}><Audit /></Protected> },
         { path: '/reports', element: <Protected roles={['ADMIN', 'HR_MANAGER', 'PAYROLL_OFFICER', 'AUDITOR', 'SUPER_ADMIN']}><Reports /></Protected> },
         { path: '/users', element: <Protected roles={['ADMIN', 'SUPER_ADMIN']} capability="manageUsersAndRoles"><Users /></Protected> },

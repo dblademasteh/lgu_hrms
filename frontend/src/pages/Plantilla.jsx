@@ -23,9 +23,9 @@ export default function Plantilla() {
       const { data } = await plantillaApi.list({ search: search || undefined, status: statusFilter || undefined });
       setItems(data.items || []);
       const depts = await departmentsApi.list();
-      setDeptList(depts.data || []);
+      setDeptList(depts.data?.items || []);
       const positions = await positionsApi.list();
-      setPosList(positions.data || []);
+      setPosList(positions.data?.items || []);
     } catch (e) {
       toast('Failed to load data', 'error');
     }
