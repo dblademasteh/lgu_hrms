@@ -647,6 +647,27 @@ async function seedTenant(tenantId, tenantCode, lguLevel, hash) {
     data: { externalId: `EMP-${tenantCode}-0001` },
   });
 
+  // ── L&D seed pool: training programs + enrollments ───────────────────
+  // `TrainingProgram.code` is globally unique → codes are prefixed per tenant.
+  // Enrollments: mixed statuses (COMPLETED with completedAt, ENROLLED, CANCELLED).
+  const trainingProgramsData = [
+    { code: `TRN-${tenantCode}-CSC-ETH-01`, title: 'Ethics & Accountability in Public Service', description: 'CSC-mandated orientation on RA 6713, public service values, and accountable governance.', durationHours: 8 },
+    { code: `TRN-${tenantCode}-ARTA-FS-01`, title: 'Frontline Services & Anti-Red Tape', description: "RA 11032 Citizen's Charter compliance, frontline service excellence, and complaint handling.", durationHours: 8 },
+    { code: `TRN-${tenantCode}-HR-201-01`, title: '201 File & Records Management', description: 'Civil service 201 file standards, records lifecycle, and data privacy (RA 10173) essentials.', durationHours: 8 },
+    { code: `TRN-${tenantCode}-SPMS-01`, title: 'SPMS Orientation & IPCR/OPCR Writing', description: 'CSC MC No. 6 s. 2012 five-point scale, target-setting, success indicators, and rating-sheet preparation.', durationHours: 12 },
+    { code: `TRN-${tenantCode}-IT-CL-01`, title: 'Basic Computer Literacy & Productivity Tools', description: 'Office productivity suite, government email etiquette, and basic cybersecurity hygiene.', durationHours: 24 },
+    { code: `TRN-${tenantCode}-DRRM-01`, title: 'DRRM Basic Response Training', description: 'RA 10121 disaster preparedness, first response, and contingency planning for LGU personnel.', durationHours: 16 },
+    { code: `TRN-${tenantCode}-GAD-01`, title: 'GAD Sensitivity & Gender-Fair Language', description: 'RA 9710 Magna Carta of Women, gender-fair language, and GAD mainstreaming in the workplace.', durationHours: 8 },
+    { code: `TRN-${tenantCode}-FIN-PAY-01`, title: 'Payroll & Government Contributions Orientation', description: 'GSIS, PhilHealth, Pag-IBIG contribution rules, BIR withholding tax, and payroll controls.', durationHours: 12 },
+  ];
+  for (const prog of trainingProgramsData) {
+    await prisma.trainingProgram.upsert({
+      where: { code: prog.code },
+      update: { tenantId, title: prog.title, description: prog.description, durationHours: prog.durationHours },
+      create: { ...prog, tenantId },
+    });
+  }
+
   const currentMonth = new Date().toISOString().slice(0, 7);
   const currentYear = new Date().getFullYear();
   await prisma.payrollPeriod.upsert({
@@ -666,6 +687,39 @@ async function seedTenant(tenantId, tenantCode, lguLevel, hash) {
   const today = new Date();
   const dateStr = today.toISOString().slice(0, 10);
   const seededEmployees = await prisma.employee.findMany({ where: { tenantId } });
+
+  // ── L&D enrollment seed: mixed statuses across the seeded employees ──
+  const seededProgramRows = await prisma.trainingProgram.findMany({ where: { tenantId }, orderBy: { code: 'asc' } });
+  const enrolledSeedRows = [
+    { empIdx: 0, progIdx: 0, status: 'COMPLETED', completedDaysAgo: 210 }, // Santos — Ethics (done)
+    { empIdx: 0, progIdx: 3, status: 'ENROLLED' },                          // Santos — SPMS (current)
+    { empIdx: 1, progIdx: 7, status: 'COMPLETED', completedDaysAgo: 150 }, // Dela Cruz — Payroll (done)
+    { empIdx: 1, progIdx: 1, status: 'ENROLLED' },                          // Dela Cruz — ARTA (current)
+    { empIdx: 2, progIdx: 4, status: 'COMPLETED', completedDaysAgo: 90 },  // Reyes — Computer Literacy (done)
+    { empIdx: 2, progIdx: 6, status: 'ENROLLED' },                          // Reyes — GAD (current)
+    { empIdx: 3, progIdx: 2, status: 'CANCELLED' },                        // Mendoza — 201 File (cancelled)
+    { empIdx: 4, progIdx: 7, status: 'COMPLETED', completedDaysAgo: 150 }, // Rodriguez — Payroll (done)
+    { empIdx: 5, progIdx: 4, status: 'ENROLLED' },                          // Villanueva — Computer Literacy (current)
+    { empIdx: 5, progIdx: 5, status: 'ENROLLED' },                          // Villanueva — DRRM (current)
+  ];
+  for (const row of enrolledSeedRows) {
+    const employee = seededEmployees[row.empIdx];
+    const program = seededProgramRows[row.progIdx];
+    if (!employee || !program) continue;
+    const existing = await prisma.trainingEnrollment.findFirst({
+      where: { tenantId, employeeId: employee.id, programId: program.id },
+    });
+    if (existing) continue;
+    await prisma.trainingEnrollment.create({
+      data: {
+        employeeId: employee.id,
+        programId: program.id,
+        status: row.status,
+        completedAt: row.status === 'COMPLETED' ? new Date(Date.now() - row.completedDaysAgo * 24 * 60 * 60 * 1000) : null,
+        tenantId,
+      },
+    });
+  }
   for (const employee of seededEmployees.slice(0, 3)) {
     const existing = await prisma.attendance.findFirst({
       where: { tenantId, employeeId: employee.id, date: new Date(dateStr) },

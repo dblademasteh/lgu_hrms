@@ -281,12 +281,25 @@ Reads-vs-docs drift + error UX + leftover fixtures surfaced in a live scan:
 - [ ] **Notifications on REVIEW/approve requests** + **mid-year (MONITORING) capture screen** — still future work.
 
 ### Dead code / dead navigation
-- [ ] **Broken Sidebar links under Performance & L&D:** IDP `/idp`, Awards `/awards`, TNA `/tna`, L&D Plans `/ld-plans`, Evaluations `/training-evaluations` — no App.jsx routes, no backend mounts; all NotFound.
-- [ ] **Route stubs with missing imports (unmounted):** `routes/trainingEvaluations.js`, `awards.js`, `ldPlans.js`, `tna.js` import controllers + contracts that don't exist (`trainingEvaluationController`, `contracts/trainingEvaluations`, award/ldPlan/tna controllers+contracts all absent). Remove or implement.
-- [ ] **`performanceCRUD` capability referenced but undefined** (`awards.js` `requirePermission('performanceCRUD')` + Sidebar Awards entry) — not in `CAPABILITIES`/`DEFAULT_PERMISSIONS`; 403s everyone if ever mounted. Add a real `performanceCRUD`/`performanceRead` capability or drop the references.
+- [x] **Broken Sidebar links under Performance & L&D:** IDP `/idp`, Awards `/awards`, TNA `/tna`, L&D Plans `/ld-plans`, Evaluations `/training-evaluations` — **resolved**: Sidebar group now carries only Performance, IPCR/OPCR, Learning, Attendance (verified Sep 2026 scan); no dead links remain.
+- [x] **Route stubs with missing imports (unmounted):** `routes/trainingEvaluations.js`, `awards.js`, `ldPlans.js`, `tna.js` — **resolved**: stub files deleted (routes glob shows none); schema models remain for a deliberate mount-or-delete later.
+- [x] **`performanceCRUD` capability referenced but undefined** — **resolved**: `performanceRead` + `performanceCRUD` are real capabilities in `CAPABILITIES`/`DEFAULT_PERMISSIONS` (seeded per tenant); the referencing stubs are gone.
 - [ ] **`frontend/src/utils/performance.js` (`adjectivalDisplayName`, `incentiveFlags`) + `performanceEngine.adjectivalDisplayName`/`incentiveFlags` unused** — dead exports (incentive logic PBB/promotion/step not surfaced anywhere).
-- [ ] **`/performance` + `/training` still not matrix-backed** (AGENTS whitelist note) — newer modules (documents, appointments) set the pattern via `requirePermission`; fold these in.
-- [ ] **Learning.jsx Sidebar item is not rank/capability-gated** (no `roles`) → all roles see it, but route requires ADMIN/HR_MANAGER/SUPER_ADMIN + `trainingCRUD`.
+- [x] **`/performance` + `/training` still not matrix-backed** — **resolved**: `/training` mounts `router.use(requirePermission('trainingCRUD'))` and `/performance` is matrix-backed via `performanceRead`/`performanceCRUD` (verified in `routes/*.js`).
+- [x] **Learning.jsx Sidebar item is not rank/capability-gated** — **resolved**: Sidebar entry carries `roles: ['HR_MANAGER','ADMIN']` + `capability: 'trainingCRUD'`.
+
+### Learning (/learning) scan findings — Sep 2026 (verified live, reference: src/docs/PERFORMANCE_LEARNING.md)
+- [x] **500 — delete program with enrollments** — **fixed**: `trainingService.deleteProgram` guards with `countEnrollmentsByProgram` → 409 `ENROLLMENTS_EXIST` with count + guidance (verified live: DELETE program-with-enrollments → 409, was raw Prisma FK 500); UI confirm message corrected ("Programs with existing enrollments cannot be deleted — cancel or remove its enrollments first.").
+- [x] **Enroll dropdown capped at 50 employees** — **fixed**: `listEmployees({ page: 1, limit: 200 })` in the Learning load; dropdown now lists up to 200 employees.
+- [x] **Uncontrolled enroll `<select>`** — **fixed**: controlled via `enrollSelects` keyed by program id; reset to "" after successful enroll (no accidental re-enroll).
+- [x] **Stat cards count only the first 50 enrollments** — **fixed**: Enrollments card uses the paginated `total` from the response (`enrollmentsTotal`).
+- [x] **No search/filter UI** — **fixed**: debounced (300ms) search box for programs (code/title) + status filter for enrollments wired to the API (`search`, `status` params).
+- [ ] **`getProgram` (detail with enrollments) unused** — no program detail view; decide build-or-drop.
+- [x] **`fmtDate` no `timeZone: 'Asia/Manila'`** — **fixed**: `toLocaleDateString('en-US', { …, timeZone: 'Asia/Manila' })`.
+- [x] **No training seed data** — **fixed**: `seed.js` seeds 8 LGU-relevant programs per tenant (Ethics/ARTA/201-file/SPMS/IT/DRRM/GAD/Payroll, tenant-prefixed codes for the global `code` UNIQUE) + 10 mixed-status enrollments (COMPLETED with `completedAt`, ENROLLED, CANCELLED); verified live: programs=8, enrollments=10.
+- [x] **`trainingCRUD` missing from `CAPABILITY_ROUTES`** — **fixed**: `trainingCRUD: ['/training/programs CRUD', '/training/enrollments CRUD']` added to `backend/src/shared/permissions.js`.
+- [ ] **ESS has no training surface** — employees cannot see their own training history in the portal (DetailPane Training tab is HR-gated only).
+- [ ] **L&D pillar modeled but unwired** — `TrainingEvaluation` (Kirkpatrick L1–L4), `TrainingNeedsAssessment`, `LdPlan` have schema + migrations (`20260916103000`) but no routes/controllers/contracts/UI; mount or delete.
 
 ### Design-token nits (don't block)
 - [ ] `RatingStars.jsx` uses `text-amber-400` (hardcoded) — swap to a token (e.g. accent/star semantic).

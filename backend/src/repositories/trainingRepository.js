@@ -44,6 +44,9 @@ export async function findEnrollmentById(req, id){ return prisma.trainingEnrollm
 export async function findEnrollmentDuplicate(req, { programId, employeeId }){
   return prisma.trainingEnrollment.findFirst({ where: withTenant(req, { programId, employeeId }) });
 }
+export async function countEnrollmentsByProgram(req, programId){
+  return prisma.trainingEnrollment.count({ where: withTenant(req, { programId }) });
+}
 export async function updateEnrollment(req, id, data){
   const scope = withTenant(req, { id });
   const existing = await prisma.trainingEnrollment.findFirst({ where: scope });

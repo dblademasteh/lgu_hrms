@@ -24,8 +24,7 @@ export const CAPABILITIES = [
   { key: 'disqualificationCRUD', label: 'Manage DIBAR records' },
   { key: 'recruitmentCRUD', label: 'Manage vacancies and applicants' },
   { key: 'interviewCRUD', label: 'Manage interviews and selection' },
-  { key: 'trainingCRUD', label: 'Manage training programs and enrollments' },
-  { key: 'performanceRead', label: 'View performance reviews & competencies' },
+  { key: 'trainingCRUD', label: 'Manage training programs and enrollments' },  { key: 'performanceRead', label: 'View performance reviews & competencies' },
   { key: 'performanceCRUD', label: 'Manage performance reviews & competencies' },
   { key: 'loansCRUD', label: 'Manage employee loans' },
   { key: 'documentsCRUD', label: 'Manage documents (tracking & workflow)' },
@@ -50,6 +49,7 @@ export const CAPABILITY_ROUTES = {
   documentsTrack: ['/documents/tracking', '/documents/:id/tracking'],
   performanceRead: ['/performance GETs (reviews, targets, review competencies)', '/performance/competencies GETs'],
   performanceCRUD: ['/performance POST|PATCH|DELETE|compute', '/performance/:id/targets writes', '/performance/:id/competencies writes', '/performance/competencies writes'],
+  trainingCRUD: ['/training/programs CRUD', '/training/enrollments CRUD'],
 };
 
 /**

@@ -11,7 +11,8 @@ import { BookOpen, User, FileText, Plus, Calendar, RefreshCw, X, Save, CheckCirc
 
 const errMsg = e => e?.response?.data?.error?.message || e?.message || 'Failed';
 const emptyForm = { code: '', title: '', description: '', durationHours: 0 };
-const fmtDate = d => (d ? new Date(d).toLocaleDateString() : '—');
+const fmtDate = d => (d ? new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'Asia/Manila' }) : '—');
+const ENROLLMENT_STATUSES = ['ENROLLED', 'COMPLETED', 'CANCELLED'];
 
 export default function Learning() {
   const toast = useToast();
@@ -21,7 +22,11 @@ export default function Learning() {
   const [programs, setPrograms] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [enrollments, setEnrollments] = useState([]);
+  const [enrollmentsTotal, setEnrollmentsTotal] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [programSearch, setProgramSearch] = useState('');
+  const [enrollmentStatus, setEnrollmentStatus] = useState('');
+  const [enrollSelects, setEnrollSelects] = useState({});
   const [showAdd, setShowAdd] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(emptyForm);
@@ -34,22 +39,27 @@ export default function Learning() {
     setLoading(true);
     try {
       const [progs, emps, enrs] = await Promise.all([
-        listPrograms({}),
-        listEmployees({ page: 1 }),
-        listEnrollments({ page: 1 }),
+        listPrograms({ search: programSearch || undefined }),
+        listEmployees({ page: 1, limit: 200 }),
+        listEnrollments({ page: 1, limit: 200, status: enrollmentStatus || undefined }),
       ]);
       setPrograms(progs.items || []);
       setEmployees(emps.items || []);
       setEnrollments(enrs.items || []);
+      setEnrollmentsTotal(enrs.total ?? (enrs.items || []).length);
     } catch (e) {
       toast(errMsg(e), 'error');
     } finally {
       setLoading(false);
     }
   };
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    const t = setTimeout(() => { load(); }, 300);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [programSearch, enrollmentStatus]);
 
-  const totalEnrollments = enrollments.length;
+  const totalEnrollments = enrollmentsTotal;
   const activeEnrollments = enrollments.filter(e => e.status === 'ENROLLED').length;
 
   const onSubmitCreate = async e => {
@@ -114,6 +124,7 @@ export default function Learning() {
       setLoading(true);
       await createEnrollment({ programId, employeeId, status: 'ENROLLED' });
       toast('Employee enrolled.', 'success');
+      setEnrollSelects(s => ({ ...s, [programId]: '' })); // reset the picker to avoid accidental re-enroll
       load();
     } catch (err) {
       toast(errMsg(err), 'error');
@@ -179,6 +190,31 @@ export default function Learning() {
         </div>
       </div>
 
+      <div className="card p-4 mb-4 flex flex-wrap items-center gap-3">
+        <label className="flex items-center gap-2 flex-1 min-w-56">
+          <span className="mono-label text-xs uppercase text-muted">Search programs</span>
+          <input
+            className="input"
+            placeholder="Code or title…"
+            value={programSearch}
+            onChange={e => setProgramSearch(e.target.value)}
+            aria-label="Search programs by code or title"
+          />
+        </label>
+        <label className="flex items-center gap-2">
+          <span className="mono-label text-xs uppercase text-muted">Status</span>
+          <select
+            className="select w-auto"
+            value={enrollmentStatus}
+            onChange={e => setEnrollmentStatus(e.target.value)}
+            aria-label="Filter enrollments by status"
+          >
+            <option value="">All statuses</option>
+            {ENROLLMENT_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </label>
+      </div>
+
       <div className="grid gap-4 md:grid-cols-3 mb-4">
         <div className="card p-4">
           <div className="flex items-center gap-2 mb-2">
@@ -233,7 +269,12 @@ export default function Learning() {
                   <td className="font-mono">{p.durationHours}</td>
                   {canManage && (
                     <td className="text-right">
-                      <select onChange={e => e.target.value && enroll(p.id, e.target.value)} defaultValue="">
+                      <select
+                        className="select w-auto"
+                        value={enrollSelects[p.id] || ''}
+                        onChange={e => enroll(p.id, e.target.value)}
+                        aria-label={`Enroll employee in ${p.title}`}
+                      >
                         <option value="">Enroll employee…</option>
                         {employees.map(emp => (
                           <option key={emp.id} value={emp.id}>
@@ -412,7 +453,7 @@ export default function Learning() {
         onClose={() => setDeleteProgramTarget(null)}
         onConfirm={onDeleteProgram}
         title="Delete training program"
-        message={`Delete program "${deleteProgramTarget?.code}"? This will also remove its enrollments.`}
+        message={`Delete program "${deleteProgramTarget?.code}"? Programs with existing enrollments cannot be deleted — cancel or remove its enrollments first.`}
         confirmLabel="Delete"
         danger
       />

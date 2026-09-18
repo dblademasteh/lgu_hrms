@@ -3,7 +3,21 @@ export const listPrograms = (req, params) => repo.findPrograms(req, params);
 export const getProgram = (req, id) => repo.findProgramById(req, id);
 export const createProgram = (req, data) => repo.createProgram(req, data);
 export const updateProgram = (req, id, data) => repo.updateProgram(req, id, data);
-export const deleteProgram = (req, id) => repo.deleteProgram(req, id);
+export const deleteProgram = (req, id) => {
+  // TrainingEnrollment FK is ON DELETE RESTRICT — deleting a program with
+  // enrollments would surface a raw Prisma FK error as a 500. Enrollments are
+  // historical records: block the delete (409) until they are removed.
+  return (async () => {
+    const enrollmentCount = await repo.countEnrollmentsByProgram(req, id);
+    if (enrollmentCount > 0) {
+      const e = new Error(`Cannot delete this program while it has ${enrollmentCount} enrollment${enrollmentCount === 1 ? '' : 's'}. Cancel or delete its enrollments first.`);
+      e.status = 409;
+      e.code = 'ENROLLMENTS_EXIST';
+      throw e;
+    }
+    return repo.deleteProgram(req, id);
+  })();
+}
 export const listEnrollments = (req, params) => repo.findEnrollments(req, params);
 
 export async function createEnrollment(req, data) {
