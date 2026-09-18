@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { Moon, Sun, LayoutGrid, Bell, User, ShieldCheck, Info, Settings as SettingsIcon, Database, Table, X, Save, Check, Plus, Download, Key, LogOut, UserX, Pencil, Trash2, Type, Palette, RefreshCw, Edit3, Server, Activity, Clock, HardDrive, Hash, AlertTriangle, Link2, Power, PowerOff, Globe, Webhook, ChevronLeft, ChevronRight, Zap, Wrench, Upload } from 'lucide-react';
 import Layout from '../components/Layout.jsx';
 import { useTheme, toggleTheme } from '../theme.js';
@@ -270,6 +270,16 @@ export default function Settings() {
   useEffect(() => { localStorage.setItem('lgu-ui-scale', String(uiScale)); document.documentElement.style.setProperty('--ui-scale', `${uiScale}%`); }, [uiScale]);
 
   const save = (msg) => toast(msg, 'success');
+
+  // UI density: notify only on the final committed value (slider release / blur /
+  // keyboard end), never on every live drag step.
+  const uiScaleToastRef = useRef(uiScale);
+  const commitUiScale = () => {
+    if (uiScale !== uiScaleToastRef.current) {
+      uiScaleToastRef.current = uiScale;
+      save(`UI density ${uiScale}%`);
+    }
+  };
 
   const confirmDeleteApiKey = async () => {
     if (!deleteKeyTarget) return;
@@ -555,7 +565,7 @@ export default function Settings() {
                       <span className="mono-label text-xs">{uiScale}%</span>
                     </div>
                     <p className="text-xs text-muted">Scale spacing & components</p>
-                    <input type="range" min="80" max="120" value={uiScale} onChange={e => { setUiScale(Number(e.target.value)); save(`UI density ${uiScale}%`); }} className="w-full accent-accent" />
+                    <input type="range" min="80" max="120" value={uiScale} onChange={e => setUiScale(Number(e.target.value))} onPointerUp={commitUiScale} onKeyUp={commitUiScale} onBlur={commitUiScale} className="w-full accent-accent" />
                     <div className="flex justify-between text-[10px] mono-label text-muted"><span>Comfortable</span><span>Compact</span></div>
                   </div>
                   <div className="p-5 border border-line rounded-xl bg-bg/50 space-y-3">
