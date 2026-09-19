@@ -15,7 +15,7 @@
 ## What is already wired (verified)
 
 - **No mocks.** All four pages call real APIs; `mock.js` is limited to the allowed `badgeTone()` static.
-- Employees page: server-side search/filter/pagination (debounced), soft delete (`deletedAt`), CSV export, `EmployeeForm` (CSC 201 tabs: Personal/Family/Education/Work Exp/Eligibility/Awards), detail via `Modal` + `DetailPane` (9 read-only relation tabs).
+- Employees page: **server-side search/filter/pagination** (debounced 300ms search; dept filter from `departmentsApi`; stats + pagination from server counts — see the reanalysis section below), soft delete (`deletedAt`), CSV export (selection-aware + paged export-all), `EmployeeForm` (CSC 201 tabs: Personal/Family/Education/Work Exp/Eligibility/Awards), detail via `Modal` + `DetailPane` (9 read-only relation tabs).
 - Organization: department tree CRUD (`parentId`/`level`), unit types, LGU-category flags, Mandatory/HRM Office/Sanggunian toggles.
 - ESS: profile, payslips + print, leave requests + filing (server-side business rules), attendance month view.
 - Global middleware order `requireAuth → tenantContext → auditLog` covers all 11 Workforce mutating endpoints exactly once (4 employees + 3 sections + 3 departments + 1 ESS leave). No double-audit.
@@ -50,6 +50,36 @@
 12. **Employees** loading skeleton `colSpan={7}` on an 11-column table; no re-fetch after delete (optimistic only); duplicates `MasterTable`.
 13. **Dead code:** `EmployeeProfileModal.jsx` (whole component — Employees uses `Modal`+`DetailPane`), `bulkImportEmployees` (`api/employees.js:31`), `SECTION_NAMES` (`api/employeeSections.js:14`).
 14. **Contract drift:** AGENTS.md lists `backend/src/shared/contracts/employeeSections.js`; only inline route Zod exists (file absent).
+
+## Employees page reanalysis (Sep 2026 — 1k-employee scan)
+
+Re-scanned `Employees.jsx` + `EmployeeForm.jsx` + `DetailPane.jsx` after seeding 1,000 employees per tenant. Backend verified solid; the frontend list layer is the problem.
+
+### Verified live (P1 — FIXED Sep 2026, verified against 1k employees)
+
+- [x] **200-row ceiling — fixed (server-side list).** The page now passes `search`/`departmentId`/`status`/`page` to `listEmployees` (all validated by `listEmployeesSchema`, DEPARTMENT_HEAD dept-scope enforced backend-side); stats cards read server counts (two `limit:1` count queries: total + ACTIVE; inactive = total−active); pagination driven by the response `total`; search debounced 300ms; the dept filter lists ALL departments from `departmentsApi` (UUID values — was built from page-1 rows only). Backend search OR-clause extended with `position: { title: { contains } }` so position search keeps working server-side. **Verified live**: `page=2&limit=20` → 20 items/total=1000; `search=Accountant` → 129; `search=HRMO` → 95; `status=ACTIVE` → 900; export-all loop (200/page × 5) reaches all 1,000.
+
+- [x] **Reads-vs-docs drift — closed.** The "server-side search/filters/pagination" claim in this doc and the TODOS Done item is now true again; the drift note above records the regression window.
+
+### Verified minor issues (FIXED unless noted)
+
+- [x] **Duplicate email column** — Email column dropped; the Name-cell sub-line is the single email surface.
+- [x] **Stale selection after delete** — `remove()` now drops the removed id from the `selection` Set and decrements the headcount cards (count/export stay honest); export toolbar button added (`Download` icon), selection-aware, with a paged export-all loop (backend caps `limit` at 200).
+- [x] **Dead API exports** — `getEmployee` + `bulkImportEmployees` removed from `api/employees.js` (user chose removal over wiring a CSV import UI; can revisit as a feature later).
+- [x] **EmployeeForm silent catches** — departments/positions loads toast on failure (was `catch(() => {})` — silent empty pickers broke create/edit).
+- [x] **Skeleton `colSpan`** — fixed to 10 (matches the table after the Email column removal).
+- [ ] **DetailPane print prints the whole page:** `window.print()` (`DetailPane.jsx:240`) includes the table behind the pane. The `buildIPCRFHtml` + `openHtmlString` pattern in `lib/print.js` is the house transport for a proper 201/Service Record print. (Deferred — full-sweep scope.)
+- [ ] **DetailPane attendance tab unpaginated:** one employee now carries ~250 attendance rows rendered in a single table (related to the general unpaginated sub-resources finding; per-employee volume is manageable but should cap/paginate). (Deferred — full-sweep scope.)
+
+### Working well (verified — no action)
+
+- `monthlySalary` edit is safe: contract uses `z.coerce.number()` so the Decimal→string over JSON coerces.
+- `Modal` unmounts children when closed (`return null`) → `EmployeeForm` `useState(initial)` re-initializes on every open (no stale-form bug between edit targets).
+- All three filters reset `page` to 1 on change (no stale-page bug).
+- Selection: per-row checkboxes, select-all across `filtered`, selection-aware CSV export.
+- Status filter options match `EmployeeForm` STATUSES and the DB enum exactly.
+- CSV export quotes/escapes correctly; loading skeleton present (though `colSpan={7}` vs 11 columns — known item).
+- Backend `findEmployees` supports search (insensitive), `status`, `departmentId` + DEPARTMENT_HEAD dept-scope, `keyPosition`, skip/take pagination, `{items,total,page,limit}` response.
 
 ## Benchmark — CSC / PRIME-HRM best practice for Workforce
 
