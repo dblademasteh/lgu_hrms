@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Users, Building2, FileBadge, Banknote, CalendarDays, Clock,
-  ShieldCheck, BarChart3, UserCog, Landmark, Settings as SettingsIcon, Fingerprint, ShieldAlert, HelpCircle,
+  ShieldCheck, BarChart3, UserCog, Landmark, Settings as SettingsIcon, ShieldAlert, HelpCircle,
   Search, ChevronDown, Database, File, ClipboardList, FileText, Trophy, Calendar, Star
 } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore.js';
@@ -91,7 +91,6 @@ const groups = [
     label: 'Administration',
     items: [
       { name: 'Users & Roles', path: '/users', icon: UserCog, roles: ['ADMIN', 'SUPER_ADMIN'], capability: 'manageUsersAndRoles' },
-      { name: 'Biometric Devices', path: '/biometric-devices', icon: Fingerprint, roles: ['ADMIN'] },
       { name: 'Settings', path: '/settings', icon: SettingsIcon },
     ]
   },

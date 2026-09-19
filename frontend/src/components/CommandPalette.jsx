@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Badge, Search as SearchIcon, User, Home, BarChart3, FileText, Calendar, ShieldCheck, ShieldAlert, Users, Settings, Clock, Fingerprint, File, Activity } from 'lucide-react';
+import { Badge, Search as SearchIcon, User, Home, BarChart3, FileText, Calendar, ShieldCheck, ShieldAlert, Users, Settings, Clock, File, Activity } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore.js';
 import { useUserCapabilities } from '../config/permissions.js';
 
@@ -14,7 +14,6 @@ const pages = [
   { label: 'Payroll', path: '/payroll', icon: BarChart3, roles: ['ADMIN', 'HR_MANAGER', 'PAYROLL_OFFICER', 'SUPER_ADMIN'], capability: 'payrollRead' },
   { label: 'Leave & Appointments', path: '/leave', icon: Calendar, roles: ['ADMIN', 'HR_MANAGER', 'DEPARTMENT_HEAD', 'SUPER_ADMIN'], capability: 'leaveApproval' },
   { label: 'Attendance (DTR)', path: '/attendance', icon: Clock, roles: HR_LEAD },
-  { label: 'Biometric Devices', path: '/biometric-devices', icon: Fingerprint, roles: ['ADMIN', 'SUPER_ADMIN'] },
   { label: 'Appointments', path: '/appointments', icon: FileText, roles: ['ADMIN', 'HR_MANAGER', 'SUPER_ADMIN'], capability: 'appointmentsCRUD' },
   { label: 'Plantilla', path: '/plantilla', icon: FileText, roles: ['ADMIN', 'HR_MANAGER', 'SUPER_ADMIN'], capability: 'employeeRecordsCRUD' },
   { label: 'Designation', path: '/designation', icon: Users, roles: ['ADMIN', 'HR_MANAGER', 'SUPER_ADMIN'], capability: 'appointmentsCRUD' },

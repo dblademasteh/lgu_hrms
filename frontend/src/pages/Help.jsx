@@ -185,7 +185,6 @@ export default function Help() {
         { title: '/attendance/my', description: 'Your full attendance history for the selected period.' },
         { title: '/attendance/today', description: 'Today\'s punch events and computed hours.' },
         { title: '/kiosk', description: 'Login-less kiosk app for lobby terminals. Supports punch in/out and keypad entry.' },
-        { title: '/biometric-devices', description: 'ADMIN-only: manage biometric device connections, sync, and enrolment.' },
         { title: '/payroll', description: 'Create payroll periods, generate runs, approve, post, and download payslips.' },
         { title: '/payroll/payslips/:id/print', description: 'Printable HTML payslip for a specific payroll item.' },
         { title: '/leave', description: 'Submit leave requests, track status, view balances and history.' },
@@ -333,22 +332,6 @@ export default function Help() {
       title: 'Biometric Devices',
       icon: Fingerprint,
       items: [
-        {
-          title: 'Device Management',
-          items: [
-            { label: 'Add Device', description: 'Settings → Biometric Devices → Add. Configure IP, port (default 4370), and optional punch key.' },
-            { label: 'Sync Now', description: '<code>POST /biometric-devices/:id/sync</code> pulls logs from device. Deduplicates by [deviceId, deviceLogId].' },
-            { label: 'Manual Event Injection', description: 'Dev-only: <code>POST /dev/device-events</code> injects events through the real ingest+dedup pipeline — no hardware needed.' },
-          ]
-        },
-        {
-          title: 'How Sync Works',
-          items: [
-            { label: 'Deduplication', description: 'BiometricDeviceLog table keyed by [deviceId, deviceLogId]. No duplicate attendance entries.' },
-            { label: 'User Mapping', description: 'Device userId maps to Employee.employeeNumber via BiometricDeviceUser table.' },
-            { label: 'Auto-Polling', description: 'When <code>BIOMETRIC_POLLER=1</code> env is set, server polls every 30s (configurable via BIOMETRIC_POLL_MS).' },
-          ]
-        },
         {
           title: 'Enrolment',
           items: [
