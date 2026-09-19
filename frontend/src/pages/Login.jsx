@@ -77,22 +77,6 @@ export default function Login() {
     }
   };
 
-  const fillDemo = () => {
-    setTenant('DEFAULT');
-    setUsername('admin-default');
-    if (mode === 'password') setPassword('admin123');
-    setErrors({});
-    setAuthError('');
-  };
-
-  const fillSuperAdmin = () => {
-    setTenant('DEFAULT');
-    setUsername('superadmin');
-    if (mode === 'password') setPassword('admin123');
-    setErrors({});
-    setAuthError('');
-  };
-
   const handleSso = async () => {
     setSsoBusy(true);
     setSsoError('');
@@ -340,23 +324,6 @@ export default function Login() {
               )}
             </button>
           </form>
-
-          <button
-            type="button"
-            onClick={fillDemo}
-            className="mt-2 w-full text-left font-mono text-xs text-muted border border-dashed border-line rounded-lg px-3 py-2.5 hover:text-ink hover:border-accent/50 transition-colors"
-          >
-            Demo access — <span className="text-ink">admin / admin123</span>
-            <span className="float-right underline underline-offset-2">Autofill</span>
-          </button>
-          <button
-            type="button"
-            onClick={fillSuperAdmin}
-            className="w-full text-left font-mono text-xs text-muted border border-dashed border-line rounded-lg px-3 py-2.5 hover:text-ink hover:border-accent/50 transition-colors"
-          >
-            Platform owner — <span className="text-ink">superadmin / admin123</span>
-            <span className="float-right underline underline-offset-2">Autofill</span>
-          </button>
 
           <>
             <div className="flex items-center gap-3 my-4" aria-hidden="true">
