@@ -9,6 +9,7 @@ export async function findEmployees(req, { page = 1, limit = 50, search, departm
       { firstName: { contains: search, mode: 'insensitive' } },
       { lastName: { contains: search, mode: 'insensitive' } },
       { employeeNumber: { contains: search, mode: 'insensitive' } },
+      { position: { title: { contains: search, mode: 'insensitive' } } },
     ];
   }
   if (status) where.status = status;

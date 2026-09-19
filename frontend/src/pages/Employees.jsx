@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import Layout from '../components/Layout.jsx';
 import Modal from '../components/Modal.jsx';
 import ConfirmDialog from '../components/ConfirmDialog.jsx';
@@ -6,8 +6,13 @@ import EmployeeForm from '../components/EmployeeForm.jsx';
 import DetailPane from '../components/DetailPane.jsx';
 import { useToast } from '../components/Toast.jsx';
 import { listEmployees, createEmployee, updateEmployee, deleteEmployee } from '../api/employees.js';
-import { Plus, Search, Users, UserCheck, UserX, Filter } from 'lucide-react';
+import { departmentsApi } from '../api/departments.js';
+import { Plus, Search, Users, UserCheck, UserX, Filter, Download } from 'lucide-react';
 import { badgeTone } from '../data/mock.js';
+
+const PAGE_SIZE = 20;
+const EXPORT_PAGE_SIZE = 200; // backend list cap per request
+const EXPORT_MAX_PAGES = 50;  // hard cap 10,000 rows on export-all
 
 const initialsOf = name => (name ?? '').split(' ').filter(Boolean).map(p => p[0]).slice(0, 2).join('') || '—';
 
@@ -37,11 +42,14 @@ function mapEmployee(e) {
 export default function Employees() {
   const toast = useToast();
   const [rows, setRows] = useState([]);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [head, setHead] = useState({ total: 0, active: 0 });
   const [filters, setFilters] = useState({ search: '', dept: 'all', status: 'all' });
+  const [searchInput, setSearchInput] = useState('');
   const [page, setPage] = useState(1);
-  const pageSize = 20;
   const [selection, setSelection] = useState(new Set());
+  const [departments, setDepartments] = useState([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(blankEmployee);
@@ -49,45 +57,57 @@ export default function Employees() {
   const [detailEmp, setDetailEmp] = useState(null);
   const [confirmDel, setConfirmDel] = useState(null);
 
-  const load = async () => {
+  // Server-side list: search/dept/status/page are validated by `listEmployeesSchema`
+  // and executed by the backend (DEPARTMENT_HEAD dept-scope enforced there). The
+  // page renders the returned page only; `total` (whole filter scope) drives
+  // pagination — at 1k+ employees every row stays reachable.
+  const load = useCallback(async () => {
     try {
       setLoading(true);
-      const data = await listEmployees({ page: 1, limit: 200 });
+      const data = await listEmployees({
+        page,
+        limit: PAGE_SIZE,
+        search: filters.search || undefined,
+        departmentId: filters.dept === 'all' ? undefined : filters.dept,
+        status: filters.status === 'all' ? undefined : filters.status,
+      });
       setRows((data.items ?? []).map(mapEmployee));
+      setTotal(data.total ?? (data.items?.length ?? 0));
     } catch { toast('Failed to load employees','error'); }
     finally { setLoading(false); }
-  };
-  useEffect(() => { load(); }, []);
+  }, [page, filters, toast]);
+  useEffect(() => { load(); }, [load]);
 
-  const stats = useMemo(() => {
-    const total = rows.length;
-    const active = rows.filter(r=>r.status==='ACTIVE').length;
-    const inactive = total - active;
-    return { total, active, inactive };
-  }, [rows]);
+  // Debounced search commit (300ms): typing never fires a request per keystroke.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setFilters(f => (f.search === searchInput ? f : { ...f, search: searchInput }));
+      setPage(1);
+    }, 300);
+    return () => clearTimeout(t);
+  }, [searchInput]);
 
-  const departments = useMemo(() => {
-    const map = new Map();
-    rows.forEach(r => { if (r.dept && !map.has(r.dept)) map.set(r.dept, r.department); });
-    return [...map.entries()];
-  }, [rows]);
+  // Tenant headcount (server-side, filter-independent) for the stat cards.
+  useEffect(() => {
+    let stale = false;
+    (async () => {
+      try {
+        const [all, active] = await Promise.all([
+          listEmployees({ page: 1, limit: 1 }),
+          listEmployees({ page: 1, limit: 1, status: 'ACTIVE' }),
+        ]);
+        if (!stale) setHead({ total: all.total ?? 0, active: active.total ?? 0 });
+      } catch { /* list load toasts the failure; cards stay at zero */ }
+    })();
+    return () => { stale = true; };
+  }, []);
 
-  const filtered = useMemo(() => {
-    return rows.filter(r => {
-      const q = filters.search.toLowerCase();
-      const matchesQ = !q || [r.fullName, r.no, r.position].some(v => (v ?? '').toLowerCase().includes(q));
-      const matchesDept = filters.dept === 'all' || r.dept === filters.dept;
-      const matchesStatus = filters.status === 'all' || r.status === filters.status;
-      return matchesQ && matchesDept && matchesStatus;
-    });
-  }, [rows, filters]);
+  // Departments for the filter picker — all units, not just those on page 1.
+  useEffect(() => {
+    departmentsApi.list().then(r => setDepartments(r.data?.items ?? [])).catch(() => toast('Failed to load departments','error'));
+  }, [toast]);
 
-  const paged = useMemo(() => {
-    const start = (page-1)*pageSize;
-    return filtered.slice(start, start+pageSize);
-  }, [filtered, page]);
-
-  const totalPages = Math.max(1, Math.ceil(filtered.length/pageSize));
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   const openAdd = () => { setEditing(null); setForm(blankEmployee); setModalOpen(true); };
   const openEdit = emp => {
@@ -110,17 +130,44 @@ export default function Employees() {
     } catch(e){ toast(e?.response?.data?.error?.message||'Save failed','error'); }
   };
   const remove = async emp => {
-    try { await deleteEmployee(emp.id); setRows(l=>l.filter(r=>r.id!==emp.id)); toast('Employee deleted','info'); }
+    try {
+      await deleteEmployee(emp.id);
+      setRows(l=>l.filter(r=>r.id!==emp.id));
+      // Drop the removed id from the selection so the count/export stay honest.
+      setSelection(s=>{ const n=new Set(s); n.delete(emp.id); return n; });
+      setHead(h=>({ total: Math.max(0, h.total-1), active: emp.status==='ACTIVE' ? Math.max(0, h.active-1) : h.active }));
+      toast('Employee deleted','info');
+    }
     catch(e){ toast(e?.response?.data?.error?.message||'Delete failed','error'); }
   };
 
-  const exportCSV = () => {
-    const data = selection.size ? rows.filter(r=>selection.has(r.id)) : filtered;
-    const headers = ['employeeNumber','lastName','firstName','middleName','birthDate','gender','civilStatus','address','contactNumber','email','sssNumber','philhealthNumber','pagibigNumber','tinNumber','status','departmentId','positionId','hiredDate','monthlySalary'];
-    const lines = [headers.join(',')];
-    data.forEach(r=>{ const e=r.raw; lines.push(headers.map(h=>`"${String(e[h]??'').replace(/"/g,'""')}"`).join(',')); });
-    const blob = new Blob([lines.join('\n')],{type:'text/csv'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='employees.csv'; a.click(); URL.revokeObjectURL(url);
-    toast(`Exported ${data.length} employees`,'success');
+  const buildFilters = () => ({
+    search: filters.search || undefined,
+    departmentId: filters.dept === 'all' ? undefined : filters.dept,
+    status: filters.status === 'all' ? undefined : filters.status,
+  });
+
+  const exportCSV = async () => {
+    try {
+      let data = selection.size ? rows.filter(r=>selection.has(r.id)) : null;
+      if (!data) {
+        // Export-all under the active filters: loop pages (backend caps limit at 200).
+        const all = [];
+        for (let p = 1; p <= EXPORT_MAX_PAGES; p++) {
+          const res = await listEmployees({ page: p, limit: EXPORT_PAGE_SIZE, ...buildFilters() });
+          const items = res.items ?? [];
+          all.push(...items);
+          if (items.length < EXPORT_PAGE_SIZE || all.length >= (res.total ?? 0)) break;
+        }
+        data = all.map(mapEmployee);
+      }
+      if (!data.length) { toast('Nothing to export','info'); return; }
+      const headers = ['employeeNumber','lastName','firstName','middleName','birthDate','gender','civilStatus','address','contactNumber','email','sssNumber','philhealthNumber','pagibigNumber','tinNumber','status','departmentId','positionId','hiredDate','monthlySalary'];
+      const lines = [headers.join(',')];
+      data.forEach(r=>{ const e=r.raw; lines.push(headers.map(h=>`"${String(e[h]??'').replace(/"/g,'""')}"`).join(',')); });
+      const blob = new Blob([lines.join('\n')],{type:'text/csv'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='employees.csv'; a.click(); URL.revokeObjectURL(url);
+      toast(`Exported ${data.length} employees`,'success');
+    } catch { toast('Export failed','error'); }
   };
 
   return (
@@ -129,15 +176,15 @@ export default function Employees() {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div className="card p-4 flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-accent/10 text-accent flex items-center justify-center"><Users/></div>
-            <div><div className="text-xs text-muted uppercase tracking-wide">Total</div><div className="text-xl font-semibold">{stats.total}</div></div>
+            <div><div className="text-xs text-muted uppercase tracking-wide">Total</div><div className="text-xl font-semibold">{head.total}</div></div>
           </div>
           <div className="card p-4 flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-success/10 text-success flex items-center justify-center"><UserCheck/></div>
-            <div><div className="text-xs text-muted uppercase tracking-wide">Active</div><div className="text-xl font-semibold">{stats.active}</div></div>
+            <div><div className="text-xs text-muted uppercase tracking-wide">Active</div><div className="text-xl font-semibold">{head.active}</div></div>
           </div>
           <div className="card p-4 flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-warning/10 text-warning flex items-center justify-center"><UserX/></div>
-            <div><div className="text-xs text-muted uppercase tracking-wide">Inactive</div><div className="text-xl font-semibold">{stats.inactive}</div></div>
+            <div><div className="text-xs text-muted uppercase tracking-wide">Inactive</div><div className="text-xl font-semibold">{Math.max(0, head.total - head.active)}</div></div>
           </div>
         </div>
 
@@ -145,26 +192,29 @@ export default function Employees() {
           <div className="flex flex-wrap items-center gap-3 mb-4">
             <div className="relative flex-1 min-w-[280px]">
               <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
-              <input className="input pl-10 h-11" placeholder="Search name, number, position..." value={filters.search} onChange={e=>{setFilters(f=>({...f,search:e.target.value})); setPage(1);}} />
+              <input className="input pl-10 h-11" placeholder="Search name, number, position..." value={searchInput} onChange={e=>setSearchInput(e.target.value)} />
             </div>
             <div className="flex items-center gap-2">
               <Filter size={16} className="text-muted"/>
               <select className="input h-11 w-44" value={filters.dept} onChange={e=>{setFilters(f=>({...f,dept:e.target.value})); setPage(1);}}>
                 <option value="all">All Departments</option>
-                {departments.map(([c,n])=><option key={c} value={c}>{n||c}</option>)}
+                {departments.map(d=><option key={d.id} value={d.id}>{d.name || d.code}</option>)}
               </select>
               <select className="input h-11 w-40" value={filters.status} onChange={e=>{setFilters(f=>({...f,status:e.target.value})); setPage(1);}}>
                 <option value="all">All Status</option>
                 {['ACTIVE','INACTIVE','RESIGNED','RETIRED'].map(s=><option key={s} value={s}>{s}</option>)}
               </select>
             </div>
-            <button className="btn btn-primary h-11 px-4" onClick={openAdd}><Plus size={18}/> New Employee</button>
+            <div className="flex items-center gap-2">
+              <button className="btn btn-secondary h-11 px-4" onClick={exportCSV}><Download size={18}/> Export CSV</button>
+              <button className="btn btn-primary h-11 px-4" onClick={openAdd}><Plus size={18}/> New Employee</button>
+            </div>
           </div>
 
           {selection.size>0 && (
             <div className="flex items-center gap-3 mb-3 text-sm">
-              <span className="text-muted">{selection.size} selected</span>
-              <button className="btn btn-ghost" onClick={exportCSV}>Export CSV</button>
+              <span className="text-muted">{selection.size} selected on this page</span>
+              <button className="btn btn-ghost" onClick={()=>setSelection(new Set())}>Clear</button>
             </div>
           )}
 
@@ -173,22 +223,21 @@ export default function Employees() {
               <table className="data-table w-full">
                 <thead className="bg-surface/70 backdrop-blur">
                   <tr className="text-left text-xs uppercase tracking-wide text-muted">
-                    <th className="w-12 p-3"><input type="checkbox" className="accent" checked={filtered.length>0 && selection.size===filtered.length} onChange={e=>setSelection(e.target.checked? new Set(filtered.map(r=>r.id)): new Set())}/></th>
+                    <th className="w-12 p-3"><input type="checkbox" className="accent" checked={rows.length>0 && selection.size===rows.length} onChange={e=>setSelection(e.target.checked? new Set(rows.map(r=>r.id)): new Set())}/></th>
                     <th className="p-3 w-28">Employee No.</th>
                     <th className="p-3">Name</th>
                     <th className="p-3">Position</th>
                     <th className="p-3 w-36">Department</th>
                     <th className="p-3 w-24">Grade</th>
                     <th className="p-3 w-32">Hired</th>
-                    <th className="p-3 w-48">Email</th>
                     <th className="p-3 w-32">Contact</th>
                     <th className="p-3 w-32">Salary</th>
                     <th className="p-3 w-28">Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-line">
-                  {loading ? Array.from({length:8}).map((_,i)=><tr key={i} className="animate-pulse"><td colSpan={7} className="p-4"><div className="h-4 bg-surface rounded"/></td></tr>)
-                    : paged.map(r=>(
+                  {loading ? Array.from({length:8}).map((_,i)=><tr key={i} className="animate-pulse"><td colSpan={10} className="p-4"><div className="h-4 bg-surface rounded"/></td></tr>)
+                    : rows.map(r=>(
                       <tr key={r.id} className="hover:bg-surface/60 transition-colors cursor-pointer" onClick={()=>{ setDetailEmp(r); setDetailOpen(true); }}>
                         <td className="p-3" onClick={e=>e.stopPropagation()}><input type="checkbox" className="accent" checked={selection.has(r.id)} onChange={e=>{const n=new Set(selection); e.target.checked? n.add(r.id): n.delete(r.id); setSelection(n);}}/></td>
                         <td className="p-3 font-mono text-xs text-muted">{r.no}</td>
@@ -205,7 +254,6 @@ export default function Employees() {
                         <td className="p-3 font-mono text-xs">{r.dept}</td>
                         <td className="p-3 font-mono text-xs">{r.sg}</td>
                         <td className="p-3 font-mono text-xs">{r.hired}</td>
-                        <td className="p-3 text-sm text-muted truncate max-w-[200px]">{r.email}</td>
                         <td className="p-3 font-mono text-xs truncate max-w-[140px]">{r.contact}</td>
                         <td className="p-3 font-mono text-xs">{r.salary ? `₱${Number(r.salary).toLocaleString()}` : '—'}</td>
                         <td className="p-3"><span className={`badge ${badgeTone(r.status)} text-xs`}>{r.status}</span></td>
@@ -214,7 +262,7 @@ export default function Employees() {
                 </tbody>
               </table>
             </div>
-            {!loading && filtered.length===0 && (
+            {!loading && total===0 && (
               <div className="py-16 text-center">
                 <div className="mx-auto w-12 h-12 rounded-full bg-surface flex items-center justify-center mb-3"><Users className="text-muted"/></div>
                 <div className="font-medium">No employees found</div>
@@ -224,9 +272,9 @@ export default function Employees() {
             )}
           </div>
 
-          {!loading && filtered.length>0 && (
+          {!loading && total>0 && (
             <div className="flex items-center justify-between pt-3 text-xs text-muted">
-              <span>{filtered.length} results</span>
+              <span>{total} results</span>
               <div className="flex items-center gap-2">
                 <button className="btn btn-ghost h-9 px-3" disabled={page<=1} onClick={()=>setPage(p=>p-1)}>Previous</button>
                 <span className="px-2">Page {page} of {totalPages}</span>

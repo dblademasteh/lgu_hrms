@@ -10,11 +10,6 @@ export async function listEmployees({ page = 1, limit = 50, search, departmentId
   return data;
 }
 
-export async function getEmployee(id) {
-  const { data } = await api.get(`/employees/${id}`);
-  return data;
-}
-
 export async function createEmployee(payload) {
   const { data } = await api.post('/employees', payload);
   return data;
@@ -27,9 +22,4 @@ export async function updateEmployee(id, payload) {
 
 export async function deleteEmployee(id) {
   await api.delete(`/employees/${id}`);
-}
-
-export async function bulkImportEmployees(items) {
-  const { data } = await api.post('/employees/bulk', items);
-  return data;
 }
