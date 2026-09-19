@@ -133,7 +133,7 @@ export const authService = {
     const accessToken = jwt.sign({ id: user.id, role: user.role, tenantId: user.tenantId ?? null }, ACCESS_SECRET, { expiresIn: '15m' });
     return { accessToken };
   },
-  async switchRole(userId, newRole, req) {
+  async switchRole(userId, newRole, req, tenantId) {
     if (process.env.NODE_ENV === 'production') {
       const err = new Error('Role switching is disabled in production');
       err.status = 403;
@@ -145,21 +145,36 @@ export const authService = {
       err.status = 404;
       throw err;
     }
-    // SUPER_ADMIN is a platform role (no tenant row in Role table) — allow it;
-    // otherwise the role must exist for the user's tenant.
-    if (newRole !== 'SUPER_ADMIN') {
-      const role = await prisma.role.findFirst({ where: { name: newRole, tenantId: user.tenantId } });
+    let sessionTenantId = user.tenantId ?? null;
+    if (newRole === 'SUPER_ADMIN') {
+      // SUPER_ADMIN is a platform role (no tenant) — the session goes platform-wide.
+      sessionTenantId = null;
+    } else {
+      // Tenant roles must resolve against a real tenant: the caller's own
+      // tenant, or (platform SUPER_ADMIN, no tenant row) the explicitly
+      // selected tenant from the switcher. Without it, the minted token would
+      // carry tenantId null and every tenant-scoped request would resolve to
+      // nothing (empty lists, orphaned writes).
+      const scopeTenantId = user.tenantId ?? tenantId ?? null;
+      if (!scopeTenantId) {
+        const err = new Error('Select a tenant scope first — this role needs a tenant');
+        err.status = 400;
+        err.code = 'TENANT_REQUIRED';
+        throw err;
+      }
+      const role = await prisma.role.findFirst({ where: { name: newRole, tenantId: scopeTenantId } });
       if (!role) {
         const err = new Error('Invalid role');
         err.status = 400;
         throw err;
       }
+      sessionTenantId = scopeTenantId;
     }
     // Session-only override: never persist the role to the user row. The
     // mismatched role applies to this access token only; a refresh or new
     // login reverts to the stored role. Persisting here lets dev testing
     // silently escalate seeded admin accounts to SUPER_ADMIN.
-    const patched = { ...user, role: newRole };
+    const patched = { ...user, role: newRole, tenantId: sessionTenantId };
     return issueSession(patched, req || { ip: '127.0.0.1', get: () => 'dev' });
   }
 };

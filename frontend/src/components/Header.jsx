@@ -1,8 +1,9 @@
-﻿import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { toggleTheme, useTheme } from '../theme.js';
 import { useAuthStore } from '../stores/authStore.js';
 import { useNotifications, useInAppEnabled } from '../hooks/useNotifications.js';
+import { useToast } from '../components/Toast.jsx';
 import { Search, Bell, Sun, Moon, LogOut, User, Menu, ChevronDown, Home, CheckCheck, Trash2, Inbox, HelpCircle, Building2 } from 'lucide-react';
 import { switchRole } from '../api/dev.js';
 import { tenantsApi } from '../api/tenants.js';
@@ -27,6 +28,7 @@ export default function Header({ onToggleSidebar }) {
   const user = useAuthStore(s => s.user);
   const switchUserRole = useAuthStore(s => s.switchRole);
   const logout = useAuthStore(s => s.logout);
+  const toast = useToast();
   const { items, loading, live, markRead, markAllRead, dismissAll } = useNotifications();
   const inAppEnabled = useInAppEnabled();
   const [bellOpen, setBellOpen] = useState(false);
@@ -359,13 +361,18 @@ export default function Header({ onToggleSidebar }) {
                           value={devRole}
                           onChange={async (e) => {
                             const next = e.target.value;
-                            setDevRole(next);
                             try {
                               setSwitchingRole(true);
-                              await switchUserRole(next);
+                              // Tenant roles minted from the platform account
+                              // must carry the active tenant scope (see
+                              // authService.switchRole).
+                              await switchUserRole(next, activeTenantId || undefined);
                               window.location.reload();
                             } catch (err) {
-                              // handled in store
+                              // Revert to the real role and surface the failure —
+                              // never leave the select on a role the session didn't take.
+                              setDevRole(user?.role || '');
+                              toast(err.response?.data?.error?.message || 'Role switch failed', 'error');
                             } finally {
                               setSwitchingRole(false);
                             }
@@ -381,7 +388,7 @@ export default function Header({ onToggleSidebar }) {
                           <option value="EMPLOYEE">EMPLOYEE</option>
                         </select>
                       </div>
-                      <p className="text-[10px] text-muted mt-1">Issues a new session token for the selected role.</p>
+                      <p className="text-[10px] text-muted mt-1">Issues a new session token for the selected role. Tenant roles use the active tenant scope; SUPER_ADMIN goes platform-wide.</p>
                     </div>
                   )}
                   <button

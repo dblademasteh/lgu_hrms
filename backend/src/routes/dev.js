@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { withTenant, stampTenant } from '../middleware/tenant.js';
 import { authService } from '../services/authService.js';
@@ -7,16 +8,25 @@ import { injectDeviceEventsSchema } from '../shared/contracts/biometricDevices.j
 
 const router = Router();
 
+const switchRoleSchema = z.object({
+  role: z.string().min(1),
+  tenantId: z.string().min(1).optional(),
+});
+
 router.post('/switch-role', async (req, res, next) => {
   if (process.env.NODE_ENV === 'production') {
     return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'Role switching is disabled in production' } });
   }
   try {
-    const { role } = req.body || {};
-    if (!role || !req.user?.id) {
+    const parsed = switchRoleSchema.safeParse(req.body || {});
+    if (!parsed.success) {
+      return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'role is required' } });
+    }
+    const { role, tenantId } = parsed.data;
+    if (!req.user?.id) {
       return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'role and authenticated user are required' } });
     }
-    const data = await authService.switchRole(req.user.id, role, req);
+    const data = await authService.switchRole(req.user.id, role, req, tenantId);
     res.json(data);
   } catch (e) {
     next(e);

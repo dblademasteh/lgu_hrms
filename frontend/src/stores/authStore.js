@@ -77,10 +77,10 @@ export const useAuthStore = create((set) => ({
     }
   },
 
-  switchRole: async (role) => {
+  switchRole: async (role, tenantId) => {
     set({ loading: true, error: null });
     try {
-      const data = await apiSwitchRole(role);
+      const data = await apiSwitchRole(role, tenantId);
       set({ ...persist(data), loading: false });
       return true;
     } catch (e) {
