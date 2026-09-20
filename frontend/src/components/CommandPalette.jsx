@@ -43,7 +43,7 @@ export default function CommandPalette() {
   const inputRef = useRef(null);
   const debounceRef = useRef(null);
   const user = useAuthStore((s) => s.user);
-  const caps = useUserCapabilities();
+  const caps = useUserCapabilities(!!user);
 
   useEffect(() => {
     const onKey = e => {

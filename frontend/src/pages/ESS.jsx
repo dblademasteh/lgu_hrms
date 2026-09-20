@@ -68,6 +68,7 @@ export default function ESS() {
   const [attendance, setAttendance] = useState([]);
   const [attendanceMonth, setAttendanceMonth] = useState(manilaMonthKey());
   const [loading, setLoading] = useState(true);
+  const [notLinked, setNotLinked] = useState(false);
   const [leaveOpen, setLeaveOpen] = useState(false);
   const [showAllLeaves, setShowAllLeaves] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -85,6 +86,10 @@ export default function ESS() {
       getEssAttendance(attendanceMonth),
     ]).then(([p, ps, lr, at]) => {
       if (cancelled) return;
+      const linkageErr = p.status === 'rejected'
+        && p.reason?.response?.data?.error?.code === 'NOT_FOUND'
+        && /Employee linkage not found/.test(p.reason.response.data.error.message || '');
+      setNotLinked(linkageErr);
       if (p.status === 'fulfilled') setProfile(p.value);
       if (ps.status === 'fulfilled') setPayslips(ps.value ?? []);
       if (lr.status === 'fulfilled') setLeaves(lr.value ?? []);
@@ -181,7 +186,14 @@ export default function ESS() {
         </div>
       )}
 
-      {!loading && (
+      {!loading && notLinked && (
+        <div className="card p-8 text-center">
+          <p className="font-display text-lg font-semibold text-ink mb-2">Account not linked</p>
+          <p className="text-sm text-muted max-w-md mx-auto">Your user account is not yet linked to an employee record. Ask HR to link your account so you can view payslips, file leave, and see attendance.</p>
+        </div>
+      )}
+
+      {!loading && !notLinked && (
         <>
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-4">
             <div className="card p-4">

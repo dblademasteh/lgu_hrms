@@ -30,7 +30,7 @@ const peso = n => `₱ ${Number(n ?? 0).toLocaleString('en-PH', { minimumFractio
 export default function UserDashboard() {
   const toast = useToast();
   const role = useAuthStore(s => s.user?.role);
-  const capabilities = useUserCapabilities();
+  const capabilities = useUserCapabilities(!!role);
   const canEmployees = can(role, 'ADMIN', 'HR_MANAGER', 'DEPARTMENT_HEAD', 'SUPER_ADMIN');
   const canPayroll = can(role, 'ADMIN', 'HR_MANAGER', 'PAYROLL_OFFICER', 'SUPER_ADMIN');
   const canReports = can(role, 'ADMIN', 'HR_MANAGER', 'PAYROLL_OFFICER', 'AUDITOR', 'SUPER_ADMIN');
@@ -40,7 +40,6 @@ export default function UserDashboard() {
   const canPerformance = can(role, 'ADMIN', 'HR_MANAGER', 'DEPARTMENT_HEAD', 'SUPER_ADMIN');
   const canAttendance = can(role, 'ADMIN', 'HR_MANAGER', 'DEPARTMENT_HEAD', 'SUPER_ADMIN');
   const canEss = !!capabilities.ess;
-  const canAttendancePortal = !!capabilities.attendancePortal;
 
   const [headcount, setHeadcount] = useState(0);
   const [deptBreakdown, setDeptBreakdown] = useState([]);

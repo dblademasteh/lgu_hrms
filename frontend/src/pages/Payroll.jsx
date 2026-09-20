@@ -9,6 +9,7 @@ import { getLines } from '../api/payrollDeduction.js';
 import { useToast } from '../components/Toast.jsx';
 import { openHtmlInNewTab } from '../lib/print.js';
 import { useUserCapabilities } from '../config/permissions.js';
+import { useAuthStore } from '../stores/authStore.js';
 
 const peso = n => `₱ ${Number(n ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const sum = (items, key) => items.reduce((s, i) => s + Number(i?.[key] ?? 0), 0);
@@ -17,7 +18,8 @@ const emptyPeriod = { name: '', startDate: '', endDate: '', fiscalYear: new Date
 
 export default function Payroll() {
   const toast = useToast();
-  const caps = useUserCapabilities();
+  const user = useAuthStore(s => s.user);
+  const caps = useUserCapabilities(!!user);
   const canRun = caps.payrollRuns === true;
 
   const [runs, setRuns] = useState([]);

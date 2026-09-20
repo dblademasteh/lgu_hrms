@@ -1126,21 +1126,25 @@ model WebhookSubscription {
 }
 
 model ExternalSystem {
-  id            String    @id @default(uuid())
-  tenantId      String?
-  name          String
-  type          String
-  description   String?
-  baseUrl       String
-  apiKey        String?
-  apiSecret     String?
-  headers       String?
-  syncDirection String    @default("pull")
-  isActive      Boolean   @default(true)
-  lastSyncedAt  DateTime?
-  createdAt     DateTime  @default(now()) @db.Timestamptz(6)
-  updatedAt     DateTime  @updatedAt @db.Timestamptz(6)
-  tenant        Tenant?   @relation(fields: [tenantId], references: [id])
+  id                      String    @id @default(uuid())
+  tenantId                String?
+  name                    String
+  type                    String
+  description             String?
+  baseUrl                 String
+  apiKey                  String?
+  apiSecret               String?
+  headers                 String?
+  syncDirection           String    @default("pull")
+  attendanceMode          String?
+  attendancePollInterval  Int?
+  deviceId                String?
+  punchKey                String?
+  isActive                Boolean   @default(true)
+  lastSyncedAt            DateTime?
+  createdAt               DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt               DateTime  @updatedAt @db.Timestamptz(6)
+  tenant                  Tenant?   @relation(fields: [tenantId], references: [id])
 
   @@index([tenantId])
 }

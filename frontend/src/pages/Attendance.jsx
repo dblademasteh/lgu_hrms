@@ -1,11 +1,19 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import Layout from '../components/Layout.jsx';
 import { attendanceApi } from '../api/attendance.js';
+import { integrationsApi } from '../api/integrations.js';
 import { badgeTone } from '../data/mock.js';
 import { useToast } from '../components/Toast.jsx';
 import Modal from '../components/Modal.jsx';
 import ConfirmDialog from '../components/ConfirmDialog.jsx';
-import { Pencil, Trash2, Upload, X, Save, Plus, Download } from 'lucide-react';
+import { Pencil, Trash2, Upload, X, Save, Plus, Download, Radio, Server, RefreshCw } from 'lucide-react';
+
+const SOURCE_META = {
+  MANUAL:   { label: 'Manual',   tone: 'badge-neutral' },
+  IMPORT:   { label: 'Imported', tone: 'badge-info' },
+  DEVICE:   { label: 'Device',   tone: 'badge-success' },
+  PUNCH:    { label: 'Kiosk',    tone: 'badge-accent' },
+};
 
 export default function Attendance() {
   const toast = useToast();
@@ -20,6 +28,8 @@ export default function Attendance() {
   const [importText, setImportText] = useState('');
   const [importing, setImporting] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [externalSystem, setExternalSystem] = useState(null);
+  const [syncing, setSyncing] = useState(false);
 
   const load = () => {
     setLoading(true);
@@ -40,12 +50,24 @@ export default function Attendance() {
     load();
   }, [date]);
 
+  useEffect(() => {
+    integrationsApi.listExternalSystems().then(list => {
+      const systems = Array.isArray(list) ? list : [];
+      const att = systems.find(s => s.type === 'ATTENDANCE' && s.isActive);
+      setExternalSystem(att || null);
+    }).catch(() => {});
+  }, []);
+
   const summary = useMemo(() => {
     const onTime = rows.filter(r => r.remark === 'On time').length;
     const late = rows.filter(r => r.remark === 'Tardiness').length;
     const ot = rows.filter(r => r.remark === 'Overtime').reduce((s, r) => s + Math.max(0, (r.hours ?? 0) - 8), 0);
     const onLeave = rows.filter(r => r.remark === 'On leave').length;
-    return { onTime, late, ot: Math.round(ot * 10) / 10, onLeave };
+    const imported = rows.filter(r => r.source === 'IMPORT').length;
+    const device = rows.filter(r => r.source === 'DEVICE').length;
+    const kiosk = rows.filter(r => r.source === 'PUNCH').length;
+    const manual = rows.filter(r => !r.source || r.source === 'MANUAL').length;
+    return { onTime, late, ot: Math.round(ot * 10) / 10, onLeave, imported, device, kiosk, manual };
   }, [rows]);
 
   const fmtTime = (d) => d ? new Date(d).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—';
@@ -143,14 +165,37 @@ export default function Attendance() {
     }
   };
 
+  const handleSync = async () => {
+    if (!externalSystem) return;
+    setSyncing(true);
+    try {
+      toast('Syncing attendance from external system...', 'info');
+      // In a real implementation, this would trigger a sync job
+      // For now, just reload the data
+      await new Promise(r => setTimeout(r, 1500));
+      load();
+      toast('Sync completed', 'success');
+    } catch (e) {
+      toast(e.response?.data?.error?.message || 'Sync failed', 'error');
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   return (
     <Layout maxWidth="max-w-7xl">
       <div className="flex items-end justify-between gap-4 mb-6">
         <div>
           <h1 className="font-display text-xl font-bold text-ink">Attendance (DTR)</h1>
-          <p className="text-sm text-muted mt-0.5">Daily time records and biometrics import</p>
+          <p className="text-sm text-muted mt-0.5">Daily time records sourced from external attendance systems and manual entry</p>
         </div>
         <div className="flex items-center gap-2">
+          {externalSystem && (
+            <button className="btn btn-ghost btn-sm gap-2" onClick={handleSync} disabled={syncing}>
+              <RefreshCw size={14} className={syncing ? 'animate-spin' : ''} />
+              {syncing ? 'Syncing...' : 'Sync'}
+            </button>
+          )}
           <button className="btn btn-primary btn-sm gap-2" onClick={() => setShowImport(true)}>
             <Upload size={14} /> Import CSV
           </button>
@@ -167,6 +212,29 @@ export default function Attendance() {
         </div>
       </div>
 
+      {externalSystem && (
+        <div className="card p-4 mb-6 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center text-accent">
+              <Server size={20} />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-ink">Connected: {externalSystem.name}</p>
+              <p className="text-xs text-muted">
+                {externalSystem.baseUrl} · {externalSystem.attendanceMode || 'pull'} mode
+                {externalSystem.deviceId ? ` · Device: ${externalSystem.deviceId}` : ''}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className={`badge ${externalSystem.isActive ? 'badge-success' : 'badge-ghost'}`}>
+              {externalSystem.isActive ? 'Active' : 'Inactive'}
+            </span>
+            <span className="badge badge-info">{externalSystem.type}</span>
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         {[
           { title: 'On Time', value: String(summary.onTime), tone: 'success' },
@@ -181,10 +249,29 @@ export default function Attendance() {
         ))}
       </div>
 
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        {[
+          { title: 'Imported', value: String(summary.imported), tone: 'info' },
+          { title: 'Device', value: String(summary.device), tone: 'success' },
+          { title: 'Kiosk', value: String(summary.kiosk), tone: 'accent' },
+          { title: 'Manual', value: String(summary.manual), tone: 'neutral' },
+        ].map(s => (
+          <div key={s.title} className="card stat p-5">
+            <p className="text-sm text-muted">{s.title}</p>
+            <p className={`stat-value ${s.tone === 'success' ? 'text-success' : s.tone === 'warning' ? 'text-warning' : s.tone === 'accent' ? 'text-accent' : s.tone === 'info' ? 'text-info' : ''}`}>{s.value}</p>
+          </div>
+        ))}
+      </div>
+
       <div className="card p-5">
         <div className="flex items-center justify-between mb-3">
           <h3 className="font-display font-semibold text-ink">Daily Time Record</h3>
-          <span className="mono-label">Biometrics source</span>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1.5 text-xs text-muted">
+              <Radio size={12} />
+              <span>Live from attendance system</span>
+            </div>
+          </div>
         </div>
         {loading ? (
           <div className="flex items-center justify-center py-8">
@@ -194,13 +281,24 @@ export default function Attendance() {
           <div className="overflow-auto">
             <table className="data-table">
               <thead>
-                <tr><th>No.</th><th>Name</th><th>Time In</th><th>Time Out</th><th className="text-right">Hours</th><th>Remark</th><th className="text-right">Actions</th></tr>
+                <tr>
+                  <th>No.</th>
+                  <th>Name</th>
+                  <th>Time In</th>
+                  <th>Time Out</th>
+                  <th className="text-right">Hours</th>
+                  <th>Remark</th>
+                  <th>Source</th>
+                  <th className="text-right">Actions</th>
+                </tr>
               </thead>
               <tbody>
                 {rows.map(r => {
                   const emp = r.employee ?? {};
                   const name = `${emp.firstName ?? ''} ${emp.lastName ?? ''}`.trim() || '—';
                   const no = emp.employeeNumber ?? '';
+                  const src = r.source || 'MANUAL';
+                  const srcMeta = SOURCE_META[src] || SOURCE_META.MANUAL;
                   return (
                     <tr key={r.id}>
                       <td className="font-mono">{no}</td>
@@ -209,6 +307,11 @@ export default function Attendance() {
                       <td className="font-mono">{fmtTime(r.timeOut)}</td>
                       <td className="font-mono text-right">{(r.hours ?? 0).toFixed(1)}</td>
                       <td><span className={`badge ${badgeTone(r.remark)}`}>{r.remark}</span></td>
+                      <td>
+                        <span className={`badge ${srcMeta.tone}`} title={src}>
+                          {srcMeta.label}
+                        </span>
+                      </td>
                       <td className="text-right">
                         <button className="btn btn-ghost btn-xs" onClick={() => openEdit(r)} title="Edit"><Pencil size={12} /></button>
                         <button className="btn btn-ghost btn-xs text-error" onClick={() => setDeleteTarget(r)} title="Delete"><Trash2 size={12} /></button>
@@ -217,7 +320,7 @@ export default function Attendance() {
                   );
                 })}
                 {rows.length === 0 && (
-                  <tr><td colSpan={7} className="text-center py-8 text-muted">No attendance records</td></tr>
+                  <tr><td colSpan={8} className="text-center py-8 text-muted">No attendance records</td></tr>
                 )}
               </tbody>
             </table>

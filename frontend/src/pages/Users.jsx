@@ -19,18 +19,23 @@ const emptyForm = { username: '', role: '', departmentId: '', externalId: '' };
 export default function Users() {
   const toast = useToast();
   const myRole = useAuthStore(s => s.user?.role);
-  const userCaps = useUserCapabilities();
+  const userCaps = useUserCapabilities(!!myRole);
   const userCapsLoaded = Object.keys(userCaps).length > 0;
   const canManage = myRole === 'SUPER_ADMIN' || (userCapsLoaded && !!userCaps.manageUsersAndRoles);
   const [list, setList] = useState([]);
   const [deptList, setDeptList] = useState([]);
   const [employees, setEmployees] = useState([]);
+  const [employeesLoading, setEmployeesLoading] = useState(true);
   const [tenants, setTenants] = useState(null);
   const [tenantFilter, setTenantFilter] = useState(null);
   const [tenantForm, setTenantForm] = useState({ code: '', name: '', domain: '' });
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(emptyForm);
+  const [submitting, setSubmitting] = useState(false);
+  const [errors, setErrors] = useState({});
+  const [employeeQuery, setEmployeeQuery] = useState('');
+  const [employeeOpen, setEmployeeOpen] = useState(false);
   const [bioStatus, setBioStatus] = useState(null); // { credentials: [], employeeId }
   const [bioLoading, setBioLoading] = useState(false);
   const [confirm, setConfirm] = useState(null);
@@ -104,11 +109,11 @@ export default function Users() {
   useEffect(() => {
     usersApi.list().then(r => setList(r.data?.items ?? [])).catch(()=>toast('Failed to load users','error'));
     departmentsApi.list().then(r => setDeptList(r.data?.items ?? [])).catch(()=>{});
-    listEmployees({ page: 1, limit: 200, keyPosition: 'true' }).then(({ items = [] }) => setEmployees(items)).catch(()=>{});
+    listEmployees({ page: 1, limit: 200 }).then(({ items = [] }) => setEmployees(items)).catch(()=>{}).finally(() => setEmployeesLoading(false));
     if (myRole === 'SUPER_ADMIN') databaseApi.tenants().then(setTenants).catch(()=>setTenants([]));
-    rolesApi.list().then(r => setRoles(r.data?.roles || [])).catch(()=>{}).finally(() => setRolesLoading(false));
+    rolesApi.list().then(r => setRoles(Array.from(new Map((r.data?.roles || []).map(x => [x.name, x])).values()))).catch(()=>{}).finally(() => setRolesLoading(false));
     rolesApi.capabilities().then(r => setCaps(r.data?.capabilities || [])).catch(()=>{});
-    rolesApi.permissions().then(r => { const roles = r.data?.roles || []; setMatrixRoles(roles); syncMatrix(roles); }).catch(()=>{});
+    rolesApi.permissions().then(r => { const raw = r.data?.roles || []; const roles = Array.from(new Map(raw.map(x => [x.id, x])).values()); setMatrixRoles(roles); syncMatrix(roles); }).catch(()=>{});
   }, [myRole]);
 
   useEffect(() => {
@@ -125,10 +130,14 @@ export default function Users() {
     return () => { cancelled = true; };
   }, [form.externalId]);
 
-  const openAdd = () => { setEditing(null); setForm(emptyForm); setFormOpen(true); };
+  const resetForm = () => { setForm(emptyForm); setBioStatus(null); setBioLoading(false); setErrors({}); setEmployeeQuery(''); setEmployeeOpen(false); };
+  const openAdd = () => { setEditing(null); resetForm(); setFormOpen(true); };
   const openEdit = u => {
     setEditing(u);
     setForm({ username: u.username, role: u.role, departmentId: u.departmentId ?? '', externalId: u.externalId ?? '' });
+    setBioStatus(null);
+    setBioLoading(false);
+    setErrors({});
     setFormOpen(true);
   };
 
@@ -137,7 +146,14 @@ export default function Users() {
 
   const submit = async e => {
     e.preventDefault();
-    if (!form.username.trim()) { toast('Username is required.', 'error'); return; }
+    const next = {};
+    if (!form.username.trim()) next.username = 'Username is required.';
+    if (!form.role) next.role = 'Role is required.';
+    if (!form.departmentId) next.departmentId = 'Department is required.';
+    setErrors(next);
+    if (Object.keys(next).length) return;
+
+    setSubmitting(true);
     try {
       if (editing) {
         const r = await usersApi.update(editing.id, form);
@@ -157,6 +173,8 @@ export default function Users() {
     } catch (e) {
       const msg = e?.response?.data?.error?.message;
       toast(msg || 'Operation failed', 'error');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -458,31 +476,35 @@ export default function Users() {
 
       <Modal
         open={formOpen}
-        onClose={() => setFormOpen(false)}
+        onClose={() => { setFormOpen(false); resetForm(); }}
         title={editing ? 'Edit User · ' + editing.username : 'Add User'}
         footer={
           <>
-            <button type="button" className="btn btn-ghost gap-2" onClick={() => setFormOpen(false)}>
+            <button type="button" className="btn btn-ghost gap-2" onClick={() => { setFormOpen(false); resetForm(); }}>
               <X size={16} />
               Cancel
             </button>
-            <button type="submit" form="user-form" className="btn btn-primary gap-2">
+            <button type="submit" form="user-form" className="btn btn-primary gap-2" disabled={submitting}>
               <Save size={16} />
-              {editing ? 'Save Changes' : 'Create User'}
+              {submitting ? 'Saving...' : editing ? 'Save Changes' : 'Create User'}
             </button>
           </>
         }
       >
         <form id="user-form" onSubmit={submit} className="space-y-4">
+          <p className="text-xs text-muted">A temporary password will be generated automatically and shown after creation.</p>
           <div>
             <label htmlFor="u-username" className="block text-sm font-medium text-ink mb-1">Username</label>
             <input id="u-username" className="input" value={form.username} onChange={e => setForm(f => ({ ...f, username: e.target.value }))} />
+            {errors.username && <p className="text-xs text-error mt-1">{errors.username}</p>}
           </div>
           <div>
             <label htmlFor="u-role" className="block text-sm font-medium text-ink mb-1">Role</label>
             <select id="u-role" className="select" value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value }))}>
+              <option value="">Select a role…</option>
               {roles.map(r => <option key={r.name} value={r.name}>{r.name.replaceAll('_', ' ')}</option>)}
             </select>
+            {errors.role && <p className="text-xs text-error mt-1">{errors.role}</p>}
           </div>
           <div>
             <label htmlFor="u-dept" className="block text-sm font-medium text-ink mb-1">Department scope</label>
@@ -490,20 +512,72 @@ export default function Users() {
               <option value="">All departments (central)</option>
               {deptList.map(d => <option key={d.id} value={d.id}>{d.code} · {d.name}</option>)}
             </select>
+            {errors.departmentId && <p className="text-xs text-error mt-1">{errors.departmentId}</p>}
           </div>
           <div>
-            <label htmlFor="u-employee" className="block text-sm font-medium text-ink mb-1">Linked employee (ESS access)</label>
-            <select id="u-employee" className="select" value={form.externalId || ''} onChange={e => setForm(f => ({ ...f, externalId: e.target.value || null }))}>
-              <option value="">None (staff account only)</option>
-              {form.externalId && !employees.some(emp => emp.employeeNumber === form.externalId) && (
-                <option value={form.externalId}>{form.externalId} · currently linked</option>
+            <label className="block text-sm font-medium text-ink mb-1">Linked employee (ESS access)</label>
+            <div className="relative">
+              <button
+                type="button"
+                className="input text-left flex items-center justify-between"
+                onClick={() => setEmployeeOpen(v => !v)}
+              >
+                <span className={form.externalId ? 'text-ink' : 'text-muted'}>
+                  {form.externalId
+                    ? (() => {
+                        const emp = employees.find(e => e.employeeNumber === form.externalId);
+                        return emp ? `${emp.employeeNumber} · ${emp.lastName}, ${emp.firstName}` : form.externalId;
+                      })()
+                    : 'None (staff account only)'}
+                </span>
+                <span className="text-muted ml-2">▾</span>
+              </button>
+              {employeeOpen && (
+                <div className="absolute z-20 mt-1 w-full bg-surface border border-line rounded-lg shadow-lg">
+                  <div className="p-2 border-b border-line">
+                    <input
+                      className="input w-full"
+                      placeholder="Search by name or employee number…"
+                      value={employeeQuery}
+                      onChange={e => setEmployeeQuery(e.target.value)}
+                      autoFocus
+                    />
+                  </div>
+                  <div className="max-h-52 overflow-auto">
+                    {employeesLoading ? (
+                      <p className="p-3 text-xs text-muted">Loading employees…</p>
+                    ) : (() => {
+                      const q = employeeQuery.trim().toLowerCase();
+                      const list = employees.filter(emp => !q || `${emp.employeeNumber} ${emp.lastName} ${emp.firstName}`.toLowerCase().includes(q));
+                      if (!list.length) return <p className="p-3 text-xs text-muted">{employeeQuery ? 'No matching employees' : 'No employees available'}</p>;
+                      const showLinked = form.externalId && !list.some(emp => emp.employeeNumber === form.externalId);
+                      return (
+                        <>
+                          <button type="button" className="w-full text-left px-3 py-2 text-sm hover:bg-bg" onClick={() => { setForm(f => ({ ...f, externalId: null })); setEmployeeQuery(''); setEmployeeOpen(false); }}>
+                            None (staff account only)
+                          </button>
+                          {showLinked && (
+                            <button type="button" className="w-full text-left px-3 py-2 text-sm hover:bg-bg" onClick={() => { setEmployeeQuery(''); setEmployeeOpen(false); }}>
+                              {form.externalId} · currently linked
+                            </button>
+                          )}
+                          {list.map(emp => (
+                            <button
+                              key={emp.id}
+                              type="button"
+                              className="w-full text-left px-3 py-2 text-sm hover:bg-bg"
+                              onClick={() => { setForm(f => ({ ...f, externalId: emp.employeeNumber })); setEmployeeQuery(''); setEmployeeOpen(false); }}
+                            >
+                              {emp.employeeNumber} · {emp.lastName}, {emp.firstName}{emp.keyPosition ? ` · ${emp.keyPosition}` : ''}
+                            </button>
+                          ))}
+                        </>
+                      );
+                    })()}
+                  </div>
+                </div>
               )}
-              {employees.map(emp => (
-                <option key={emp.id} value={emp.employeeNumber}>
-                  {emp.employeeNumber} · {emp.lastName}, {emp.firstName}{emp.keyPosition ? ` · ${emp.keyPosition}` : ''}
-                </option>
-              ))}
-            </select>
+            </div>
             <p className="text-xs text-muted mt-1">Only employees tagged to a key position can be linked. Linking gives ESS access (payslips, leave filing, attendance).</p>
             {form.externalId && (
               <div className="mt-2 p-3 bg-bg rounded-lg border border-line">

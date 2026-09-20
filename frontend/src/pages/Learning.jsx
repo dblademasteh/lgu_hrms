@@ -7,6 +7,7 @@ import { listEmployees } from '../api/employees.js';
 import { useToast } from '../components/Toast.jsx';
 import { badgeTone } from '../data/mock.js';
 import { useUserCapabilities } from '../config/permissions.js';
+import { useAuthStore } from '../stores/authStore.js';
 import { BookOpen, User, FileText, Plus, Calendar, RefreshCw, X, Save, CheckCircle, Ban, Trash2, Award } from 'lucide-react';
 
 const errMsg = e => e?.response?.data?.error?.message || e?.message || 'Failed';
@@ -16,7 +17,8 @@ const ENROLLMENT_STATUSES = ['ENROLLED', 'COMPLETED', 'CANCELLED'];
 
 export default function Learning() {
   const toast = useToast();
-  const caps = useUserCapabilities();
+  const user = useAuthStore(s => s.user);
+  const caps = useUserCapabilities(!!user);
   const canManage = caps.trainingCRUD === true;
 
   const [programs, setPrograms] = useState([]);

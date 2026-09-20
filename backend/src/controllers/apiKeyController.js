@@ -37,7 +37,7 @@ export const apiKeyController = {
         data: stampTenant(req, {
           name,
           keyHash,
-          scopes: scopes || ['employees:read'],
+          scopes: Array.isArray(scopes) && scopes.length > 0 ? scopes : ['employees:read'],
         }),
         select: {
           id: true,

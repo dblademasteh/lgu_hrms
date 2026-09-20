@@ -15,18 +15,21 @@ There is also an **implicit employee-to-device mapping** that requires manual ZK
 
 ### Who enrolls
 
-The **employee themselves**, via the **Attendance Portal** (`/attendance-portal`).
+The **employee themselves**, via the **My Attendance** page in the standalone
+**lgu-attendance** project (`/my-attendance`). The enrollment UI moved there in
+the Attendance Portal transfer; the backend credential routes remain in lgu-hrms
+for admin/employee credential reads.
 
 ### Entry point
 
-`frontend/src/pages/AttendancePortal.jsx:125-140`
+`lgu-attendance/frontend/src/pages/MyAttendance.jsx` (enrollment modal)
 
 ### Flow
 
 ```
-Employee clicks "Enroll New" in Attendance Portal
+Employee clicks "Enroll New" in lgu-attendance My Attendance page
   → Modal asks for optional device name
-  → Frontend generates random credentialId + publicKey
+  → Frontend calls GET /biometric/webauthn/enroll/options (or generates random credentialId + publicKey)
   → POST /biometric/enroll { credentialId, publicKey, deviceName }
     [requireAuth — any authenticated user]
   → biometricController.enroll()
@@ -46,8 +49,8 @@ Employee clicks "Enroll New" in Attendance Portal
 | `backend/src/services/biometricService.js:6-20` | Dedup check, creates `BiometricCredential` |
 | `backend/src/repositories/biometricRepository.js:19-23` | `prisma.biometricCredential.create()` with `stampTenant` |
 | `backend/src/shared/contracts/biometric.js:3-7` | Schema: `deviceName` optional |
-| `frontend/src/pages/AttendancePortal.jsx:125-140` | Enroll modal + API call |
-| `frontend/src/api/biometric.js:7` | `biometricApi.enroll()` wrapper |
+| `lgu-attendance/frontend/src/pages/MyAttendance.jsx` | Enroll modal + API call |
+| `frontend/src/api/biometric.js:7` | `biometricApi.enroll()` wrapper (lgu-hrms, admin/employee reads) |
 
 ### Schema
 
@@ -105,7 +108,7 @@ async enroll(req, employeeId, credentialId, publicKey, deviceName) {
 ### Frontend enrollment flow
 
 ```jsx
-// AttendancePortal.jsx:125-140
+// lgu-attendance/frontend/src/pages/MyAttendance.jsx (handleEnroll)
 const handleEnroll = async () => {
   const credentialId = `cred_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
   const publicKey = `publicKey_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
@@ -360,7 +363,9 @@ async verify(req, credentialId, assertion) {
 
 ### Entry point
 
-`frontend/src/pages/AttendancePortal.jsx:88-111` (Kiosk Mode)
+`kiosk/` standalone lobby app (public punch, no login required). The old in-app
+kiosk mode from `AttendancePortal.jsx` was removed when the portal moved to
+lgu-attendance; the kiosk app remains in lgu-hrms at `/kiosk/`.
 
 ### Flow
 

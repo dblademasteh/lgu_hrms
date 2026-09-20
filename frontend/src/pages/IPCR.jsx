@@ -5,6 +5,7 @@ import ConfirmDialog from '../components/ConfirmDialog.jsx';
 import { useToast } from '../components/Toast.jsx';
 import { badgeTone } from '../data/mock.js';
 import { useUserCapabilities } from '../config/permissions.js';
+import { useAuthStore } from '../stores/authStore.js';
 import { openHtmlString } from '../lib/print.js';
 import Tabs, { TabList, Tab, TabPanel } from '../components/Tabs.jsx';
 import {
@@ -538,7 +539,8 @@ function buildIPCRFHtml(review, targets, competencies, computed) {
 
 export default function IPCR() {
   const toast = useToast();
-  const caps = useUserCapabilities();
+  const user = useAuthStore(s => s.user);
+  const caps = useUserCapabilities(!!user);
   const canEdit = !!caps.performanceCRUD;
 
   const [reviews, setReviews] = useState([]);

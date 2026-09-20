@@ -42,10 +42,11 @@ export function visibleRoles(minRole) {
 }
 
 /** Current user's capability map from the backend (empty until loaded). */
-export function useUserCapabilities() {
+export function useUserCapabilities(enabled) {
   const [permissions, setPermissions] = useState({});
 
   useEffect(() => {
+    if (enabled === false) return;
     let cancelled = false;
     rolesApi.myPermissions()
       .then(res => {
@@ -53,7 +54,7 @@ export function useUserCapabilities() {
       })
       .catch(() => { /* dashboard degrades to role-gated cards */ });
     return () => { cancelled = true; };
-  }, []);
+  }, [enabled]);
 
   return permissions;
 }

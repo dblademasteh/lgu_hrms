@@ -18,7 +18,6 @@ import Audit from './pages/Audit.jsx';
 import Reports from './pages/Reports.jsx';
 import Users from './pages/Users.jsx';
 import Attendance from './pages/Attendance.jsx';
-import AttendancePortal from './pages/AttendancePortal.jsx';
 import Appointments from './pages/Appointments.jsx';
 import Settings from './pages/Settings.jsx';
 import Performance from './pages/Performance.jsx';
@@ -43,7 +42,7 @@ import { sentryWrapCreateBrowserRouter } from './lib/sentry.js';
 
 function Protected({ children, roles, capability }) {
   const user = useAuthStore(s => s.user);
-  const caps = useUserCapabilities();
+  const caps = useUserCapabilities(!!user);
   if (!user) return <Navigate to="/" replace />;
   if (roles && !roles.includes(user.role)) return <Navigate to="/dashboard" replace />;
   if (capability && user.role !== 'SUPER_ADMIN') {
@@ -86,7 +85,6 @@ function createAppRouter() {
         { path: '/reports', element: <Protected roles={['ADMIN', 'HR_MANAGER', 'PAYROLL_OFFICER', 'AUDITOR', 'SUPER_ADMIN']}><Reports /></Protected> },
         { path: '/users', element: <Protected roles={['ADMIN', 'SUPER_ADMIN']} capability="manageUsersAndRoles"><Users /></Protected> },
         { path: '/attendance', element: <Protected roles={['ADMIN', 'HR_MANAGER', 'DEPARTMENT_HEAD', 'SUPER_ADMIN']}><Attendance /></Protected> },
-        { path: '/attendance-portal', element: <Protected roles={['EMPLOYEE', 'ADMIN', 'HR_MANAGER', 'PAYROLL_OFFICER', 'DEPARTMENT_HEAD', 'SUPER_ADMIN']}><AttendancePortal /></Protected> },
         { path: '/appointments', element: <Protected roles={['ADMIN', 'HR_MANAGER', 'SUPER_ADMIN']} capability="appointmentsCRUD"><Appointments /></Protected> },
         { path: '/documents', element: <Protected roles={['ADMIN', 'HR_MANAGER', 'SUPER_ADMIN']} capability="documentsCRUD"><Documents /></Protected> },
   { path: '/documents/tracking', element: <Protected roles={['ADMIN', 'HR_MANAGER', 'AUDITOR', 'SUPER_ADMIN']} capability="documentsTrack"><DocumentsTracking /></Protected> },

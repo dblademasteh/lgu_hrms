@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { requireApiKey } from '../middleware/apiKey.js';
+import { requireApiKey, requireScope } from '../middleware/apiKey.js';
 import { requireAuth } from '../middleware/auth.js';
 import { requireRole } from '../middleware/rbac.js';
 import { tenantContext } from '../middleware/tenant.js';
@@ -7,36 +7,25 @@ import { createApiKey, listApiKeys, revokeApiKey } from '../controllers/apiKeyCo
 import { listWebhooks, createWebhook, updateWebhook, deleteWebhook, testWebhook, rotateWebhookSecret } from '../controllers/webhookController.js';
 import { listExternalSystems, createExternalSystem, updateExternalSystem, deleteExternalSystem } from '../controllers/externalSystemController.js';
 import { prisma } from '../lib/prisma.js';
+import { attendanceController } from '../controllers/attendanceController.js';
+import { integrationsAttendancePunchSchema, integrationsAttendanceBulkSchema } from '../shared/contracts/attendance.js';
+import { validate } from '../middleware/validate.js';
 
 const router = Router();
 
 // Public docs
 router.get('/health', (req, res) => res.json({ ok: true }));
 
-// Integration management is SUPER_ADMIN only
-router.use(requireAuth, requireRole('SUPER_ADMIN'));
+// API-key-authenticated ingestion endpoints (no JWT required)
+// These must come BEFORE the SUPER_ADMIN requireAuth block below.
+router.use('/attendance', requireApiKey, requireScope('attendance:ingest'));
+router.post('/attendance/punch', validate(integrationsAttendancePunchSchema), attendanceController.ingestPunch);
+router.post('/attendance/bulk', validate(integrationsAttendanceBulkSchema), attendanceController.bulkIngest);
+router.post('/attendance/test', (req, res) => {
+  res.json({ ok: true, message: 'Attendance ingestion endpoint reachable', tenantId: req.tenantContext.tenantId });
+});
 
-// API Keys management (tenant-scoped)
-router.get('/keys', tenantContext, listApiKeys);
-router.post('/keys', tenantContext, createApiKey);
-router.delete('/keys/:id', tenantContext, revokeApiKey);
-
-// Webhooks management (tenant-scoped)
-router.get('/webhooks', tenantContext, listWebhooks);
-router.post('/webhooks', tenantContext, createWebhook);
-router.put('/webhooks/:id', tenantContext, updateWebhook);
-router.delete('/webhooks/:id', tenantContext, deleteWebhook);
-router.post('/webhooks/:id/test', tenantContext, testWebhook);
-router.post('/webhooks/:id/rotate-secret', tenantContext, rotateWebhookSecret);
-
-// External Systems management (tenant-scoped)
-router.get('/external-systems', tenantContext, listExternalSystems);
-router.post('/external-systems', tenantContext, createExternalSystem);
-router.put('/external-systems/:id', tenantContext, updateExternalSystem);
-router.delete('/external-systems/:id', tenantContext, deleteExternalSystem);
-
-// Protected by API key - Employees endpoint
-router.use('/employees', requireApiKey);
+router.use('/employees', requireApiKey, requireScope('employees:read'));
 router.get('/employees', async (req, res) => {
   try {
     const tenantId = req.tenantContext.tenantId;
@@ -97,8 +86,7 @@ router.get('/employees', async (req, res) => {
   }
 });
 
-// Protected by API key - Departments endpoint
-router.use('/departments', requireApiKey);
+router.use('/departments', requireApiKey, requireScope('employees:read'));
 router.get('/departments', async (req, res) => {
   try {
     const tenantId = req.tenantContext.tenantId;
@@ -130,5 +118,27 @@ router.get('/departments', async (req, res) => {
     res.status(500).json({ error: { message: error.message } });
   }
 });
+
+// Integration management is SUPER_ADMIN only (JWT required)
+router.use(requireAuth, requireRole('SUPER_ADMIN'));
+
+// API Keys management (tenant-scoped)
+router.get('/keys', tenantContext, listApiKeys);
+router.post('/keys', tenantContext, createApiKey);
+router.delete('/keys/:id', tenantContext, revokeApiKey);
+
+// Webhooks management (tenant-scoped)
+router.get('/webhooks', tenantContext, listWebhooks);
+router.post('/webhooks', tenantContext, createWebhook);
+router.put('/webhooks/:id', tenantContext, updateWebhook);
+router.delete('/webhooks/:id', tenantContext, deleteWebhook);
+router.post('/webhooks/:id/test', tenantContext, testWebhook);
+router.post('/webhooks/:id/rotate-secret', tenantContext, rotateWebhookSecret);
+
+// External Systems management (tenant-scoped)
+router.get('/external-systems', tenantContext, listExternalSystems);
+router.post('/external-systems', tenantContext, createExternalSystem);
+router.put('/external-systems/:id', tenantContext, updateExternalSystem);
+router.delete('/external-systems/:id', tenantContext, deleteExternalSystem);
 
 export default router;

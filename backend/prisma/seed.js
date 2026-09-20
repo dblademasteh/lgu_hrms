@@ -564,6 +564,7 @@ async function seedTenant(tenantId, tenantCode, lguLevel, hash) {
       positionId: posBudgetOfficer.id,
       hiredDate: new Date('2018-06-01'),
       monthlySalary: 35000,
+      keyPosition: 'Budget Officer',
     },
     {
       employeeNumber: `EMP-${tenantCode}-0003`,
@@ -578,6 +579,7 @@ async function seedTenant(tenantId, tenantCode, lguLevel, hash) {
       positionId: posAdminAsst.id,
       hiredDate: new Date('2020-03-10'),
       monthlySalary: 28000,
+      keyPosition: 'Admin Assistant',
     },
     {
       employeeNumber: `EMP-${tenantCode}-0004`,
@@ -592,6 +594,7 @@ async function seedTenant(tenantId, tenantCode, lguLevel, hash) {
       positionId: posAdminAsst.id,
       hiredDate: new Date('2012-07-01'),
       monthlySalary: 60000,
+      keyPosition: 'Department Head',
     },
     {
       employeeNumber: `EMP-${tenantCode}-0005`,
@@ -606,6 +609,7 @@ async function seedTenant(tenantId, tenantCode, lguLevel, hash) {
       positionId: posAccountant.id,
       hiredDate: new Date('2019-01-15'),
       monthlySalary: 32000,
+      keyPosition: 'Accountant',
     },
     {
       employeeNumber: `EMP-${tenantCode}-0006`,
@@ -620,6 +624,7 @@ async function seedTenant(tenantId, tenantCode, lguLevel, hash) {
       positionId: posIT.id,
       hiredDate: new Date('2021-05-10'),
       monthlySalary: 26000,
+      keyPosition: 'IT Officer',
     },
   ];
 

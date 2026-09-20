@@ -11,9 +11,10 @@ import {
 } from '../lib/time.js';
 
 function toUtcDate(v) {
-  return typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)
-    ? dateKeyToUtc(v)
-    : v;
+  if (typeof v !== 'string') return v;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return dateKeyToUtc(v);
+  if (/^\d{2}:\d{2}(:\d{2})?$/.test(v)) return new Date(`1970-01-01T${v}.000Z`);
+  return new Date(v);
 }
 
 function isFutureDate(date) {
@@ -323,6 +324,84 @@ export const attendanceService = {
         results.push({ status: 'error', employeeNumber: record.employeeNumber, message: e.message });
       }
     }
+    return results;
+  },
+
+  // Ingest a punch event from an external attendance system.
+  async ingestPunch(req, data) {
+    const { employeeNumber, punchType, at, deviceId, source } = data;
+    const employee = await prisma.employee.findFirst({
+      where: withTenant(req, { employeeNumber }),
+      select: { id: true },
+    });
+    if (!employee) {
+      throw new AppError(`Employee "${employeeNumber}" not found`, 404, 'EMPLOYEE_NOT_FOUND');
+    }
+    const punchAt = at ? new Date(at) : new Date();
+    return punchTransition(req, employee.id, punchType ?? null, punchAt, source ?? 'IMPORT', deviceId ?? null);
+  },
+
+  // Bulk ingest attendance records from an external system.
+  async bulkIngest(req, records) {
+    const results = await prisma.$transaction(async (tx) => {
+      const results = [];
+      for (const record of records) {
+        try {
+          const employee = await tx.employee.findFirst({
+            where: withTenant(req, { employeeNumber: record.employeeNumber }),
+          });
+          if (!employee) {
+            results.push({ status: 'error', employeeNumber: record.employeeNumber, message: 'Employee not found' });
+            continue;
+          }
+          const utcDate = toUtcDate(record.date);
+          if (isFutureDate(utcDate)) {
+            results.push({ status: 'error', employeeNumber: record.employeeNumber, message: 'Future date' });
+            continue;
+          }
+          const existing = await tx.attendance.findFirst({
+            where: withTenant(req, { employeeId: employee.id, date: utcDate }),
+          });
+          const timeIn = record.timeIn ? normalizeTimeField(record.timeIn, record.date) : null;
+          const timeOut = record.timeOut ? normalizeTimeField(record.timeOut, record.date) : null;
+          let remark = record.remark || null;
+          if (!remark) {
+            const leaveRemark = await autoMarkLeave(tx, req.tenantId, employee.id, utcDate);
+            if (leaveRemark) remark = leaveRemark;
+          }
+          if (existing) {
+            const updated = await tx.attendance.update({
+              where: { id: existing.id },
+              data: {
+                timeIn: timeIn ?? existing.timeIn,
+                timeOut: timeOut ?? existing.timeOut,
+                hours: record.hours ?? existing.hours,
+                remark,
+                source: record.source || existing.source,
+              },
+            });
+            results.push({ status: 'updated', id: updated.id, employeeNumber: record.employeeNumber });
+          } else {
+            const created = await tx.attendance.create({
+              data: {
+                tenantId: req.tenantId,
+                employeeId: employee.id,
+                date: utcDate,
+                timeIn,
+                timeOut,
+                hours: record.hours ?? null,
+                remark,
+                source: record.source || 'IMPORT',
+              },
+            });
+            results.push({ status: 'created', id: created.id, employeeNumber: record.employeeNumber });
+          }
+        } catch (e) {
+          results.push({ status: 'error', employeeNumber: record.employeeNumber, message: e.message });
+        }
+      }
+      return results;
+    });
     return results;
   },
 

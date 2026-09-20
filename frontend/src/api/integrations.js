@@ -24,6 +24,8 @@ export const integrationsApi = {
   updateExternalSystem: (id, data) => api.put(`/integrations/external-systems/${id}`, data).then(r => r.data),
   deleteExternalSystem: (id) => api.delete(`/integrations/external-systems/${id}`).then(r => r.data),
   
-  // Employees endpoint (protected by API key)
-  getEmployees: () => api.get('/integrations/employees').then(r => r.data),
+  // Attendance ingestion endpoints (protected by API key)
+  testAttendance: (apiKey) => api.post('/integrations/attendance/test', null, { headers: { 'x-api-key': apiKey } }).then(r => r.data),
+  attendancePunch: (data, apiKey) => api.post('/integrations/attendance/punch', data, { headers: { 'x-api-key': apiKey } }).then(r => r.data),
+  attendanceBulk: (data, apiKey) => api.post('/integrations/attendance/bulk', data, { headers: { 'x-api-key': apiKey } }).then(r => r.data),
 };

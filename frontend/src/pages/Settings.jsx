@@ -32,6 +32,8 @@ export default function Settings() {
   const sidebarStyle = useSidebarStyle();
   const toastStyle = useToastStyle();
   const currentRole = useAuthStore(s => s.user?.role);
+  const activeTenantId = localStorage.getItem('lgu-active-tenant');
+  const [showTenantWarning, setShowTenantWarning] = useState(false);
   const [active, setActive] = useState('appearance');
   const [notificationsEnabled, setNotificationsEnabled] = useState(() => localStorage.getItem('lgu-notif-inapp') !== 'false');
   const [emailNotifications, setEmailNotifications] = useState(() => localStorage.getItem('lgu-notif-email') !== 'false');
@@ -50,11 +52,15 @@ export default function Settings() {
   const [showRevokeAllConfirm, setShowRevokeAllConfirm] = useState(false);
   const [showApiKeyModal, setShowApiKeyModal] = useState(false);
   const [apiKeyName, setApiKeyName] = useState('');
+  const [apiKeyScopes, setApiKeyScopes] = useState(['employees:read']);
   const [createdApiKey, setCreatedApiKey] = useState(null);
   const [revealApiKey, setRevealApiKey] = useState(false);
   const [copyApiKey, setCopyApiKey] = useState(false);
   const [apiKeys, setApiKeys] = useState([]);
   const [deleteKeyTarget, setDeleteKeyTarget] = useState(null);
+  const [testAttendanceTarget, setTestAttendanceTarget] = useState(null);
+  const [testAttendanceKey, setTestAttendanceKey] = useState('');
+  const [testingAttendance, setTestingAttendance] = useState(false);
   const [webhooks, setWebhooks] = useState([]);
   const [createdWebhook, setCreatedWebhook] = useState(null);
   const [revealWebhookSecret, setRevealWebhookSecret] = useState(false);
@@ -97,8 +103,9 @@ export default function Settings() {
     setShowWebhookModal(true);
   };
   const [showExternalSystemModal, setShowExternalSystemModal] = useState(false);
+  const [editingExternalSystem, setEditingExternalSystem] = useState(null);
   const [webhookForm, setWebhookForm] = useState({ name: '', url: '', events: [], secret: generateSecret() });
-  const [externalSystemForm, setExternalSystemForm] = useState({ name: '', type: 'HRIS', description: '', baseUrl: '', apiKey: '', apiSecret: '', headers: '', syncDirection: 'pull' });
+  const [externalSystemForm, setExternalSystemForm] = useState({ name: '', type: 'HRIS', description: '', baseUrl: '', apiKey: '', apiSecret: '', headers: '', syncDirection: 'pull', attendanceMode: 'pull', attendancePollInterval: '', deviceId: '', punchKey: '' });
   const [show2FAModal, setShow2FAModal] = useState(false);
   const [twoFASecret, setTwoFASecret] = useState(null);
   const [twoFACode, setTwoFACode] = useState('');
@@ -260,10 +267,11 @@ export default function Settings() {
   useEffect(() => { localStorage.setItem('lgu-notif-quiet', quietHours); }, [quietHours]);
   useEffect(() => {
     if (active === 'integrations') {
-      integrationsApi.listKeys().then(setApiKeys).catch(() => {});
-      integrationsApi.listWebhooks().then(setWebhooks).catch(() => {});
-      integrationsApi.listExternalSystems().then(setExternalSystems).catch(() => {});
+      integrationsApi.listKeys().then(setApiKeys).catch(() => toast('Failed to load API keys', 'error'));
+      integrationsApi.listWebhooks().then(setWebhooks).catch(() => toast('Failed to load webhooks', 'error'));
+      integrationsApi.listExternalSystems().then(setExternalSystems).catch(() => toast('Failed to load external systems', 'error'));
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active]);
   useEffect(() => { localStorage.setItem('lgu-accent', accent); document.documentElement.style.setProperty('--accent', accent); }, [accent]);
   useEffect(() => { localStorage.setItem('lgu-font-family', fontFamily); document.documentElement.style.setProperty('--font-sans', `"${fontFamily}", var(--font-sans-fallback)`); document.body.style.fontFamily = `"${fontFamily}", var(--font-sans-fallback)`; }, [fontFamily]);
@@ -287,7 +295,7 @@ export default function Settings() {
       await integrationsApi.deleteKey(deleteKeyTarget.id);
       toast('API key permanently deleted', 'success');
       setDeleteKeyTarget(null);
-      integrationsApi.listKeys().then(setApiKeys).catch(() => {});
+      integrationsApi.listKeys().then(setApiKeys).catch(() => toast('Failed to refresh API keys', 'error'));
     } catch (e) {
       toast(e?.response?.data?.error?.message || 'Failed to delete API key', 'error');
       setDeleteKeyTarget(null);
@@ -300,7 +308,7 @@ export default function Settings() {
       await integrationsApi.updateWebhook(disableWebhookTarget.id, { isActive: !disableWebhookTarget.isActive });
       toast(disableWebhookTarget.isActive ? 'Webhook deactivated' : 'Webhook activated', 'success');
       setDisableWebhookTarget(null);
-      integrationsApi.listWebhooks().then(setWebhooks).catch(() => {});
+      integrationsApi.listWebhooks().then(setWebhooks).catch(() => toast('Failed to refresh webhooks', 'error'));
     } catch (e) {
       toast(e?.response?.data?.error?.message || 'Failed to update webhook', 'error');
       setDisableWebhookTarget(null);
@@ -313,7 +321,7 @@ export default function Settings() {
       await integrationsApi.deleteWebhook(deleteWebhookTarget.id);
       toast('Webhook deleted', 'success');
       setDeleteWebhookTarget(null);
-      integrationsApi.listWebhooks().then(setWebhooks).catch(() => {});
+      integrationsApi.listWebhooks().then(setWebhooks).catch(() => toast('Failed to refresh webhooks', 'error'));
     } catch (e) {
       toast(e?.response?.data?.error?.message || 'Failed to delete webhook', 'error');
       setDeleteWebhookTarget(null);
@@ -1076,6 +1084,33 @@ export default function Settings() {
                       {dbTables.length === 0 && (
                         <p className="text-sm text-muted col-span-full">No tables found.</p>
                       )}
+                      {testAttendanceTarget && (
+                        <Modal open={!!testAttendanceTarget} onClose={() => { setTestAttendanceTarget(null); setTestAttendanceKey(''); }} title="Test Attendance Connection" size="sm" footer={
+                          <>
+                            <button className="btn btn-ghost gap-2" onClick={() => { setTestAttendanceTarget(null); setTestAttendanceKey(''); }}><X size={16}/> Close</button>
+                            <button className="btn btn-primary gap-2" disabled={!testAttendanceKey.trim() || testingAttendance} onClick={async () => {
+                              setTestingAttendance(true);
+                              try {
+                                const result = await integrationsApi.testAttendance(testAttendanceKey);
+                                toast('Attendance endpoint reachable: ' + result.message, 'success');
+                              } catch (e) {
+                                toast('Test failed: ' + (e?.response?.data?.error?.message || e.message), 'error');
+                              } finally {
+                                setTestingAttendance(false);
+                              }
+                            }}>{testingAttendance ? 'Testing...' : 'Test'}</button>
+                          </>
+                        }>
+                          <div className="space-y-3 text-sm">
+                            <p className="text-xs text-muted">Testing connection to <span className="font-medium text-ink">{testAttendanceTarget?.name}</span>.</p>
+                            <div>
+                              <label className="block text-xs font-medium text-muted mb-1">HRMS API Key (with attendance:ingest scope)</label>
+                              <input className="input w-full font-mono" type="password" placeholder="Enter API key" value={testAttendanceKey} onChange={e => setTestAttendanceKey(e.target.value)} />
+                            </div>
+                            <p className="text-[11px] text-muted">This calls the HRMS ingestion health endpoint. The external system must be able to reach this HRMS instance.</p>
+                          </div>
+                        </Modal>
+                      )}
                     </div>
                   )}
                 </div>
@@ -1228,6 +1263,11 @@ export default function Settings() {
             {active === 'integrations' && (
               <section className="card p-6 space-y-6">
                 <h2 className="font-display font-semibold text-ink flex items-center gap-2"><Link2 size={18} className="text-accent"/> Integrations</h2>
+                {isSuperAdmin && !activeTenantId && (
+                  <div className="p-3 rounded-lg bg-warning/10 border border-warning/30 text-xs text-warning">
+                    You are SUPER_ADMIN but no tenant is selected. Use the tenant switcher in the header to select a tenant before configuring external systems.
+                  </div>
+                )}
                 <div className="grid md:grid-cols-2 gap-4">
                   <div className="p-5 border border-line rounded-xl bg-bg/50 space-y-3">
                     <p className="text-sm font-medium text-ink">API Keys</p>
@@ -1242,9 +1282,9 @@ export default function Settings() {
                              <div className="flex items-center gap-2">
                                <span className={`badge ${k.isActive !== false ? 'badge-success' : 'badge-ghost'}`}>{k.isActive !== false ? 'Active' : 'Inactive'}</span>
                                <span className="badge badge-accent">{k.scopes?.join(', ') || 'employees:read'}</span>
-                                <button className="btn btn-ghost btn-sm text-error" onClick={() => integrationsApi.revokeKey(k.id).then((r) => { toast(r?.isActive ? 'API key reactivated' : 'API key deactivated', 'success'); integrationsApi.listKeys().then(setApiKeys).catch(() => {}); })}>
-                                  {k.isActive !== false ? <PowerOff size={12}/> : <Power size={12}/>}
-                                </button>
+                                 <button className="btn btn-ghost btn-sm text-error" onClick={() => integrationsApi.revokeKey(k.id).then((r) => { toast(r?.isActive ? 'API key reactivated' : 'API key deactivated', 'success'); integrationsApi.listKeys().then(setApiKeys).catch(() => toast('Failed to refresh API keys', 'error')); })}>
+                                   {k.isActive !== false ? <PowerOff size={12}/> : <Power size={12}/>}
+                                 </button>
                                 <button className="btn btn-ghost btn-sm text-error" onClick={() => setDeleteKeyTarget(k)} title="Permanently delete">
                                   <Trash2 size={12}/>
                                 </button>
@@ -1298,21 +1338,83 @@ export default function Settings() {
                                <span className="text-ink truncate block">{s.name}</span>
                                <span className="text-muted truncate block">{s.baseUrl}</span>
                              </div>
-                             <div className="flex items-center gap-2">
-                               <span className="badge badge-accent">{s.type}</span>
-                               <span className={`badge ${s.isActive ? 'badge-success' : 'badge-ghost'}`}>{s.isActive ? 'Active' : 'Inactive'}</span>
-                               <button className="btn btn-ghost btn-sm text-error" onClick={() => integrationsApi.deleteExternalSystem(s.id).then(() => { toast('External system deleted', 'success'); integrationsApi.listExternalSystems().then(setExternalSystems).catch(() => {}); })}><Trash2 size={12}/></button>
-                             </div>
+                               <div className="flex items-center gap-2">
+                                 <span className="badge badge-accent">{s.type}</span>
+                                 <span className={`badge ${s.isActive ? 'badge-success' : 'badge-ghost'}`}>{s.isActive ? 'Active' : 'Inactive'}</span>
+                                 {s.type === 'ATTENDANCE' && (
+                                   <button className="btn btn-ghost btn-xs" onClick={() => setTestAttendanceTarget(s)} title="Test attendance connection">Test</button>
+                                 )}
+                                 <button className="btn btn-ghost btn-xs" onClick={() => { setEditingExternalSystem(s); setExternalSystemForm({ name: s.name || '', type: s.type || 'HRIS', description: s.description || '', baseUrl: s.baseUrl || '', apiKey: s.apiKey || '', apiSecret: s.apiSecret || '', headers: s.headers || '', syncDirection: s.syncDirection || 'pull', attendanceMode: s.attendanceMode || 'pull', attendancePollInterval: s.attendancePollInterval ? String(s.attendancePollInterval) : '', deviceId: s.deviceId || '', punchKey: s.punchKey || '' }); }} title="Edit"><Pencil size={12}/></button>
+                                 <button className="btn btn-ghost btn-sm text-error" onClick={() => integrationsApi.deleteExternalSystem(s.id).then(() => { toast('External system deleted', 'success'); integrationsApi.listExternalSystems().then(setExternalSystems).catch(() => toast('Failed to refresh external systems', 'error')); })}><Trash2 size={12}/></button>
+                               </div>
                            </div>
                          ))}
                        </div>
                      ) : (
                        <p className="text-xs text-muted">No external systems configured yet.</p>
                      )}
-                   </div>
-                </div>
-              </section>
-            )}
+                    </div>
+                 </div>
+               </section>
+             )}
+
+             {(showExternalSystemModal || editingExternalSystem) && (
+               <Modal open={!!(showExternalSystemModal || editingExternalSystem)} onClose={() => { setShowExternalSystemModal(false); setEditingExternalSystem(null); setExternalSystemForm({ name: '', type: 'HRIS', description: '', baseUrl: '', apiKey: '', apiSecret: '', headers: '', syncDirection: 'pull', attendanceMode: 'pull', attendancePollInterval: '', deviceId: '', punchKey: '' }); }} title={editingExternalSystem ? 'Edit External System' : 'Add External System'} size="md" footer={
+                 <>
+                   <button className="btn btn-ghost gap-2" onClick={() => { setShowExternalSystemModal(false); setEditingExternalSystem(null); setExternalSystemForm({ name: '', type: 'HRIS', description: '', baseUrl: '', apiKey: '', apiSecret: '', headers: '', syncDirection: 'pull', attendanceMode: 'pull', attendancePollInterval: '', deviceId: '', punchKey: '' }); }}><X size={16}/> Cancel</button>
+                   <button className="btn btn-primary gap-2" disabled={!externalSystemForm.name || !externalSystemForm.type || !externalSystemForm.baseUrl} onClick={async () => {
+                     try {
+                       if (editingExternalSystem) {
+                         await integrationsApi.updateExternalSystem(editingExternalSystem.id, {
+                           name: externalSystemForm.name,
+                           type: externalSystemForm.type,
+                           description: externalSystemForm.description || undefined,
+                           baseUrl: externalSystemForm.baseUrl,
+                           apiKey: externalSystemForm.apiKey || undefined,
+                           apiSecret: externalSystemForm.apiSecret || undefined,
+                           headers: externalSystemForm.headers || undefined,
+                           syncDirection: externalSystemForm.syncDirection,
+                           isActive: editingExternalSystem.isActive,
+                           attendanceMode: externalSystemForm.type === 'ATTENDANCE' ? (externalSystemForm.attendanceMode || undefined) : undefined,
+                           attendancePollInterval: externalSystemForm.type === 'ATTENDANCE' && externalSystemForm.attendancePollInterval ? Number(externalSystemForm.attendancePollInterval) : undefined,
+                           deviceId: externalSystemForm.type === 'ATTENDANCE' ? (externalSystemForm.deviceId || undefined) : undefined,
+                           punchKey: externalSystemForm.type === 'ATTENDANCE' ? (externalSystemForm.punchKey || undefined) : undefined,
+                         });
+                         toast('External system updated', 'success');
+                       } else {
+                         await integrationsApi.createExternalSystem({
+                           name: externalSystemForm.name,
+                           type: externalSystemForm.type,
+                           description: externalSystemForm.description || undefined,
+                           baseUrl: externalSystemForm.baseUrl,
+                           apiKey: externalSystemForm.apiKey || undefined,
+                           apiSecret: externalSystemForm.apiSecret || undefined,
+                           headers: externalSystemForm.headers || undefined,
+                           syncDirection: externalSystemForm.syncDirection,
+                           attendanceMode: externalSystemForm.type === 'ATTENDANCE' ? (externalSystemForm.attendanceMode || undefined) : undefined,
+                           attendancePollInterval: externalSystemForm.type === 'ATTENDANCE' && externalSystemForm.attendancePollInterval ? Number(externalSystemForm.attendancePollInterval) : undefined,
+                           deviceId: externalSystemForm.type === 'ATTENDANCE' ? (externalSystemForm.deviceId || undefined) : undefined,
+                           punchKey: externalSystemForm.type === 'ATTENDANCE' ? (externalSystemForm.punchKey || undefined) : undefined,
+                         });
+                         toast('External system added', 'success');
+                       }
+                       setShowExternalSystemModal(false);
+                       setEditingExternalSystem(null);
+                       setExternalSystemForm({ name: '', type: 'HRIS', description: '', baseUrl: '', apiKey: '', apiSecret: '', headers: '', syncDirection: 'pull', attendanceMode: 'pull', attendancePollInterval: '', deviceId: '', punchKey: '' });
+                       try {
+                         const result = await integrationsApi.listExternalSystems();
+                         const list = Array.isArray(result) ? result : (result?.data ?? []);
+                         setExternalSystems(list);
+                       } catch (listError) {
+                         toast('Saved, but failed to refresh list', 'error');
+                       }
+                     } catch (e) {
+                       const msg = e?.response?.data?.error?.message || (editingExternalSystem ? 'Failed to update external system' : 'Failed to add external system');
+                       toast(msg, 'error');
+                     }
+                   }}><Plus size={14}/> {editingExternalSystem ? 'Update' : 'Add'}</button>
+                 </>
+               }>
 
             {active === 'account' && (
               <section className="card p-6 space-y-6">
@@ -1913,23 +2015,36 @@ export default function Settings() {
              </div>
           </Modal>
         ) : (
-          <Modal open={showApiKeyModal} onClose={()=>{setShowApiKeyModal(false); setApiKeyName(''); setCreatedApiKey(null);}} title="Create API Key" size="sm" footer={
+          <Modal open={showApiKeyModal} onClose={()=>{setShowApiKeyModal(false); setApiKeyName(''); setApiKeyScopes(['employees:read']); setCreatedApiKey(null);}} title="Create API Key" size="sm" footer={
             <>
-              <button className="btn btn-ghost gap-2" onClick={()=>{setShowApiKeyModal(false); setApiKeyName(''); setCreatedApiKey(null);}}><X size={16}/> Cancel</button>
-              <button className="btn btn-primary gap-2" disabled={!apiKeyName.trim()} onClick={async()=>{ 
-                try { 
-                  const result = await integrationsApi.createKey({name: apiKeyName});
-                  setCreatedApiKey(result);
-                  toast('API key created – save it now', 'success');
-                  integrationsApi.listKeys().then(setApiKeys).catch(() => {});
-                } catch { toast('Failed to create key','error'); } 
-              }}>Create</button>
+              <button className="btn btn-ghost gap-2" onClick={()=>{setShowApiKeyModal(false); setApiKeyName(''); setApiKeyScopes(['employees:read']); setCreatedApiKey(null);}}><X size={16}/> Cancel</button>
+               <button className="btn btn-primary gap-2" disabled={!apiKeyName.trim()} onClick={async()=>{ 
+                 try { 
+                   const result = await integrationsApi.createKey({name: apiKeyName, scopes: apiKeyScopes});
+                   setCreatedApiKey(result);
+                   toast('API key created – save it now', 'success');
+                   integrationsApi.listKeys().then(setApiKeys).catch(() => toast('Failed to refresh API keys', 'error'));
+                 } catch { toast('Failed to create key','error'); } 
+               }}>Create</button>
             </>
           }>
             <div className="space-y-3 text-sm">
               <label className="block text-xs font-medium text-muted">Name</label>
               <input className="input h-11" placeholder="External HR System" value={apiKeyName} onChange={e=>setApiKeyName(e.target.value)} />
-              <p className="text-[11px] text-muted">Scopes: employees:read. Key will be shown once.</p>
+              <div>
+                <label className="block text-xs font-medium text-muted mb-1">Scopes</label>
+                <div className="flex flex-wrap gap-2">
+                  {['employees:read', 'attendance:ingest'].map(scope => (
+                    <label key={scope} className="flex items-center gap-1.5 text-xs cursor-pointer">
+                      <input type="checkbox" className="rounded border-line" checked={apiKeyScopes.includes(scope)} onChange={e => {
+                        setApiKeyScopes(e.target.checked ? [...apiKeyScopes, scope] : apiKeyScopes.filter(s => s !== scope));
+                      }} />
+                      <span>{scope}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+              <p className="text-[11px] text-muted">Key will be shown once. Store it securely.</p>
             </div>
           </Modal>
         )}
@@ -1937,21 +2052,21 @@ export default function Settings() {
         <Modal open={showWebhookModal} onClose={() => setShowWebhookModal(false)} title="Add Webhook" size="md" footer={
           <>
             <button className="btn btn-ghost gap-2" onClick={() => setShowWebhookModal(false)}><X size={16}/> Cancel</button>
-             <button className="btn btn-primary gap-2" disabled={!webhookForm.name || !webhookForm.url || webhookForm.events.length === 0} onClick={async () => {
-                try {
-                  const result = await integrationsApi.createWebhook({
-                    name: webhookForm.name,
-                    url: webhookForm.url,
-                    events: webhookForm.events,
-                    secret: webhookForm.secret || undefined,
-                  });
-                  setCreatedWebhook(result);
-                  toast('Webhook created – save the secret now', 'success');
-                  setShowWebhookModal(false);
-                  setWebhookForm({ name: '', url: '', events: [], secret: '' });
-                  integrationsApi.listWebhooks().then(setWebhooks).catch(() => {});
-                } catch { toast('Failed to create webhook', 'error'); }
-              }}><Plus size={14}/> Add</button>
+               <button className="btn btn-primary gap-2" disabled={!webhookForm.name || !webhookForm.url || webhookForm.events.length === 0} onClick={async () => {
+                 try {
+                   const result = await integrationsApi.createWebhook({
+                     name: webhookForm.name,
+                     url: webhookForm.url,
+                     events: webhookForm.events,
+                     secret: webhookForm.secret || undefined,
+                   });
+                   setCreatedWebhook(result);
+                   toast('Webhook created – save the secret now', 'success');
+                   setShowWebhookModal(false);
+                   setWebhookForm({ name: '', url: '', events: [], secret: '' });
+                   integrationsApi.listWebhooks().then(setWebhooks).catch(() => toast('Failed to refresh webhooks', 'error'));
+                 } catch { toast('Failed to create webhook', 'error'); }
+               }}><Plus size={14}/> Add</button>
           </>
         }>
           <div className="space-y-3 text-sm">
@@ -2002,75 +2117,7 @@ export default function Settings() {
           </div>
         </Modal>
 
-        <Modal open={showExternalSystemModal} onClose={() => setShowExternalSystemModal(false)} title="Add External System" size="md" footer={
-          <>
-            <button className="btn btn-ghost gap-2" onClick={() => setShowExternalSystemModal(false)}><X size={16}/> Cancel</button>
-            <button className="btn btn-primary gap-2" disabled={!externalSystemForm.name || !externalSystemForm.type || !externalSystemForm.baseUrl} onClick={async () => {
-              try {
-                await integrationsApi.createExternalSystem({
-                  name: externalSystemForm.name,
-                  type: externalSystemForm.type,
-                  description: externalSystemForm.description || undefined,
-                  baseUrl: externalSystemForm.baseUrl,
-                  apiKey: externalSystemForm.apiKey || undefined,
-                  apiSecret: externalSystemForm.apiSecret || undefined,
-                  headers: externalSystemForm.headers || undefined,
-                  syncDirection: externalSystemForm.syncDirection,
-                });
-                toast('External system added', 'success');
-                setShowExternalSystemModal(false);
-                setExternalSystemForm({ name: '', type: 'HRIS', description: '', baseUrl: '', apiKey: '', apiSecret: '', headers: '', syncDirection: 'pull' });
-                integrationsApi.listExternalSystems().then(setExternalSystems).catch(() => {});
-              } catch { toast('Failed to add external system', 'error'); }
-            }}><Plus size={14}/> Add</button>
-          </>
-        }>
-          <div className="space-y-3 text-sm">
-            <div>
-              <label className="block text-xs font-medium text-ink mb-1">Name</label>
-              <input className="input w-full" placeholder="Prime HR" value={externalSystemForm.name} onChange={e => setExternalSystemForm({ ...externalSystemForm, name: e.target.value })} />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-ink mb-1">Type</label>
-              <select className="select w-full" value={externalSystemForm.type} onChange={e => setExternalSystemForm({ ...externalSystemForm, type: e.target.value })}>
-                <option value="HRIS">HRIS</option>
-                <option value="PAYROLL">Payroll</option>
-                <option value="PORTAL">Portal</option>
-                <option value="OTHER">Other</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-ink mb-1">Base URL</label>
-              <input className="input w-full font-mono" placeholder="https://hr.example.com/api" value={externalSystemForm.baseUrl} onChange={e => setExternalSystemForm({ ...externalSystemForm, baseUrl: e.target.value })} />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-ink mb-1">Description</label>
-              <input className="input w-full" placeholder="Optional description" value={externalSystemForm.description} onChange={e => setExternalSystemForm({ ...externalSystemForm, description: e.target.value })} />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-medium text-ink mb-1">API Key</label>
-                <input className="input w-full font-mono" type="password" placeholder="Optional" value={externalSystemForm.apiKey} onChange={e => setExternalSystemForm({ ...externalSystemForm, apiKey: e.target.value })} />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-ink mb-1">API Secret</label>
-                <input className="input w-full font-mono" type="password" placeholder="Optional" value={externalSystemForm.apiSecret} onChange={e => setExternalSystemForm({ ...externalSystemForm, apiSecret: e.target.value })} />
-              </div>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-ink mb-1">Headers (JSON, optional)</label>
-              <textarea className="input w-full font-mono" rows="3" placeholder='{"X-Custom-Header": "value"}' value={externalSystemForm.headers} onChange={e => setExternalSystemForm({ ...externalSystemForm, headers: e.target.value })} />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-ink mb-1">Sync Direction</label>
-              <select className="select w-full" value={externalSystemForm.syncDirection} onChange={e => setExternalSystemForm({ ...externalSystemForm, syncDirection: e.target.value })}>
-                <option value="pull">Pull from external</option>
-                <option value="push">Push to external</option>
-                <option value="bidirectional">Bidirectional</option>
-              </select>
-            </div>
-          </div>
-        </Modal>
+
 
         {createdWebhook && (
           <Modal open={!!createdWebhook} onClose={() => setCreatedWebhook(null)} title="Webhook Created" size="sm" footer={
@@ -2101,17 +2148,17 @@ export default function Settings() {
            <ConfirmDialog
              open={!!rotateSecretTarget}
              onClose={() => setRotateSecretTarget(null)}
-             onConfirm={async () => {
-               try {
-                 const res = await integrationsApi.rotateWebhookSecret(rotateSecretTarget.id);
-                 toast('Secret rotated. Save the new secret.', 'success');
-                 setRotateSecretTarget(null);
-                 integrationsApi.listWebhooks().then(setWebhooks).catch(() => {});
-               } catch (e) {
-                 toast(e?.response?.data?.error?.message || 'Failed to rotate secret', 'error');
-                 setRotateSecretTarget(null);
-               }
-             }}
+              onConfirm={async () => {
+                try {
+                  const res = await integrationsApi.rotateWebhookSecret(rotateSecretTarget.id);
+                  toast('Secret rotated. Save the new secret.', 'success');
+                  setRotateSecretTarget(null);
+                  integrationsApi.listWebhooks().then(setWebhooks).catch(() => toast('Failed to refresh webhooks', 'error'));
+                } catch (e) {
+                  toast(e?.response?.data?.error?.message || 'Failed to rotate secret', 'error');
+                  setRotateSecretTarget(null);
+                }
+              }}
              title="Rotate webhook secret?"
              message={`This will generate a new secret for "${rotateSecretTarget.name}". The old secret will stop working immediately.`}
              confirmLabel="Rotate"

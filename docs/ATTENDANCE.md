@@ -8,14 +8,14 @@ call it, and known follow-ups.
 
 | Surface | Path | Auth |
 | --- | --- | --- |
-| Employee self-service punch + history | `POST /attendance/punch`, `GET /attendance/my`, `GET /attendance/today` | any linked employee (JWT) |
+| Employee self-service punch + history | `POST /attendance/punch`, `GET /attendance/my`, `GET /attendance/my/history` | any linked employee (JWT) |
 | ESS dashboards | `GET /ess/attendance?month=` | linked employee (self-scoped) |
-| Attendance Portal (main SPA) | `/attendance-portal` in `frontend` | `EMPLOYEE/ADMIN/HR_MANAGER/PAYROLL_OFFICER/DEPARTMENT_HEAD/SUPER_ADMIN` |
+| Self-service portal | moved to `lgu-attendance` project (`/my-attendance`) | any linked employee (JWT) |
 | Standalone lobby kiosk | `/kiosk/` in `kiosk/` | **none** (public punch API + optional punch key) |
 | HR management list/create/edit/delete/import | `GET|POST /attendance`, `PATCH|DELETE /attendance/:id`, `POST /attendance/import` | role-gated (see matrix) |
 | Public terminal punch | `POST /attendance/public-punch/punch` | none / `punchKey` if configured |
 
-Both the in-app Portal and the kiosk are wired to the **real** endpoints — no mocks.
+Both the kiosk and the standalone `lgu-attendance` self-service portal are wired to real endpoints — no mocks.
 
 ## Data model
 

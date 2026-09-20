@@ -89,3 +89,27 @@ export const punchBiometricPublicSchema = {
     punchKey: z.string().optional(),
   }),
 };
+
+export const integrationsAttendancePunchSchema = {
+  body: z.object({
+    employeeNumber: z.string().min(1),
+    punchType: z.enum(['IN', 'OUT']).optional(),
+    at: z.string().datetime().optional(),
+    deviceId: z.string().optional(),
+    source: z.string().optional(),
+  }),
+};
+
+export const integrationsAttendanceBulkSchema = {
+  body: z.object({
+    records: z.array(z.object({
+      employeeNumber: z.string().min(1),
+      date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Expected YYYY-MM-DD'),
+      timeIn: z.string().optional().nullable(),
+      timeOut: z.string().optional().nullable(),
+      hours: z.number().min(0).max(24).optional().nullable(),
+      remark: z.string().max(255).optional().nullable(),
+      source: z.string().optional(),
+    })).min(1).max(1000),
+  }),
+};

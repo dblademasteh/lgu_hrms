@@ -1,6 +1,5 @@
 import crypto from 'crypto';
-import { PrismaClient } from '@prisma/client';
-const prisma = new PrismaClient();
+import { prisma } from '../lib/prisma.js';
 
 function signPayload(secret, payload) {
   const hmac = crypto.createHmac('sha256', secret);

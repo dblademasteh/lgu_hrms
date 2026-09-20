@@ -163,25 +163,20 @@
 
 ---
 
-## 5. Attendance Portal (Frontend)
+## 5. Self-Service Portal (moved to lgu-attendance)
 
-**Route:** `/attendance-portal`
+The employee self-service attendance portal (`/attendance-portal`) was transferred to
+the standalone **lgu-attendance** project. In lgu-attendance the route is
+`/my-attendance` and it covers:
+- **Today's Status:** time in, time out, hours, status badge
+- **Punch In/Out:** authenticated punch buttons
+- **Monthly Summary:** stats for total days, present, late, absent, hours
+- **Attendance History:** table of records for selected month (`GET /attendance/my/history?month=YYYY-MM`)
+- **Enrolled Devices:** list of enrolled fingerprint devices with enroll/remove actions
 
-**Features:**
-- **Today's Status:** Shows time in, time out, hours, remark
-- **Punch In/Out:** Authenticated punch buttons for logged-in employees
-- **Kiosk Mode:** Toggle to show public punch form (employee number + tenant code)
-- **Monthly Summary:** Stats for total days, punched in/out, hours, on time, tardiness
-- **Attendance History:** Table of records for selected month
-- **Enrolled Devices:** List of enrolled fingerprint devices with enroll/remove actions
-
-**Verified Workflow:**
-1. Employee opens `/attendance-portal`
-2. `GET /api/v1/attendance/today` loads today's record
-3. `GET /api/v1/attendance/my?month=YYYY-MM` loads history
-4. Punch buttons call `POST /api/v1/attendance/punch`
-5. Kiosk mode calls `POST /api/v1/attendance/public-punch/punch`
-6. Enrollment modal calls `POST /api/v1/biometric/enroll`
+The underlying HRMS biometric credential API (`POST /biometric/enroll`,
+`GET /biometric/credentials`, etc.) remains available in lgu-hrms for admin/employee
+credential reads; the enrollment UI now lives in lgu-attendance.
 
 ---
 

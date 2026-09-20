@@ -173,5 +173,25 @@ export const attendanceController = {
     } catch (e) {
       next(e);
     }
+  },
+
+  // Ingest a punch from an external attendance system (API-key authenticated).
+  async ingestPunch(req, res, next) {
+    try {
+      const result = await attendanceService.ingestPunch(req, req.body);
+      res.json(result);
+    } catch (e) {
+      next(e);
+    }
+  },
+
+  // Bulk ingest attendance records from an external attendance system.
+  async bulkIngest(req, res, next) {
+    try {
+      const results = await attendanceService.bulkIngest(req, req.body.records);
+      res.json({ results });
+    } catch (e) {
+      next(e);
+    }
   }
 };

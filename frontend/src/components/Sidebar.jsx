@@ -54,7 +54,6 @@ const groups = [
       { name: 'Learning', path: '/learning', icon: Landmark, roles: ['HR_MANAGER', 'ADMIN'], capability: 'trainingCRUD' },
       { name: 'Attendance', path: '/attendance', icon: Clock, roles: ['HR_MANAGER', 'ADMIN', 'DEPARTMENT_HEAD'], children: [
         { name: 'DTR', path: '/attendance' },
-        { name: 'Portal', path: '/attendance-portal' },
       ]},
     ]
   },
@@ -635,7 +634,7 @@ function AccordionSidebar({ collapsed, visibleGroups, role }) {
 export default function Sidebar({ collapsed }) {
   const role = useAuthStore(s => s.user?.role);
   const style = useSidebarStyle();
-  const capabilities = useUserCapabilities();
+  const capabilities = useUserCapabilities(!!role);
   const visibleGroups = filterGroups(groups, role, capabilities);
 
   if (style === 'dock') {
