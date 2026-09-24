@@ -1414,7 +1414,81 @@ export default function Settings() {
                      }
                    }}><Plus size={14}/> {editingExternalSystem ? 'Update' : 'Add'}</button>
                  </>
-               }>
+                }>
+            <div className="space-y-3 text-sm">
+              <div>
+                <label className="block text-xs font-medium text-ink mb-1">Name</label>
+                <input className="input w-full" placeholder="Prime HR" value={externalSystemForm.name} onChange={e => setExternalSystemForm({ ...externalSystemForm, name: e.target.value })} />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-ink mb-1">Type</label>
+                <select className="select w-full" value={externalSystemForm.type} onChange={e => setExternalSystemForm({ ...externalSystemForm, type: e.target.value })}>
+                  <option value="HRIS">HRIS</option>
+                  <option value="ATTENDANCE">Attendance</option>
+                  <option value="PAYROLL">Payroll</option>
+                  <option value="PORTAL">Portal</option>
+                  <option value="OTHER">Other</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-ink mb-1">Base URL</label>
+                <input className="input w-full font-mono" placeholder="https://hr.example.com/api" value={externalSystemForm.baseUrl} onChange={e => setExternalSystemForm({ ...externalSystemForm, baseUrl: e.target.value })} />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-ink mb-1">Description</label>
+                <input className="input w-full" placeholder="Optional description" value={externalSystemForm.description} onChange={e => setExternalSystemForm({ ...externalSystemForm, description: e.target.value })} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-ink mb-1">API Key</label>
+                  <input className="input w-full font-mono" type="password" placeholder="Optional" value={externalSystemForm.apiKey} onChange={e => setExternalSystemForm({ ...externalSystemForm, apiKey: e.target.value })} />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-ink mb-1">API Secret</label>
+                  <input className="input w-full font-mono" type="password" placeholder="Optional" value={externalSystemForm.apiSecret} onChange={e => setExternalSystemForm({ ...externalSystemForm, apiSecret: e.target.value })} />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-ink mb-1">Headers (JSON, optional)</label>
+                <textarea className="input w-full font-mono" rows="3" placeholder='{"X-Custom-Header": "value"}' value={externalSystemForm.headers} onChange={e => setExternalSystemForm({ ...externalSystemForm, headers: e.target.value })} />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-ink mb-1">Sync Direction</label>
+                <select className="select w-full" value={externalSystemForm.syncDirection} onChange={e => setExternalSystemForm({ ...externalSystemForm, syncDirection: e.target.value })}>
+                  <option value="pull">Pull from external</option>
+                  <option value="push">Push to external</option>
+                  <option value="bidirectional">Bidirectional</option>
+                </select>
+              </div>
+              {externalSystemForm.type === 'ATTENDANCE' && (
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs font-medium text-ink mb-1">Ingestion Mode</label>
+                    <select className="select w-full" value={externalSystemForm.attendanceMode || 'pull'} onChange={e => setExternalSystemForm({ ...externalSystemForm, attendanceMode: e.target.value })}>
+                      <option value="pull">Poll / Pull</option>
+                      <option value="push">Push / Webhook</option>
+                      <option value="bulk">Bulk Import</option>
+                    </select>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-ink mb-1">Poll Interval (seconds)</label>
+                      <input className="input w-full font-mono" type="number" placeholder="300" value={externalSystemForm.attendancePollInterval || ''} onChange={e => setExternalSystemForm({ ...externalSystemForm, attendancePollInterval: e.target.value })} />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-ink mb-1">Device / Terminal ID</label>
+                      <input className="input w-full font-mono" placeholder="ZK-400" value={externalSystemForm.deviceId || ''} onChange={e => setExternalSystemForm({ ...externalSystemForm, deviceId: e.target.value })} />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-ink mb-1">Punch Key (optional)</label>
+                    <input className="input w-full font-mono" type="password" placeholder="Optional shared secret for kiosk/public punch" value={externalSystemForm.punchKey || ''} onChange={e => setExternalSystemForm({ ...externalSystemForm, punchKey: e.target.value })} />
+                  </div>
+                </div>
+              )}
+            </div>
+           </Modal>
+            )}
 
             {active === 'account' && (
               <section className="card p-6 space-y-6">

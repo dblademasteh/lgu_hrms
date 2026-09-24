@@ -55,6 +55,7 @@ export async function createExternalSystem(req, res, next) {
         attendancePollInterval: type === 'ATTENDANCE' && attendancePollInterval ? Math.max(0, Number(attendancePollInterval)) : null,
         deviceId: type === 'ATTENDANCE' ? (deviceId || null) : null,
         punchKey: type === 'ATTENDANCE' ? (punchKey || null) : null,
+        lastSyncedAt: new Date(),
       }),
     });
 
@@ -95,6 +96,7 @@ export async function updateExternalSystem(req, res, next) {
           deviceId: null,
           punchKey: null,
         }),
+        lastSyncedAt: new Date(),
       },
     });
 

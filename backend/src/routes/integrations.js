@@ -10,6 +10,7 @@ import { prisma } from '../lib/prisma.js';
 import { attendanceController } from '../controllers/attendanceController.js';
 import { integrationsAttendancePunchSchema, integrationsAttendanceBulkSchema } from '../shared/contracts/attendance.js';
 import { validate } from '../middleware/validate.js';
+import { createApiKeySchema, createWebhookSchema, updateWebhookSchema, createExternalSystemSchema, updateExternalSystemSchema } from '../shared/contracts/integrations.js';
 
 const router = Router();
 
@@ -124,21 +125,21 @@ router.use(requireAuth, requireRole('SUPER_ADMIN'));
 
 // API Keys management (tenant-scoped)
 router.get('/keys', tenantContext, listApiKeys);
-router.post('/keys', tenantContext, createApiKey);
+router.post('/keys', tenantContext, validate(createApiKeySchema), createApiKey);
 router.delete('/keys/:id', tenantContext, revokeApiKey);
 
 // Webhooks management (tenant-scoped)
 router.get('/webhooks', tenantContext, listWebhooks);
-router.post('/webhooks', tenantContext, createWebhook);
-router.put('/webhooks/:id', tenantContext, updateWebhook);
+router.post('/webhooks', tenantContext, validate(createWebhookSchema), createWebhook);
+router.put('/webhooks/:id', tenantContext, validate(updateWebhookSchema), updateWebhook);
 router.delete('/webhooks/:id', tenantContext, deleteWebhook);
 router.post('/webhooks/:id/test', tenantContext, testWebhook);
 router.post('/webhooks/:id/rotate-secret', tenantContext, rotateWebhookSecret);
 
 // External Systems management (tenant-scoped)
 router.get('/external-systems', tenantContext, listExternalSystems);
-router.post('/external-systems', tenantContext, createExternalSystem);
-router.put('/external-systems/:id', tenantContext, updateExternalSystem);
+router.post('/external-systems', tenantContext, validate(createExternalSystemSchema), createExternalSystem);
+router.put('/external-systems/:id', tenantContext, validate(updateExternalSystemSchema), updateExternalSystem);
 router.delete('/external-systems/:id', tenantContext, deleteExternalSystem);
 
 export default router;
