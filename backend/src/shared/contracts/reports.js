@@ -15,6 +15,29 @@ export const payrollSummarySchema = {
   }),
 };
 
+export const payrollRegisterSchema = {
+  query: z.object({
+    runId: z.string().optional(),
+    periodId: z.string().optional(),
+    format: z.enum(['json', 'csv']).optional().default('csv'),
+  }),
+};
+
+export const payrollJournalSchema = {
+  query: z.object({
+    runId: z.string().optional(),
+    periodId: z.string().optional(),
+    format: z.enum(['json', 'csv']).optional().default('csv'),
+  }),
+};
+
+export const employeeMasterListSchema = {
+  query: z.object({
+    departmentId: z.string().optional(),
+    format: z.enum(['json', 'csv']).optional().default('csv'),
+  }),
+};
+
 export const serviceRecordSchema = {
   params: z.object({
     employeeId: z.string().min(1),
