@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Save, X, Edit, UserCheck, Shield, Building2, Settings, Copy, Trash2, Fingerprint } from 'lucide-react';
+import { Plus, Save, X, Edit, UserCheck, Shield, ShieldOff, BarChart3, Building2, Settings, Copy, Trash2, Fingerprint } from 'lucide-react';
 import Layout from '../components/Layout.jsx';
 import Modal from '../components/Modal.jsx';
 import ConfirmDialog from '../components/ConfirmDialog.jsx';
@@ -305,6 +305,54 @@ export default function Users() {
 
       {activeTab === 'users' && (
         <div className="card p-5">
+          {/* ── KPI Stat Cards ── */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+            <div className="stat">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-8 h-8 rounded-lg bg-accent/10 text-accent grid place-items-center" aria-hidden="true">
+                  <UserCheck size={16} />
+                </div>
+                <span className="mono-label">TOTAL USERS</span>
+              </div>
+              <div className="stat-value">{list.length}</div>
+              <div className="flex items-center gap-2 mt-1">
+                <span className="badge badge-success text-xs">{list.filter(isActive).length} active</span>
+                <span className="badge badge-error text-xs">{list.filter(u => !isActive(u)).length} inactive</span>
+              </div>
+            </div>
+            <div className="stat">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-8 h-8 rounded-lg bg-success/10 text-success grid place-items-center" aria-hidden="true">
+                  <UserCheck size={16} />
+                </div>
+                <span className="mono-label">ACTIVE</span>
+              </div>
+              <div className="stat-value text-success">{list.filter(isActive).length}</div>
+            </div>
+            <div className="stat">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-8 h-8 rounded-lg bg-error/10 text-error grid place-items-center" aria-hidden="true">
+                  <ShieldOff size={16} />
+                </div>
+                <span className="mono-label">INACTIVE</span>
+              </div>
+              <div className="stat-value text-error">{list.filter(u => !isActive(u)).length}</div>
+            </div>
+            <div className="stat">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-8 h-8 rounded-lg bg-accent-secondary/10 text-accent-secondary grid place-items-center" aria-hidden="true">
+                  <Shield size={16} />
+                </div>
+                <span className="mono-label">TOTAL ROLES</span>
+              </div>
+              <div className="stat-value">{roles.length}</div>
+              <div className="flex items-center gap-2 mt-1">
+                <span className="badge text-xs">{roles.filter(r => r.isSystem).length} system</span>
+                <span className="badge text-xs">{roles.filter(r => !r.isSystem).length} custom</span>
+              </div>
+            </div>
+          </div>
+
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-display font-semibold text-ink">User Accounts</h3>
             <span className="flex items-center gap-3 mono-label">
@@ -402,6 +450,43 @@ export default function Users() {
 
       {activeTab === 'roles' && (
         <div className="card p-5">
+          {/* ── KPI Stat Cards ── */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+            <div className="stat">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-8 h-8 rounded-lg bg-accent/10 text-accent grid place-items-center" aria-hidden="true">
+                  <Shield size={16} />
+                </div>
+                <span className="mono-label">TOTAL ROLES</span>
+              </div>
+              <div className="stat-value">{roles.length}</div>
+              <div className="flex items-center gap-2 mt-1">
+                <span className="badge text-xs">{roles.filter(r => r.isSystem).length} system</span>
+                <span className="badge text-xs">{roles.filter(r => !r.isSystem).length} custom</span>
+              </div>
+            </div>
+            <div className="stat">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-8 h-8 rounded-lg bg-success/10 text-success grid place-items-center" aria-hidden="true">
+                  <Shield size={16} />
+                </div>
+                <span className="mono-label">SYSTEM ROLES</span>
+              </div>
+              <div className="stat-value text-success">{roles.filter(r => r.isSystem).length}</div>
+              <p className="text-xs text-muted mt-1">Pre-defined, not deletable</p>
+            </div>
+            <div className="stat">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-8 h-8 rounded-lg bg-warning/10 text-warning grid place-items-center" aria-hidden="true">
+                  <Settings size={16} />
+                </div>
+                <span className="mono-label">CUSTOM ROLES</span>
+              </div>
+              <div className="stat-value text-warning">{roles.filter(r => !r.isSystem).length}</div>
+              <p className="text-xs text-muted mt-1">User-defined, editable</p>
+            </div>
+          </div>
+
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-display font-semibold text-ink">Roles</h3>
             {canManage && (
@@ -455,6 +540,40 @@ export default function Users() {
 
       {activeTab === 'permissions' && (
         <div className="card p-5">
+          {/* ── KPI Stat Cards ── */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+            <div className="stat">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-8 h-8 rounded-lg bg-accent/10 text-accent grid place-items-center" aria-hidden="true">
+                  <BarChart3 size={16} />
+                </div>
+                <span className="mono-label">TOTAL CAPABILITIES</span>
+              </div>
+              <div className="stat-value">{caps.length}</div>
+            </div>
+            <div className="stat">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-8 h-8 rounded-lg bg-success/10 text-success grid place-items-center" aria-hidden="true">
+                  <Shield size={16} />
+                </div>
+                <span className="mono-label">ASSIGNED ROLES</span>
+              </div>
+              <div className="stat-value text-success">{matrixRoles.length}</div>
+              <p className="text-xs text-muted mt-1">{(matrixRoles || []).filter(r => Object.values(r.permissions || {}).some(Boolean)).length} with capabilities</p>
+            </div>
+            <div className="stat">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-8 h-8 rounded-lg bg-warning/10 text-warning grid place-items-center" aria-hidden="true">
+                  <Settings size={16} />
+                </div>
+                <span className="mono-label">SYSTEM ROLES</span>
+              </div>
+              <div className="stat-value text-warning">
+                {(matrixRoles || []).filter(r => r.isSystem).length}
+              </div>
+            </div>
+          </div>
+
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-display font-semibold text-ink">Permissions Matrix</h3>
             <div className="flex items-center gap-2">
