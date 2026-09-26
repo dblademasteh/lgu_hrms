@@ -102,7 +102,7 @@ export default function Recruitment() {
 
   const loadRefs = async () => {
     try { const { data } = await positionsApi.list(); setPositions(data?.items || []); } catch { setPositions([]); }
-    try { const { data } = await departmentsApi.list(); setDepartments(data?.items || []); } catch { setDepartments([]); }
+    try { setDepartments(await departmentsApi.list()); } catch { setDepartments([]); }
   };
 
   const loadInterviews = async () => {

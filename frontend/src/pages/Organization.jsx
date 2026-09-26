@@ -47,7 +47,7 @@ export default function Organization() {
   const [search, setSearch] = useState('');
 
   useEffect(() => {
-    departmentsApi.list().then(r => setList(r.data?.items ?? [])).catch(() => toast('Failed to load departments', 'error'));
+    departmentsApi.list().then(setList).catch(() => toast('Failed to load departments', 'error'));
   }, [toast]);
 
   const parentMap = useMemo(() => {

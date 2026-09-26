@@ -106,7 +106,7 @@ export default function Employees() {
 
   // Departments for the filter picker — all units, not just those on page 1.
   useEffect(() => {
-    departmentsApi.list().then(r => setDepartments(r.data?.items ?? [])).catch(() => toast('Failed to load departments','error'));
+    departmentsApi.list().then(setDepartments).catch(() => toast('Failed to load departments','error'));
   }, [toast]);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));

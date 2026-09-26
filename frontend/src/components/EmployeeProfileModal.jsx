@@ -81,7 +81,7 @@ async function getRefMaps() {
   if (refCache) return refCache;
   try {
     const [deps, poss] = await Promise.all([
-      departmentsApi.list().then(r => r?.data ?? r).catch(() => []),
+      departmentsApi.list().catch(() => []),
       api.get('/positions').then(r => r?.data ?? []).catch(() => []),
     ]);
     const depMap = Object.fromEntries(

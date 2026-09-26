@@ -121,8 +121,8 @@ export default function Users() {
   };
 
   useEffect(() => {
-    usersApi.list().then(r => setList(r.data?.items ?? [])).catch(()=>toast('Failed to load users','error'));
-    departmentsApi.list().then(r => setDeptList(r.data?.items ?? [])).catch(()=>{});
+    usersApi.list().then(setList).catch(()=>toast('Failed to load users','error'));
+    departmentsApi.list().then(setDeptList).catch(()=>{});
     listEmployees({ page: 1, limit: 200 }).then(({ items = [] }) => setEmployees(items)).catch(()=>{}).finally(() => setEmployeesLoading(false));
     if (myRole === 'SUPER_ADMIN') databaseApi.tenants().then(setTenants).catch(()=>setTenants([]));
     rolesApi.list().then(r => setRoles(Array.from(new Map((r.data?.roles || []).map(x => [x.name, x])).values()))).catch(()=>{}).finally(() => setRolesLoading(false));

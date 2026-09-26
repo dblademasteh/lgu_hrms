@@ -23,7 +23,7 @@ export default function Plantilla() {
       const { data } = await plantillaApi.list({ search: search || undefined, status: statusFilter || undefined });
       setItems(data.items || []);
       const depts = await departmentsApi.list();
-      setDeptList(depts.data?.items || []);
+      setDeptList(Array.isArray(depts) ? depts : []);
       const positions = await positionsApi.list();
       setPosList(positions.data?.items || []);
     } catch (e) {

@@ -37,7 +37,7 @@ export default function Appointments() {
 
   useEffect(() => {
     appointmentsApi.list().then(r => setList(r.data?.items ?? [])).catch(() => toast('Failed to load appointments', 'error'));
-    departmentsApi.list().then(r => setDeptList(r.data?.items ?? [])).catch(() => {});
+    departmentsApi.list().then(setDeptList).catch(() => {});
     listEmployees({ limit: 200 }).then(r => setEmployeeOptions(r.items ?? [])).catch(() => {});
   }, []);
 
