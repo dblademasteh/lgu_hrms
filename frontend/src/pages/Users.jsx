@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Save, X, Edit, UserCheck, Shield, ShieldOff, BarChart3, Building2, Settings, Copy, Trash2, Fingerprint } from 'lucide-react';
+import { Plus, Save, X, Edit, Eye, UserCheck, Shield, ShieldOff, BarChart3, Building2, Settings, Copy, Trash2, Fingerprint } from 'lucide-react';
 import Layout from '../components/Layout.jsx';
 import Modal from '../components/Modal.jsx';
 import ConfirmDialog from '../components/ConfirmDialog.jsx';
@@ -46,6 +46,7 @@ export default function Users() {
   const [roleSaving, setRoleSaving] = useState(false);
   const [editingRole, setEditingRole] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
+  const [viewing, setViewing] = useState(null);
   const [userSearch, setUserSearch] = useState('');
   const [activeTab, setActiveTab] = useState('users');
   // Permission matrix — authoritative in the backend (RolePermission table).
@@ -425,6 +426,10 @@ export default function Users() {
                         <td><span className={"badge " + badgeTone(u.status)}>{u.status}</span></td>
                         <td className="text-right">
                           <span className="inline-flex gap-1">
+                            <button type="button" className="btn btn-ghost px-2 text-xs" onClick={() => setViewing(u)} aria-label={`View ${u.username}`}>
+                              <Eye size={14} />
+                              <span className="hidden sm:inline">View</span>
+                            </button>
                             <button type="button" className="btn btn-ghost px-2 text-xs" onClick={() => openEdit(u)} aria-label={`Edit ${u.username}`}>
                               <Edit size={14} />
                               <span className="hidden sm:inline">Edit</span>
@@ -932,6 +937,87 @@ export default function Users() {
           </div>
           <p className="text-xs text-muted">Password expires after 30 days. User must change it on first login.</p>
         </div>
+      </Modal>
+
+      {/* ── View User Detail ── */}
+      <Modal
+        open={!!viewing}
+        onClose={() => setViewing(null)}
+        title="User Details"
+        footer={
+          <button type="button" className="btn" onClick={() => setViewing(null)}>
+            <X size={16} /> Close
+          </button>
+        }
+      >
+        {viewing && (
+          <div className="space-y-4">
+            {/* Header: Avatar + Identity */}
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-[12px] bg-gradient-to-br from-accent/20 to-accent/5 text-accent grid place-items-center ring-1 ring-accent/10">
+                <span className="font-display font-bold text-xl">
+                  {viewing.username?.[0]?.toUpperCase() ?? 'U'}
+                </span>
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="font-display font-bold text-ink text-xl">{viewing.username}</h3>
+                  <span className={"badge " + badgeTone(viewing.status)}>{viewing.status}</span>
+                  {viewing.tenantId === 'tenant-solana' || viewing.tenantId === 'tenant-default' ? null : (
+                    <span className="badge bg-accent/10 text-accent mono-label text-[10px]">
+                      {viewing.tenantId}
+                    </span>
+                  )}
+                </div>
+                <p className="text-sm text-muted">
+                  {viewing.role?.replaceAll('_', ' ')}
+                  {viewing.tenantId === 'platform' && <span className="mono-label text-[10px] text-accent ml-1">PLATFORM</span>}
+                </p>
+              </div>
+            </div>
+
+            {/* Info Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <p className="mono-label text-[10px]">Role</p>
+                <p className="font-medium text-ink mt-0.5">{viewing.role?.replaceAll('_', ' ')}</p>
+              </div>
+              <div>
+                <p className="mono-label text-[10px]">Tenant Scope</p>
+                <p className="font-medium text-ink mt-0.5 font-mono">{viewing.tenantId ?? '—'}</p>
+              </div>
+              <div>
+                <p className="mono-label text-[10px]">Department</p>
+                <p className="font-medium text-ink mt-0.5">{viewing.department?.name ?? viewing.department ?? '—'}</p>
+              </div>
+              <div>
+                <p className="mono-label text-[10px]">Status</p>
+                <p className="font-medium text-ink mt-0.5">{isActive(viewing) ? 'Active' : 'Inactive'}</p>
+              </div>
+              {viewing.externalId && (
+                <div className="sm:col-span-2">
+                  <p className="mono-label text-[10px]">ESS Linked Employee</p>
+                  <p className="font-medium text-ink mt-0.5">
+                    {viewing.linkedEmployee
+                      ? `${viewing.linkedEmployee.employeeNumber} · ${viewing.linkedEmployee.lastName}, ${viewing.linkedEmployee.firstName}`
+                      : viewing.externalId}
+                  </p>
+                  {viewing.linkedEmployee?.keyPosition && (
+                    <span className="badge badge-success text-xs mt-1 mono-label">Key Position: {viewing.linkedEmployee.keyPosition}</span>
+                  )}
+                </div>
+              )}
+              {viewing.createdAt && (
+                <div className="sm:col-span-2">
+                  <p className="mono-label text-[10px]">Account Created</p>
+                  <p className="font-medium text-ink mt-0.5 font-mono text-xs">
+                    {new Date(viewing.createdAt).toLocaleString()}
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </Modal>
     </Layout>
   );
