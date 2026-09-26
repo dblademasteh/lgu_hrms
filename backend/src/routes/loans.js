@@ -3,6 +3,7 @@ import { prisma } from '../lib/prisma.js';
 import { validate } from '../middleware/validate.js';
 import { requirePermission } from '../middleware/permission.js';
 import { withTenant, stampTenant } from '../middleware/tenant.js';
+import { Prisma } from '@prisma/client';
 import {
   listLoansSchema,
   loanIdSchema,
@@ -10,6 +11,30 @@ import {
 } from '../shared/contracts/loans.js';
 
 const router = Router();
+
+// Equal monthly installments from startDate; the last installment absorbs the
+// rounding remainder so the schedule always sums to the exact loan amount.
+// Month-end dates clamp to the last day of the month (Jan 31 + 1mo = Feb 28),
+// which is how salary deductions actually fall.
+function addMonthsUtc(date, months) {
+  const d = new Date(date);
+  const day = d.getUTCDate();
+  d.setUTCDate(1);
+  d.setUTCMonth(d.getUTCMonth() + months);
+  const daysInMonth = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate();
+  d.setUTCDate(Math.min(day, daysInMonth));
+  return d;
+}
+
+function buildAmortizations(amount, termMonths, startDate) {
+  const total = new Prisma.Decimal(amount);
+  const base = total.div(termMonths).toDecimalPlaces(2, Prisma.Decimal.ROUND_DOWN);
+  const last = total.minus(base.mul(termMonths - 1));
+  return Array.from({ length: termMonths }, (_, i) => ({
+    dueDate: addMonthsUtc(startDate, i),
+    amount: i === termMonths - 1 ? last : base,
+  }));
+}
 
 router.use(requirePermission('loansCRUD'));
 
@@ -63,7 +88,14 @@ router.post('/', validate(createLoanSchema), async (req,res,next)=>{
         amount,
         termMonths,
         startDate: new Date(`${startDate}T00:00:00.000Z`),
+        amortizations: {
+          create: buildAmortizations(amount, termMonths, new Date(`${startDate}T00:00:00.000Z`)).map((a) => ({
+            dueDate: a.dueDate,
+            amount: a.amount,
+          })),
+        },
       }),
+      include: { amortizations: { orderBy: { dueDate: 'asc' } } },
     });
     res.status(201).json(loan);
   }catch(e){ next(e); }
