@@ -178,6 +178,10 @@
 - [ ] **Settings.jsx accent hex literals**: `frontend/src/pages/Settings.jsx:41,580` uses hex strings (`#1d4ed8` etc.) for the accent preset picker. These are the actual token values the user selects (applied to `--accent` via inline style), not hardcoded component colors. The "refactor to `var(--accent-*)`" todo is a non-issue — changing them would remove color choice. Marked as design decision.
 - [ ] **Attendance list pagination**: `GET /attendance` (`attendanceRepository.findAll`) still returns all rows without pagination despite `listAttendanceSchema` only allowing `date` filter. Medium gap — daily date scope mitigates at small scale, but needs `page`/`limit` for 1k-employee LGUs.
 
+## Workflow
+- [x] Installed `farmage/opencode-skills` repository — 66 skills + 13 workflow commands (discovery, planning, execution, retrospectives, common-ground references)
+- [x] Documented all workflow commands: `docs/OPENCODE_WORKFLOW_COMMANDS.md` (command reference, workflow chain diagram, phase-by-phase guide, usage examples)
+
 ## Done
 - [x] Permission matrix made real: RolePermission model + migration `20260913120000_role_permissions` (baselined into migration history), `requirePermission()` middleware (SUPER_ADMIN bypass, DEFAULT_PERMISSIONS fallback), capability catalog in `backend/src/shared/permissions.js`, service in `backend/src/services/permissionService.js`
 - [x] Matrix UI now API-backed: Users.jsx renders capabilities × roles from `GET /roles/permissions` + `/roles/capabilities`, edits PATCH `/roles/:name/permissions`; removed localStorage `permissions-overrides` + `permissions-changed`; custom roles get capability-gated access
@@ -310,3 +314,6 @@ Reads-vs-docs drift + error UX + leftover fixtures surfaced in a live scan:
 ### Benchmark notes vs CSC SPMS / PRIME-HRM (see doc)
 - Engine matches CSC MC No. 6 s. 2012 five-point scale + IPCRF Part I/II/III computation; states PLANNING→MONITORING→REVIEW→APPROVED/REJECTED track the SPMS Appraisal process.
 - Gaps: no mid-year (MONITORING) review capture; no rating-sheet/SPMS Form 1 print; no OPCR→IPCR cascade UI (model exists); no sign-off notifications; L&D eval levels (Kirkpatrick 1–2 via `TrainingEvaluation` model) + TNA + L&D plan + IDP all modeled but unmounted/unwired.
+
+## Brand Logo (completed)
+- [x] **LGU HRMS logo designed & integrated** — created `logo.svg` (full brand mark: indigo shield + teal capitol building with columns + white people figures + "LGU HRMS" text + tagline), `logo-icon.svg` (icon-only variant for headers/sidebar/favicon), `public/icon.svg` (simplified favicon); integrated into Login page (desktop + mobile headers), Header component, and all Sidebar variants (classic/compact/mobile). Colors use existing design tokens (`--accent` indigo `#1d4ed8`, `--accent-secondary` teal `#0f766e`, white). Documented in `DESIGN.md` §4 "Logo & Brand". `npm run build` passes, `node --check` passes, color lint clean.
