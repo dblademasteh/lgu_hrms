@@ -72,9 +72,17 @@ export const usersService = {
     await this.assertDepartmentExists(departmentId, req.tenantId);
     const plain = randomPassword();
     const passwordHash = await bcrypt.hash(plain, 12);
-    const stamped = stampTenant(req, { username, role, departmentId, displayName, email, contactNumber, passwordHash, passwordChangedAt: null });
-    const link = externalId ? { linkedEmployee: { connect: { employeeNumber: externalId } } } : {};
-    const user = await userRepository.create(req, { ...stamped, ...link });
+    // `externalId` is the FK backing the `linkedEmployee` relation, so it is
+    // written as a plain scalar. Using a nested `linkedEmployee: { connect }`
+    // here instead would mix a checked relation with the unchecked scalar FKs
+    // (tenantId, departmentId) that stampTenant adds, which Prisma rejects
+    // ("Unknown argument `tenantId`") — that made every ESS-linked user
+    // creation fail with a 500. The scalar produces the identical row.
+    const stamped = stampTenant(req, {
+      username, role, departmentId, displayName, email, contactNumber,
+      externalId: externalId || null, passwordHash, passwordChangedAt: null,
+    });
+    const user = await userRepository.create(req, stamped);
     const { passwordHash: _ph, pinHash: _pin, ...safe } = user;
     return { ...safe, temporaryPassword: plain };
   },
@@ -87,10 +95,8 @@ export const usersService = {
     if ('externalId' in rest) {
       const ext = rest.externalId?.trim();
       await this.assertLinkable(req, ext, id);
-      rest.linkedEmployee = ext
-        ? { connect: { employeeNumber: ext } }
-        : { disconnect: true };
-      delete rest.externalId;
+      // Scalar FK, not a nested relation — see the note in create().
+      rest.externalId = ext || null;
     }
     if ('role' in rest) await this.assertRoleExists(rest.role, req.tenantId);
     if ('departmentId' in rest) await this.assertDepartmentExists(rest.departmentId, req.tenantId);
