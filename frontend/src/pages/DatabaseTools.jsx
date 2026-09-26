@@ -68,7 +68,7 @@ export default function DatabaseTools() {
     setConfirmRunMigrations(false);
     try {
       const res = await databaseApi.runMigrations();
-      toast(`Migrations applied: ${res.message || 'success'}`, 'success');
+      toast(res.message || 'Migrations applied', res.inSync === false ? 'error' : 'success');
       await loadAll();
     } catch (e) {
       toast(e?.response?.data?.error?.message || 'Migration failed', 'error');

@@ -375,8 +375,11 @@ export default function Settings() {
     setConfirmRunMigrations(false);
     try {
       const res = await databaseApi.runMigrations();
-      toast(`Migrations applied: ${res.message || 'success'}`, 'success');
-      databaseApi.migrations().then(mig => setDbOps(prev => ({ ...prev, migrations: mig }))).catch(() => {});
+      toast(res.message || 'Migrations applied', res.inSync === false ? 'error' : 'success');
+      // The deploy response returns the authoritative post-run state, so use it
+      // directly instead of issuing a second round-trip.
+      if (res.state) setDbOps(prev => ({ ...prev, migrations: res.state }));
+      else databaseApi.migrations().then(mig => setDbOps(prev => ({ ...prev, migrations: mig }))).catch(() => {});
     } catch (e) {
       toast(e?.response?.data?.error?.message || 'Migration failed', 'error');
     } finally {

@@ -85,6 +85,70 @@ function _filterSensitive(record) {
   return clean;
 }
 
+// Absolute path to the project root (…/backend) from this controller's location.
+const BACKEND_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../');
+
+// Migration bookkeeping is read from _prisma_migrations and compared against the
+// folders in prisma/migrations. Shared by the status endpoint and the deploy
+// endpoint so both always report the same view.
+//
+// If _prisma_migrations is missing the database was created with `prisma db push`
+// and every migration will read as pending; `applied` then comes back empty.
+async function readMigrationState() {
+  let applied = [];
+  try {
+    applied = await prisma.$queryRawUnsafe(
+      `SELECT migration_name, started_at AS "startedAt", finished_at AS "finishedAt"
+       FROM _prisma_migrations ORDER BY finished_at NULLS LAST, started_at`
+    );
+  } catch {
+    applied = [];
+  }
+  const appliedNames = new Set(applied.map(r => r.migration_name));
+  const finished = applied.map(r => r.finishedAt).filter(Boolean).sort();
+  let onDisk = [];
+  try {
+    const entries = await fs.readdir(path.join(BACKEND_DIR, 'prisma/migrations'), { withFileTypes: true });
+    onDisk = entries.filter(e => e.isDirectory()).map(e => e.name).sort();
+  } catch { onDisk = []; }
+  const pending = onDisk.filter(m => !appliedNames.has(m));
+  return {
+    applied: applied.map(r => r.migration_name),
+    history: applied.map(r => ({
+      name: r.migration_name,
+      startedAt: r.startedAt,
+      finishedAt: r.finishedAt,
+    })),
+    lastApplied: finished.length ? finished[finished.length - 1] : null,
+    appliedCount: applied.length,
+    onDisk,
+    pending,
+    pendingCount: pending.length,
+    inSync: pending.length === 0,
+  };
+}
+
+// Run the project-local Prisma CLI through the current node binary.
+//
+// Deliberately not `npx`: npx is a .cmd shim on Windows and execFile cannot spawn
+// it without a shell, so the deploy endpoint failed with `spawn npx ENOENT`.
+// Going through process.execPath + the local CLI also pins the Prisma version to
+// the one in package.json rather than whatever happens to be on PATH.
+function runPrismaMigrateDeploy() {
+  const prismaCli = path.join(BACKEND_DIR, 'node_modules', 'prisma', 'build', 'index.js');
+  return new Promise((resolve, reject) => {
+    execFile(
+      process.execPath,
+      [prismaCli, 'migrate', 'deploy'],
+      { cwd: BACKEND_DIR, timeout: 300000, maxBuffer: 10 * 1024 * 1024, windowsHide: true },
+      (err, stdout, stderr) => {
+        if (err) return reject(Object.assign(err, { stdout: stdout || '', stderr: stderr || '' }));
+        resolve({ stdout: stdout || '', stderr: stderr || '' });
+      }
+    );
+  });
+}
+
 export const databaseController = {
   // List all managed tables with row counts
   async listTables(req, res) {
@@ -339,69 +403,60 @@ export const databaseController = {
   // Applied Prisma migrations vs. files on disk.
   async migrations(req, res, next) {
     try {
-      let applied = [];
-      try {
-        applied = await prisma.$queryRawUnsafe(
-          `SELECT migration_name, started_at AS "startedAt", finished_at AS "finishedAt"
-           FROM _prisma_migrations ORDER BY finished_at NULLS LAST, started_at`
-        );
-      } catch {
-        applied = [];
-      }
-      const appliedNames = new Set(applied.map(r => r.migration_name));
-      const finished = applied.map(r => r.finishedAt).filter(Boolean).sort();
-      const here = path.dirname(fileURLToPath(import.meta.url));
-      const dir = path.resolve(here, '../../prisma/migrations');
-      let onDisk = [];
-      try {
-        const entries = await fs.readdir(dir, { withFileTypes: true });
-        onDisk = entries.filter(e => e.isDirectory()).map(e => e.name).sort();
-      } catch { onDisk = []; }
-      const pending = onDisk.filter(m => !appliedNames.has(m));
-      res.json({
-        applied: applied.map(r => r.migration_name),
-        history: applied.map(r => ({
-          name: r.migration_name,
-          startedAt: r.startedAt,
-          finishedAt: r.finishedAt,
-        })),
-        lastApplied: finished.length ? finished[finished.length - 1] : null,
-        appliedCount: applied.length,
-        onDisk,
-        pending,
-        pendingCount: pending.length,
-        inSync: pending.length === 0,
-      });
+      res.json(await readMigrationState());
     } catch (e) { next(e); }
   },
 
-  // Run pending Prisma migrations via CLI.
-  // SUPER_ADMIN only (route-level gate). Best-effort: returns stdout/stderr.
+  // Apply pending Prisma migrations (`prisma migrate deploy`).
+  // SUPER_ADMIN only (route-level gate). Re-reads migration state afterwards so
+  // the caller gets the resulting state rather than having to trust the CLI text.
   async runMigrations(req, res, next) {
     try {
-      const backendDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../');
-      execFile('npx', ['prisma', 'migrate', 'deploy'], {
-        cwd: backendDir,
-        timeout: 120000,
-        maxBuffer: 10 * 1024 * 1024,
-      }, (err, stdout, stderr) => {
-        if (err) {
-          return res.status(502).json({
-            error: {
-              code: 'MIGRATION_FAILED',
-              message: `Migration command failed: ${err.message || 'timeout or execution error'}.`,
-              stdout: stdout || '',
-              stderr: stderr || '',
-            },
-          });
-        }
-        res.json({
+      const before = await readMigrationState();
+      if (before.pendingCount === 0) {
+        return res.json({
           ok: true,
-          message: 'Migrations applied successfully',
-          stdout: stdout || '',
-          stderr: stderr || '',
-          appliedAt: new Date().toISOString(),
+          message: 'Database schema is already up to date',
+          applied: [],
+          skipped: true,
+          state: before,
         });
+      }
+
+      let stdout = '';
+      let stderr = '';
+      try {
+        ({ stdout, stderr } = await runPrismaMigrateDeploy());
+      } catch (e) {
+        // Surface the post-failure state: a partially applied migration leaves
+        // pending entries behind, which is what the operator has to act on.
+        const after = await readMigrationState().catch(() => null);
+        return res.status(502).json({
+          error: {
+            code: 'MIGRATION_FAILED',
+            message: e.killed
+              ? 'Migration timed out after 5 minutes. Check the database state before retrying.'
+              : `Migration failed: ${e.message || 'unknown error'}.`,
+            stdout: e.stdout || stdout,
+            stderr: e.stderr || stderr,
+            state: after,
+          },
+        });
+      }
+
+      const after = await readMigrationState();
+      return res.json({
+        ok: true,
+        message: after.inSync
+          ? `Applied ${before.pendingCount} migration${before.pendingCount === 1 ? '' : 's'}`
+          : 'Migration command finished but migrations are still pending',
+        applied: after.applied.filter(m => before.pending.includes(m)),
+        skipped: false,
+        inSync: after.inSync,
+        stdout,
+        stderr,
+        state: after,
+        appliedAt: new Date().toISOString(),
       });
     } catch (e) { next(e); }
   },

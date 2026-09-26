@@ -7,7 +7,7 @@
 - Backend prod start: `cd backend && npm run start` (node src/server.js)
 - Syntax-check backend fast: `cd backend && node --check src/routes/<name>.js` (no boot needed)
 - DB up: `docker compose up -d db` (dead DB container = 500s on login)
-- Prisma migrate: `cd backend && npx prisma migrate dev`
+- Prisma migrate: `cd backend && npx prisma migrate dev --name <change>`
 - Prisma generate: stop backend watch first, then `cd backend && npx prisma generate`
 - Prisma studio (DB inspector): `cd backend && npx prisma studio`
 - Seed: `cd backend && node prisma/seed.js` after migrate (multi-tenant for DEFAULT and TARLAC)
@@ -76,6 +76,7 @@
 - Money fields `Decimal(12,2)`, never JS floats
 - Dates stored UTC, displayed Asia/Manila
 - Prisma client regeneration is blocked while backend watch runs on Windows; stop backend before `npx prisma generate`
+- **Migration history is real now (repaired 2026-09-26).** Active history is a single baseline `20260926000000_baseline`; the 61 pre-existing migrations were never applied to any DB (schema came from `prisma db push`, so `_prisma_migrations` didn't exist) and were internally broken (two `init` migrations both issued `CREATE TYPE "Role"`, so the chain couldn't replay on an empty DB). They are archived, superseded, and must never be restored: `backend/docs/superseded-migrations-2026-09/` (see its README for the full post-mortem). Consequences: **never use `prisma db push` for schema changes** — it silently reintroduces the drift where every migration shows pending. Change `prisma/schema.prisma`, then `npx prisma migrate dev --name <change>`. Deploys use `prisma migrate deploy`, which is what the SUPER_ADMIN "Apply Migrations" button runs. `POST /database/migrations/run` invokes the project-local CLI via `process.execPath` + `node_modules/prisma/build/index.js` (not `npx`, which is a `.cmd` shim on Windows and fails with `spawn npx ENOENT`) and returns the authoritative post-run state.
 - Seed password: `SEED_DEFAULT_PASSWORD` default `admin123`
 - `isDependent` (FamilyMember) has a DB default: omit explicit nulls or Prisma 500s (service strips them)
 - `yearGraduated` is Int: Postgres silently truncates floats — guard whole numbers client-side
