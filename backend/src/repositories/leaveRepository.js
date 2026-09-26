@@ -69,6 +69,65 @@ export const leaveRepository = {
     const where = withTenant(req);
     return prisma.leaveRuleConfig.findMany({ where, orderBy: { effectiveFrom: 'asc' } });
   },
+
+  async findIntegrationRequests(req, { startDate, endDate, employeeNumber, status, type, page = 1, limit = 50 }) {
+    const where = withTenant(req);
+    // Date filters match requests that overlap the window: toDate >= start
+    // and fromDate <= end. Each bound applies only when supplied.
+    if (startDate) where.toDate = { gte: new Date(`${startDate}T00:00:00Z`) };
+    if (endDate) where.fromDate = { lte: new Date(`${endDate}T23:59:59Z`) };
+    if (status) where.status = status;
+    if (type) where.type = type;
+    if (employeeNumber) where.employee = { employeeNumber };
+
+    const [items, total] = await Promise.all([
+      prisma.leaveRequest.findMany({
+        where,
+        skip: (page - 1) * limit,
+        take: limit,
+        orderBy: [{ fromDate: 'desc' }, { createdAt: 'desc' }],
+        include: {
+          employee: {
+            select: {
+              id: true,
+              employeeNumber: true,
+              firstName: true,
+              lastName: true,
+              middleName: true,
+              department: { select: { id: true, name: true, code: true } },
+              position: { select: { id: true, title: true } },
+            },
+          },
+        },
+      }),
+      prisma.leaveRequest.count({ where }),
+    ]);
+
+    return { items, total, page, limit };
+  },
+
+  async findIntegrationCredits(req, { employeeNumber, year, page = 1, limit = 100 }) {
+    const where = withTenant(req);
+    if (year) where.year = year;
+    if (employeeNumber) where.employee = { employeeNumber };
+
+    const [items, total] = await Promise.all([
+      prisma.leaveCredit.findMany({
+        where,
+        skip: (page - 1) * limit,
+        take: limit,
+        orderBy: [{ year: 'desc' }, { type: 'asc' }],
+        include: {
+          employee: {
+            select: { id: true, employeeNumber: true, firstName: true, lastName: true },
+          },
+        },
+      }),
+      prisma.leaveCredit.count({ where }),
+    ]);
+
+    return { items, total, page, limit };
+  },
   async updateLeaveCredit(req, employeeId, type, year, delta) {
     const credit = await prisma.leaveCredit.findFirst({
       where: { ...withTenant(req), employeeId, type, year },

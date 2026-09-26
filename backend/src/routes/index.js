@@ -47,7 +47,6 @@ const router = Router();
 
 router.use('/auth', authRouter);
 router.use('/integrations', integrationsRouter);
-router.use('/integrations/requests', integrationRequestsRouter);
 // Public biometric punch - no JWT required
 router.use('/attendance/public-punch', publicPunchRouter);
 // Public document download - no JWT required (tenant-scoped via subdomain)
@@ -101,5 +100,6 @@ router.use('/database', databaseRouter);
 router.use('/tenants', tenantsRouter);
 router.use('/disqualifications', disqualificationsRouter);
 router.use('/documents', documentsRouter);
+router.use('/integrationRequests', integrationRequestsRouter);
 
 export default router;

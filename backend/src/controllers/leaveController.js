@@ -1,4 +1,5 @@
 import { leaveService } from '../services/leaveService.js';
+import { leaveRepository } from '../repositories/leaveRepository.js';
 
 export const leaveController = {
   async listRequests(req, res, next) {
@@ -44,6 +45,24 @@ export const leaveController = {
   async monetize(req, res, next) {
     try {
       const result = await leaveService.monetize(req, req.params.id, req.body);
+      res.json(result);
+    } catch (e) {
+      next(e);
+    }
+  },
+  // API-key integration surface (x-api-key + leave:read). Read-only: the
+  // tenant comes from the key, never from the request body.
+  async integrationListRequests(req, res, next) {
+    try {
+      const result = await leaveRepository.findIntegrationRequests(req, req.query);
+      res.json(result);
+    } catch (e) {
+      next(e);
+    }
+  },
+  async integrationListCredits(req, res, next) {
+    try {
+      const result = await leaveRepository.findIntegrationCredits(req, req.query);
       res.json(result);
     } catch (e) {
       next(e);

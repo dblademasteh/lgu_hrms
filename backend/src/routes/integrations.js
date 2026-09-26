@@ -1,30 +1,51 @@
 import { Router } from 'express';
-import { requireApiKey, requireScope } from '../middleware/apiKey.js';
+import { requireApiKey, requireScope, requireAnyScope } from '../middleware/apiKey.js';
 import { requireAuth } from '../middleware/auth.js';
 import { requireRole } from '../middleware/rbac.js';
 import { tenantContext } from '../middleware/tenant.js';
 import { createApiKey, listApiKeys, revokeApiKey } from '../controllers/apiKeyController.js';
 import { listWebhooks, createWebhook, updateWebhook, deleteWebhook, testWebhook, rotateWebhookSecret } from '../controllers/webhookController.js';
 import { listExternalSystems, createExternalSystem, updateExternalSystem, deleteExternalSystem } from '../controllers/externalSystemController.js';
+import { INTEGRATION_SCOPES, WEBHOOK_EVENTS, INTEGRATION_TYPES, EXTERNAL_SYSTEM_TYPES } from '../shared/integrationCatalog.js';
 import { prisma } from '../lib/prisma.js';
 import { attendanceController } from '../controllers/attendanceController.js';
-import { integrationsAttendancePunchSchema, integrationsAttendanceBulkSchema } from '../shared/contracts/attendance.js';
+import { payrollController } from '../controllers/payrollController.js';
+import { leaveController } from '../controllers/leaveController.js';
+import { integrationsAttendancePunchSchema, integrationsAttendanceBulkSchema, integrationsAttendanceListSchema } from '../shared/contracts/attendance.js';
+import { integrationsPayrollRunsQuerySchema, integrationsPayrollRunIdSchema, integrationsPayrollPeriodsQuerySchema, integrationsPayslipsQuerySchema, integrationsLoansQuerySchema, integrationsLeaveRequestsQuerySchema, integrationsLeaveCreditsQuerySchema } from '../shared/contracts/integrations.js';
 import { validate } from '../middleware/validate.js';
 import { createApiKeySchema, createWebhookSchema, updateWebhookSchema, createExternalSystemSchema, updateExternalSystemSchema } from '../shared/contracts/integrations.js';
+import { lguPayrollWebhook } from '../controllers/lguPayrollWebhookController.js';
 
 const router = Router();
 
 // Public docs
 router.get('/health', (req, res) => res.json({ ok: true }));
 
+// Public webhook endpoint for lgu-payroll (no JWT required, validates HMAC signature)
+router.post('/payroll/webhook', lguPayrollWebhook);
+
 // API-key-authenticated ingestion endpoints (no JWT required)
 // These must come BEFORE the SUPER_ADMIN requireAuth block below.
-router.use('/attendance', requireApiKey, requireScope('attendance:ingest'));
+router.use('/attendance', requireApiKey, requireAnyScope('attendance:ingest', 'attendance:read'));
 router.post('/attendance/punch', validate(integrationsAttendancePunchSchema), attendanceController.ingestPunch);
 router.post('/attendance/bulk', validate(integrationsAttendanceBulkSchema), attendanceController.bulkIngest);
+router.get('/attendance', validate(integrationsAttendanceListSchema), attendanceController.listForIntegration);
 router.post('/attendance/test', (req, res) => {
   res.json({ ok: true, message: 'Attendance ingestion endpoint reachable', tenantId: req.tenantContext.tenantId });
 });
+
+router.use('/payroll', requireApiKey, requireAnyScope('payroll:read', 'payroll:write'));
+router.get('/payroll/runs', validate(integrationsPayrollRunsQuerySchema), payrollController.integrationListRuns);
+router.get('/payroll/runs/:id', validate(integrationsPayrollRunIdSchema), payrollController.integrationGetRun);
+router.get('/payroll/periods', validate(integrationsPayrollPeriodsQuerySchema), payrollController.integrationListPeriods);
+router.get('/payroll/payslips', validate(integrationsPayslipsQuerySchema), payrollController.integrationListPayslips);
+router.post('/payroll/test', (req, res) => {
+  res.json({ ok: true, message: 'Payroll integration endpoint reachable', tenantId: req.tenantContext.tenantId });
+});
+
+router.use('/loans', requireApiKey, requireScope('loans:read'));
+router.get('/loans', validate(integrationsLoansQuerySchema), payrollController.integrationListLoans);
 
 router.use('/employees', requireApiKey, requireScope('employees:read'));
 router.get('/employees', async (req, res) => {
@@ -66,6 +87,14 @@ router.get('/employees', async (req, res) => {
           contactNumber: true,
           email: true,
           status: true,
+          monthlySalary: true,
+          keyPosition: true,
+          sssNumber: true,
+          philhealthNumber: true,
+          pagibigNumber: true,
+          tinNumber: true,
+          bankAccount: true,
+          bankName: true,
           department: { select: { id: true, name: true, code: true } },
           position: { select: { id: true, title: true} },
           hiredDate: true,
@@ -120,8 +149,26 @@ router.get('/departments', async (req, res) => {
   }
 });
 
+router.use('/leave', requireApiKey, requireScope('leave:read'));
+router.get('/leave/requests', validate(integrationsLeaveRequestsQuerySchema), leaveController.integrationListRequests);
+router.get('/leave/credits', validate(integrationsLeaveCreditsQuerySchema), leaveController.integrationListCredits);
+router.post('/leave/test', (req, res) => {
+  res.json({ ok: true, message: 'Leave integration endpoint reachable', tenantId: req.tenantContext.tenantId });
+});
+
 // Integration management is SUPER_ADMIN only (JWT required)
 router.use(requireAuth, requireRole('SUPER_ADMIN'));
+
+// Setup catalog: the wizard renders scopes/events/endpoints from here so the
+// UI can never drift from what the server enforces.
+router.get('/catalog', (req, res) => {
+  res.json({
+    scopes: INTEGRATION_SCOPES,
+    events: WEBHOOK_EVENTS,
+    types: INTEGRATION_TYPES,
+    systemTypes: EXTERNAL_SYSTEM_TYPES,
+  });
+});
 
 // API Keys management (tenant-scoped)
 router.get('/keys', tenantContext, listApiKeys);

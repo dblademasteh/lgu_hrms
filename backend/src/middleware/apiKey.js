@@ -27,3 +27,14 @@ export function requireScope(...requiredScopes) {
     next();
   };
 }
+
+export function requireAnyScope(...requiredScopes) {
+  return (req, res, next) => {
+    const scopes = Array.isArray(req.apiKeyScopes) ? req.apiKeyScopes : [];
+    const hasAny = requiredScopes.some(s => scopes.includes(s));
+    if (!hasAny) {
+      return res.status(403).json({ error: { code: 'FORBIDDEN', message: `Missing one of scopes: ${requiredScopes.join(', ')}` }});
+    }
+    next();
+  };
+}

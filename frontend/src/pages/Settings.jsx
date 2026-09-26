@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
-import { Moon, Sun, LayoutGrid, Bell, User, ShieldCheck, Info, Settings as SettingsIcon, Database, Table, X, Save, Check, Plus, Download, Key, LogOut, UserX, Pencil, Trash2, Type, Palette, RefreshCw, Edit3, Server, Activity, Clock, HardDrive, Hash, AlertTriangle, Link2, Power, PowerOff, Globe, Webhook, ChevronLeft, ChevronRight, Zap, Wrench, Upload } from 'lucide-react';
+import { Moon, Sun, LayoutGrid, Bell, User, ShieldCheck, Info, Settings as SettingsIcon, Database, Table, X, Save, Check, Plus, Download, Key, LogOut, UserX, Pencil, Trash2, Type, Palette, RefreshCw, Server, Activity, Clock, HardDrive, Hash, AlertTriangle, Link2, ChevronLeft, ChevronRight, Zap, Upload } from 'lucide-react';
 import Layout from '../components/Layout.jsx';
 import { useTheme, toggleTheme } from '../theme.js';
 import { useSidebarStyle, setSidebarStyle, SIDEBAR_STYLES, SIDEBAR_STYLE_META } from '../sidebarStyle.js';
@@ -13,7 +13,7 @@ import { databaseApi } from '../api/database.js';
 import { auditApi } from '../api/audit.js';
 import { rulesApi } from '../api/rules.js';
 import { usersApi } from '../api/users.js';
-import { integrationsApi } from '../api/integrations.js';
+import Integrations from '../components/Integrations.jsx';
 import Modal from '../components/Modal.jsx';
 import ConfirmDialog from '../components/ConfirmDialog.jsx';
 
@@ -32,8 +32,6 @@ export default function Settings() {
   const sidebarStyle = useSidebarStyle();
   const toastStyle = useToastStyle();
   const currentRole = useAuthStore(s => s.user?.role);
-  const activeTenantId = localStorage.getItem('lgu-active-tenant');
-  const [showTenantWarning, setShowTenantWarning] = useState(false);
   const [active, setActive] = useState('appearance');
   const [notificationsEnabled, setNotificationsEnabled] = useState(() => localStorage.getItem('lgu-notif-inapp') !== 'false');
   const [emailNotifications, setEmailNotifications] = useState(() => localStorage.getItem('lgu-notif-email') !== 'false');
@@ -50,27 +48,6 @@ export default function Settings() {
   const [showProfileEdit, setShowProfileEdit] = useState(false);
   const [showDeactivateConfirm, setShowDeactivateConfirm] = useState(false);
   const [showRevokeAllConfirm, setShowRevokeAllConfirm] = useState(false);
-  const [showApiKeyModal, setShowApiKeyModal] = useState(false);
-  const [apiKeyName, setApiKeyName] = useState('');
-  const [apiKeyScopes, setApiKeyScopes] = useState(['employees:read']);
-  const [createdApiKey, setCreatedApiKey] = useState(null);
-  const [revealApiKey, setRevealApiKey] = useState(false);
-  const [copyApiKey, setCopyApiKey] = useState(false);
-  const [apiKeys, setApiKeys] = useState([]);
-  const [deleteKeyTarget, setDeleteKeyTarget] = useState(null);
-  const [testAttendanceTarget, setTestAttendanceTarget] = useState(null);
-  const [testAttendanceKey, setTestAttendanceKey] = useState('');
-  const [testingAttendance, setTestingAttendance] = useState(false);
-  const [webhooks, setWebhooks] = useState([]);
-  const [createdWebhook, setCreatedWebhook] = useState(null);
-  const [revealWebhookSecret, setRevealWebhookSecret] = useState(false);
-  const [copyWebhookSecret, setCopyWebhookSecret] = useState(false);
-  const [rotateSecretTarget, setRotateSecretTarget] = useState(null);
-  const [disableWebhookTarget, setDisableWebhookTarget] = useState(null);
-  const [deleteWebhookTarget, setDeleteWebhookTarget] = useState(null);
-  const [showWebhookModal, setShowWebhookModal] = useState(false);
-  const [webhookFormSecretVisible, setWebhookFormSecretVisible] = useState(false);
-  const [externalSystems, setExternalSystems] = useState([]);
 
   const ADMIN_ROLES = ['ADMIN', 'SUPER_ADMIN'];
   const isAdmin = ADMIN_ROLES.includes(currentRole);
@@ -92,20 +69,6 @@ export default function Settings() {
     }
   }, [active, visibleTabs]);
 
-  const generateSecret = () => {
-    const bytes = new Uint8Array(24);
-    crypto.getRandomValues(bytes);
-    return Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
-  };
-  
-  const openWebhookModal = () => {
-    setWebhookForm({ name: '', url: '', events: [], secret: generateSecret() });
-    setShowWebhookModal(true);
-  };
-  const [showExternalSystemModal, setShowExternalSystemModal] = useState(false);
-  const [editingExternalSystem, setEditingExternalSystem] = useState(null);
-  const [webhookForm, setWebhookForm] = useState({ name: '', url: '', events: [], secret: generateSecret() });
-  const [externalSystemForm, setExternalSystemForm] = useState({ name: '', type: 'HRIS', description: '', baseUrl: '', apiKey: '', apiSecret: '', headers: '', syncDirection: 'pull', attendanceMode: 'pull', attendancePollInterval: '', deviceId: '', punchKey: '' });
   const [show2FAModal, setShow2FAModal] = useState(false);
   const [twoFASecret, setTwoFASecret] = useState(null);
   const [twoFACode, setTwoFACode] = useState('');
@@ -265,14 +228,6 @@ export default function Settings() {
   useEffect(() => { localStorage.setItem('lgu-notif-sms', String(smsNotifications)); }, [smsNotifications]);
   useEffect(() => { localStorage.setItem('lgu-notif-push', String(pushNotifications)); }, [pushNotifications]);
   useEffect(() => { localStorage.setItem('lgu-notif-quiet', quietHours); }, [quietHours]);
-  useEffect(() => {
-    if (active === 'integrations') {
-      integrationsApi.listKeys().then(setApiKeys).catch(() => toast('Failed to load API keys', 'error'));
-      integrationsApi.listWebhooks().then(setWebhooks).catch(() => toast('Failed to load webhooks', 'error'));
-      integrationsApi.listExternalSystems().then(setExternalSystems).catch(() => toast('Failed to load external systems', 'error'));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active]);
   useEffect(() => { localStorage.setItem('lgu-accent', accent); document.documentElement.style.setProperty('--accent', accent); }, [accent]);
   useEffect(() => { localStorage.setItem('lgu-font-family', fontFamily); document.documentElement.style.setProperty('--font-sans', `"${fontFamily}", var(--font-sans-fallback)`); document.body.style.fontFamily = `"${fontFamily}", var(--font-sans-fallback)`; }, [fontFamily]);
   useEffect(() => { localStorage.setItem('lgu-ui-scale', String(uiScale)); document.documentElement.style.setProperty('--ui-scale', `${uiScale}%`); }, [uiScale]);
@@ -286,45 +241,6 @@ export default function Settings() {
     if (uiScale !== uiScaleToastRef.current) {
       uiScaleToastRef.current = uiScale;
       save(`UI density ${uiScale}%`);
-    }
-  };
-
-  const confirmDeleteApiKey = async () => {
-    if (!deleteKeyTarget) return;
-    try {
-      await integrationsApi.deleteKey(deleteKeyTarget.id);
-      toast('API key permanently deleted', 'success');
-      setDeleteKeyTarget(null);
-      integrationsApi.listKeys().then(setApiKeys).catch(() => toast('Failed to refresh API keys', 'error'));
-    } catch (e) {
-      toast(e?.response?.data?.error?.message || 'Failed to delete API key', 'error');
-      setDeleteKeyTarget(null);
-    }
-  };
-
-  const confirmDisableWebhook = async () => {
-    if (!disableWebhookTarget) return;
-    try {
-      await integrationsApi.updateWebhook(disableWebhookTarget.id, { isActive: !disableWebhookTarget.isActive });
-      toast(disableWebhookTarget.isActive ? 'Webhook deactivated' : 'Webhook activated', 'success');
-      setDisableWebhookTarget(null);
-      integrationsApi.listWebhooks().then(setWebhooks).catch(() => toast('Failed to refresh webhooks', 'error'));
-    } catch (e) {
-      toast(e?.response?.data?.error?.message || 'Failed to update webhook', 'error');
-      setDisableWebhookTarget(null);
-    }
-  };
-
-  const confirmDeleteWebhook = async () => {
-    if (!deleteWebhookTarget) return;
-    try {
-      await integrationsApi.deleteWebhook(deleteWebhookTarget.id);
-      toast('Webhook deleted', 'success');
-      setDeleteWebhookTarget(null);
-      integrationsApi.listWebhooks().then(setWebhooks).catch(() => toast('Failed to refresh webhooks', 'error'));
-    } catch (e) {
-      toast(e?.response?.data?.error?.message || 'Failed to delete webhook', 'error');
-      setDeleteWebhookTarget(null);
     }
   };
 
@@ -1084,33 +1000,6 @@ export default function Settings() {
                       {dbTables.length === 0 && (
                         <p className="text-sm text-muted col-span-full">No tables found.</p>
                       )}
-                      {testAttendanceTarget && (
-                        <Modal open={!!testAttendanceTarget} onClose={() => { setTestAttendanceTarget(null); setTestAttendanceKey(''); }} title="Test Attendance Connection" size="sm" footer={
-                          <>
-                            <button className="btn btn-ghost gap-2" onClick={() => { setTestAttendanceTarget(null); setTestAttendanceKey(''); }}><X size={16}/> Close</button>
-                            <button className="btn btn-primary gap-2" disabled={!testAttendanceKey.trim() || testingAttendance} onClick={async () => {
-                              setTestingAttendance(true);
-                              try {
-                                const result = await integrationsApi.testAttendance(testAttendanceKey);
-                                toast('Attendance endpoint reachable: ' + result.message, 'success');
-                              } catch (e) {
-                                toast('Test failed: ' + (e?.response?.data?.error?.message || e.message), 'error');
-                              } finally {
-                                setTestingAttendance(false);
-                              }
-                            }}>{testingAttendance ? 'Testing...' : 'Test'}</button>
-                          </>
-                        }>
-                          <div className="space-y-3 text-sm">
-                            <p className="text-xs text-muted">Testing connection to <span className="font-medium text-ink">{testAttendanceTarget?.name}</span>.</p>
-                            <div>
-                              <label className="block text-xs font-medium text-muted mb-1">HRMS API Key (with attendance:ingest scope)</label>
-                              <input className="input w-full font-mono" type="password" placeholder="Enter API key" value={testAttendanceKey} onChange={e => setTestAttendanceKey(e.target.value)} />
-                            </div>
-                            <p className="text-[11px] text-muted">This calls the HRMS ingestion health endpoint. The external system must be able to reach this HRMS instance.</p>
-                          </div>
-                        </Modal>
-                      )}
                     </div>
                   )}
                 </div>
@@ -1261,234 +1150,9 @@ export default function Settings() {
             )}
 
             {active === 'integrations' && (
-              <section className="card p-6 space-y-6">
-                <h2 className="font-display font-semibold text-ink flex items-center gap-2"><Link2 size={18} className="text-accent"/> Integrations</h2>
-                {isSuperAdmin && !activeTenantId && (
-                  <div className="p-3 rounded-lg bg-warning/10 border border-warning/30 text-xs text-warning">
-                    You are SUPER_ADMIN but no tenant is selected. Use the tenant switcher in the header to select a tenant before configuring external systems.
-                  </div>
-                )}
-                <div className="grid md:grid-cols-2 gap-4">
-                  <div className="p-5 border border-line rounded-xl bg-bg/50 space-y-3">
-                    <p className="text-sm font-medium text-ink">API Keys</p>
-                    <p className="text-xs text-muted">Create keys for external HR systems to read employees</p>
-                    <button className="btn btn-primary text-sm gap-2" onClick={()=>setShowApiKeyModal(true)}>Create API Key</button>
-                    <p className="text-[11px] text-muted">Store securely. Rotate every 90 days.</p>
-                     {apiKeys.length > 0 && (
-                       <div className="mt-3 space-y-2">
-                         {apiKeys.map(k => (
-                           <div key={k.id} className="flex items-center justify-between text-xs p-2 bg-bg/40 rounded">
-                             <span className="text-muted truncate">{k.name}</span>
-                             <div className="flex items-center gap-2">
-                               <span className={`badge ${k.isActive !== false ? 'badge-success' : 'badge-ghost'}`}>{k.isActive !== false ? 'Active' : 'Inactive'}</span>
-                               <span className="badge badge-accent">{k.scopes?.join(', ') || 'employees:read'}</span>
-                                 <button className="btn btn-ghost btn-sm text-error" onClick={() => integrationsApi.revokeKey(k.id).then((r) => { toast(r?.isActive ? 'API key reactivated' : 'API key deactivated', 'success'); integrationsApi.listKeys().then(setApiKeys).catch(() => toast('Failed to refresh API keys', 'error')); })}>
-                                   {k.isActive !== false ? <PowerOff size={12}/> : <Power size={12}/>}
-                                 </button>
-                                <button className="btn btn-ghost btn-sm text-error" onClick={() => setDeleteKeyTarget(k)} title="Permanently delete">
-                                  <Trash2 size={12}/>
-                                </button>
-                             </div>
-                           </div>
-                         ))}
-                       </div>
-                     )}
-                  </div>
-                   <div className="p-5 border border-line rounded-xl bg-bg/50 space-y-3">
-                     <p className="text-sm font-medium text-ink">Webhooks</p>
-                     <p className="text-xs text-muted">Subscribe to employee events: created, updated, deleted</p>
-                      <button className="btn btn-primary text-sm gap-2" onClick={openWebhookModal}><Plus size={14}/> Add Webhook</button>
-                     {webhooks.length > 0 && (
-                       <div className="mt-3 space-y-2">
-                         {webhooks.map(w => (
-                           <div key={w.id} className="flex items-center justify-between text-xs p-2 bg-bg/40 rounded">
-                             <div className="min-w-0">
-                               <span className="text-ink truncate block">{w.name}</span>
-                               <span className="text-muted truncate block">{w.url}</span>
-                             </div>
-                               <div className="flex items-center gap-2">
-                                 <span className={`badge ${w.isActive ? 'badge-success' : 'badge-ghost'}`}>{w.isActive ? 'Active' : 'Inactive'}</span>
-                                 <button className="btn btn-ghost btn-xs" onClick={() => integrationsApi.testWebhook(w.id).then(() => toast('Test payload sent', 'success')).catch(() => toast('Test failed', 'error'))} title="Send test event"><Webhook size={12}/></button>
-                                 <button className="btn btn-ghost btn-xs" onClick={() => setRotateSecretTarget(w)} title="Rotate secret"><RefreshCw size={12}/></button>
-                                 <button className="btn btn-ghost btn-xs" onClick={() => setDisableWebhookTarget(w)} title={w.isActive ? 'Disable' : 'Activate'}>
-                                   {w.isActive ? <PowerOff size={12}/> : <Power size={12}/>}
-                                 </button>
-                                 <button className="btn btn-ghost btn-sm text-error" onClick={() => setDeleteWebhookTarget(w)} title="Delete">
-                                   <Trash2 size={12}/>
-                                 </button>
-                               </div>
-                           </div>
-                         ))}
-                       </div>
-                     )}
-                   </div>
-                   <div className="md:col-span-2 p-5 border border-line rounded-xl bg-bg/50 space-y-3">
-                     <div className="flex items-center justify-between">
-                       <div>
-                         <p className="text-sm font-medium text-ink">External Systems</p>
-                         <p className="text-xs text-muted">Prime HR, Civil Service portal, Payroll provider</p>
-                       </div>
-                       <button className="btn btn-primary text-sm gap-2" onClick={() => setShowExternalSystemModal(true)}><Plus size={14}/> Add System</button>
-                     </div>
-                     {externalSystems.length > 0 ? (
-                       <div className="mt-3 space-y-2">
-                         {externalSystems.map(s => (
-                           <div key={s.id} className="flex items-center justify-between text-xs p-2 bg-bg/40 rounded">
-                             <div className="min-w-0">
-                               <span className="text-ink truncate block">{s.name}</span>
-                               <span className="text-muted truncate block">{s.baseUrl}</span>
-                             </div>
-                               <div className="flex items-center gap-2">
-                                 <span className="badge badge-accent">{s.type}</span>
-                                 <span className={`badge ${s.isActive ? 'badge-success' : 'badge-ghost'}`}>{s.isActive ? 'Active' : 'Inactive'}</span>
-                                 {s.type === 'ATTENDANCE' && (
-                                   <button className="btn btn-ghost btn-xs" onClick={() => setTestAttendanceTarget(s)} title="Test attendance connection">Test</button>
-                                 )}
-                                 <button className="btn btn-ghost btn-xs" onClick={() => { setEditingExternalSystem(s); setExternalSystemForm({ name: s.name || '', type: s.type || 'HRIS', description: s.description || '', baseUrl: s.baseUrl || '', apiKey: s.apiKey || '', apiSecret: s.apiSecret || '', headers: s.headers || '', syncDirection: s.syncDirection || 'pull', attendanceMode: s.attendanceMode || 'pull', attendancePollInterval: s.attendancePollInterval ? String(s.attendancePollInterval) : '', deviceId: s.deviceId || '', punchKey: s.punchKey || '' }); }} title="Edit"><Pencil size={12}/></button>
-                                 <button className="btn btn-ghost btn-sm text-error" onClick={() => integrationsApi.deleteExternalSystem(s.id).then(() => { toast('External system deleted', 'success'); integrationsApi.listExternalSystems().then(setExternalSystems).catch(() => toast('Failed to refresh external systems', 'error')); })}><Trash2 size={12}/></button>
-                               </div>
-                           </div>
-                         ))}
-                       </div>
-                     ) : (
-                       <p className="text-xs text-muted">No external systems configured yet.</p>
-                     )}
-                    </div>
-                 </div>
-               </section>
-             )}
-
-             {(showExternalSystemModal || editingExternalSystem) && (
-               <Modal open={!!(showExternalSystemModal || editingExternalSystem)} onClose={() => { setShowExternalSystemModal(false); setEditingExternalSystem(null); setExternalSystemForm({ name: '', type: 'HRIS', description: '', baseUrl: '', apiKey: '', apiSecret: '', headers: '', syncDirection: 'pull', attendanceMode: 'pull', attendancePollInterval: '', deviceId: '', punchKey: '' }); }} title={editingExternalSystem ? 'Edit External System' : 'Add External System'} size="md" footer={
-                 <>
-                   <button className="btn btn-ghost gap-2" onClick={() => { setShowExternalSystemModal(false); setEditingExternalSystem(null); setExternalSystemForm({ name: '', type: 'HRIS', description: '', baseUrl: '', apiKey: '', apiSecret: '', headers: '', syncDirection: 'pull', attendanceMode: 'pull', attendancePollInterval: '', deviceId: '', punchKey: '' }); }}><X size={16}/> Cancel</button>
-                   <button className="btn btn-primary gap-2" disabled={!externalSystemForm.name || !externalSystemForm.type || !externalSystemForm.baseUrl} onClick={async () => {
-                     try {
-                       if (editingExternalSystem) {
-                         await integrationsApi.updateExternalSystem(editingExternalSystem.id, {
-                           name: externalSystemForm.name,
-                           type: externalSystemForm.type,
-                           description: externalSystemForm.description || undefined,
-                           baseUrl: externalSystemForm.baseUrl,
-                           apiKey: externalSystemForm.apiKey || undefined,
-                           apiSecret: externalSystemForm.apiSecret || undefined,
-                           headers: externalSystemForm.headers || undefined,
-                           syncDirection: externalSystemForm.syncDirection,
-                           isActive: editingExternalSystem.isActive,
-                           attendanceMode: externalSystemForm.type === 'ATTENDANCE' ? (externalSystemForm.attendanceMode || undefined) : undefined,
-                           attendancePollInterval: externalSystemForm.type === 'ATTENDANCE' && externalSystemForm.attendancePollInterval ? Number(externalSystemForm.attendancePollInterval) : undefined,
-                           deviceId: externalSystemForm.type === 'ATTENDANCE' ? (externalSystemForm.deviceId || undefined) : undefined,
-                           punchKey: externalSystemForm.type === 'ATTENDANCE' ? (externalSystemForm.punchKey || undefined) : undefined,
-                         });
-                         toast('External system updated', 'success');
-                       } else {
-                         await integrationsApi.createExternalSystem({
-                           name: externalSystemForm.name,
-                           type: externalSystemForm.type,
-                           description: externalSystemForm.description || undefined,
-                           baseUrl: externalSystemForm.baseUrl,
-                           apiKey: externalSystemForm.apiKey || undefined,
-                           apiSecret: externalSystemForm.apiSecret || undefined,
-                           headers: externalSystemForm.headers || undefined,
-                           syncDirection: externalSystemForm.syncDirection,
-                           attendanceMode: externalSystemForm.type === 'ATTENDANCE' ? (externalSystemForm.attendanceMode || undefined) : undefined,
-                           attendancePollInterval: externalSystemForm.type === 'ATTENDANCE' && externalSystemForm.attendancePollInterval ? Number(externalSystemForm.attendancePollInterval) : undefined,
-                           deviceId: externalSystemForm.type === 'ATTENDANCE' ? (externalSystemForm.deviceId || undefined) : undefined,
-                           punchKey: externalSystemForm.type === 'ATTENDANCE' ? (externalSystemForm.punchKey || undefined) : undefined,
-                         });
-                         toast('External system added', 'success');
-                       }
-                       setShowExternalSystemModal(false);
-                       setEditingExternalSystem(null);
-                       setExternalSystemForm({ name: '', type: 'HRIS', description: '', baseUrl: '', apiKey: '', apiSecret: '', headers: '', syncDirection: 'pull', attendanceMode: 'pull', attendancePollInterval: '', deviceId: '', punchKey: '' });
-                       try {
-                         const result = await integrationsApi.listExternalSystems();
-                         const list = Array.isArray(result) ? result : (result?.data ?? []);
-                         setExternalSystems(list);
-                       } catch (listError) {
-                         toast('Saved, but failed to refresh list', 'error');
-                       }
-                     } catch (e) {
-                       const msg = e?.response?.data?.error?.message || (editingExternalSystem ? 'Failed to update external system' : 'Failed to add external system');
-                       toast(msg, 'error');
-                     }
-                   }}><Plus size={14}/> {editingExternalSystem ? 'Update' : 'Add'}</button>
-                 </>
-                }>
-            <div className="space-y-3 text-sm">
-              <div>
-                <label className="block text-xs font-medium text-ink mb-1">Name</label>
-                <input className="input w-full" placeholder="Prime HR" value={externalSystemForm.name} onChange={e => setExternalSystemForm({ ...externalSystemForm, name: e.target.value })} />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-ink mb-1">Type</label>
-                <select className="select w-full" value={externalSystemForm.type} onChange={e => setExternalSystemForm({ ...externalSystemForm, type: e.target.value })}>
-                  <option value="HRIS">HRIS</option>
-                  <option value="ATTENDANCE">Attendance</option>
-                  <option value="PAYROLL">Payroll</option>
-                  <option value="PORTAL">Portal</option>
-                  <option value="OTHER">Other</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-ink mb-1">Base URL</label>
-                <input className="input w-full font-mono" placeholder="https://hr.example.com/api" value={externalSystemForm.baseUrl} onChange={e => setExternalSystemForm({ ...externalSystemForm, baseUrl: e.target.value })} />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-ink mb-1">Description</label>
-                <input className="input w-full" placeholder="Optional description" value={externalSystemForm.description} onChange={e => setExternalSystemForm({ ...externalSystemForm, description: e.target.value })} />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-ink mb-1">API Key</label>
-                  <input className="input w-full font-mono" type="password" placeholder="Optional" value={externalSystemForm.apiKey} onChange={e => setExternalSystemForm({ ...externalSystemForm, apiKey: e.target.value })} />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-ink mb-1">API Secret</label>
-                  <input className="input w-full font-mono" type="password" placeholder="Optional" value={externalSystemForm.apiSecret} onChange={e => setExternalSystemForm({ ...externalSystemForm, apiSecret: e.target.value })} />
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-ink mb-1">Headers (JSON, optional)</label>
-                <textarea className="input w-full font-mono" rows="3" placeholder='{"X-Custom-Header": "value"}' value={externalSystemForm.headers} onChange={e => setExternalSystemForm({ ...externalSystemForm, headers: e.target.value })} />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-ink mb-1">Sync Direction</label>
-                <select className="select w-full" value={externalSystemForm.syncDirection} onChange={e => setExternalSystemForm({ ...externalSystemForm, syncDirection: e.target.value })}>
-                  <option value="pull">Pull from external</option>
-                  <option value="push">Push to external</option>
-                  <option value="bidirectional">Bidirectional</option>
-                </select>
-              </div>
-              {externalSystemForm.type === 'ATTENDANCE' && (
-                <div className="space-y-3">
-                  <div>
-                    <label className="block text-xs font-medium text-ink mb-1">Ingestion Mode</label>
-                    <select className="select w-full" value={externalSystemForm.attendanceMode || 'pull'} onChange={e => setExternalSystemForm({ ...externalSystemForm, attendanceMode: e.target.value })}>
-                      <option value="pull">Poll / Pull</option>
-                      <option value="push">Push / Webhook</option>
-                      <option value="bulk">Bulk Import</option>
-                    </select>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-medium text-ink mb-1">Poll Interval (seconds)</label>
-                      <input className="input w-full font-mono" type="number" placeholder="300" value={externalSystemForm.attendancePollInterval || ''} onChange={e => setExternalSystemForm({ ...externalSystemForm, attendancePollInterval: e.target.value })} />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-ink mb-1">Device / Terminal ID</label>
-                      <input className="input w-full font-mono" placeholder="ZK-400" value={externalSystemForm.deviceId || ''} onChange={e => setExternalSystemForm({ ...externalSystemForm, deviceId: e.target.value })} />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-ink mb-1">Punch Key (optional)</label>
-                    <input className="input w-full font-mono" type="password" placeholder="Optional shared secret for kiosk/public punch" value={externalSystemForm.punchKey || ''} onChange={e => setExternalSystemForm({ ...externalSystemForm, punchKey: e.target.value })} />
-                  </div>
-                </div>
-              )}
-            </div>
-           </Modal>
+              <Integrations />
             )}
+
 
             {active === 'account' && (
               <section className="card p-6 space-y-6">
@@ -1506,7 +1170,7 @@ export default function Settings() {
                       const email = u?.username?.includes('@') ? u.username : `${u?.username || 'admin'}@lgu.gov.ph`;
                       const role = u?.role || 'ADMIN';
                       const dept = u?.department?.name || 'HR Admin';
-                      const completeness = profile?.completeness ?? 78;
+                       const completeness = profile?.completeness ?? 0;
                       return (
                         <>
                           <div className="flex items-center gap-4">
@@ -1525,7 +1189,7 @@ export default function Settings() {
                             <div className="h-2 rounded-full bg-line overflow-hidden">
                               <div className="h-full bg-accent transition-all" style={{width:`${completeness}%`}}></div>
                             </div>
-                            <p className="text-[11px] text-muted">Complete avatar, contact number, and emergency contact to reach 100%</p>
+                             <p className="text-[11px] text-muted">Complete your display name, email, contact number, emergency contact, and avatar to reach 100%</p>
                           </div>
                         </>
                       );
@@ -2057,214 +1721,7 @@ export default function Settings() {
             })()}
           </div>
         </Modal>
-        {createdApiKey ? (
-          <Modal open={!!createdApiKey} onClose={()=>{setCreatedApiKey(null); setShowApiKeyModal(false); setApiKeyName('');}} title="API Key Created" size="sm" footer={
-            <>
-              <button className="btn btn-ghost gap-2" onClick={()=>{setCreatedApiKey(null); setShowApiKeyModal(false); setApiKeyName('');}}><X size={16}/> Close</button>
-            </>
-          }>
-             <div className="space-y-3 text-sm">
-               <p className="text-xs text-muted">Save this key now — it won't be shown again.</p>
-               <div className="flex gap-2">
-                 <input
-                   className="input flex-1 font-mono text-xs"
-                   type={revealApiKey ? 'text' : 'password'}
-                   readOnly
-                   value={createdApiKey.key}
-                 />
-                 <button type="button" className="btn btn-ghost btn-sm" onClick={() => setRevealApiKey(!revealApiKey)} title={revealApiKey ? 'Hide' : 'Reveal'}>
-                   {revealApiKey ? '🙈' : '👁️'}
-                 </button>
-                 <button type="button" className="btn btn-ghost btn-sm" onClick={() => { navigator.clipboard.writeText(createdApiKey.key); setCopyApiKey(true); setTimeout(() => setCopyApiKey(false), 1500); }} title="Copy">
-                   {copyApiKey ? '✓' : '📋'}
-                 </button>
-               </div>
-               <p className="text-xs text-muted">
-                 Name: <span className="font-medium text-ink">{createdApiKey.name}</span><br/>
-                 Scopes: {createdApiKey.scopes?.join(', ')}
-               </p>
-               <p className="text-xs text-muted">
-                 Created: {createdApiKey.createdAt ? new Date(createdApiKey.createdAt).toLocaleString() : ''}
-               </p>
-             </div>
-          </Modal>
-        ) : (
-          <Modal open={showApiKeyModal} onClose={()=>{setShowApiKeyModal(false); setApiKeyName(''); setApiKeyScopes(['employees:read']); setCreatedApiKey(null);}} title="Create API Key" size="sm" footer={
-            <>
-              <button className="btn btn-ghost gap-2" onClick={()=>{setShowApiKeyModal(false); setApiKeyName(''); setApiKeyScopes(['employees:read']); setCreatedApiKey(null);}}><X size={16}/> Cancel</button>
-               <button className="btn btn-primary gap-2" disabled={!apiKeyName.trim()} onClick={async()=>{ 
-                 try { 
-                   const result = await integrationsApi.createKey({name: apiKeyName, scopes: apiKeyScopes});
-                   setCreatedApiKey(result);
-                   toast('API key created – save it now', 'success');
-                   integrationsApi.listKeys().then(setApiKeys).catch(() => toast('Failed to refresh API keys', 'error'));
-                 } catch { toast('Failed to create key','error'); } 
-               }}>Create</button>
-            </>
-          }>
-            <div className="space-y-3 text-sm">
-              <label className="block text-xs font-medium text-muted">Name</label>
-              <input className="input h-11" placeholder="External HR System" value={apiKeyName} onChange={e=>setApiKeyName(e.target.value)} />
-              <div>
-                <label className="block text-xs font-medium text-muted mb-1">Scopes</label>
-                <div className="flex flex-wrap gap-2">
-                  {['employees:read', 'attendance:ingest'].map(scope => (
-                    <label key={scope} className="flex items-center gap-1.5 text-xs cursor-pointer">
-                      <input type="checkbox" className="rounded border-line" checked={apiKeyScopes.includes(scope)} onChange={e => {
-                        setApiKeyScopes(e.target.checked ? [...apiKeyScopes, scope] : apiKeyScopes.filter(s => s !== scope));
-                      }} />
-                      <span>{scope}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-              <p className="text-[11px] text-muted">Key will be shown once. Store it securely.</p>
-            </div>
-          </Modal>
-        )}
 
-        <Modal open={showWebhookModal} onClose={() => setShowWebhookModal(false)} title="Add Webhook" size="md" footer={
-          <>
-            <button className="btn btn-ghost gap-2" onClick={() => setShowWebhookModal(false)}><X size={16}/> Cancel</button>
-               <button className="btn btn-primary gap-2" disabled={!webhookForm.name || !webhookForm.url || webhookForm.events.length === 0} onClick={async () => {
-                 try {
-                   const result = await integrationsApi.createWebhook({
-                     name: webhookForm.name,
-                     url: webhookForm.url,
-                     events: webhookForm.events,
-                     secret: webhookForm.secret || undefined,
-                   });
-                   setCreatedWebhook(result);
-                   toast('Webhook created – save the secret now', 'success');
-                   setShowWebhookModal(false);
-                   setWebhookForm({ name: '', url: '', events: [], secret: '' });
-                   integrationsApi.listWebhooks().then(setWebhooks).catch(() => toast('Failed to refresh webhooks', 'error'));
-                 } catch { toast('Failed to create webhook', 'error'); }
-               }}><Plus size={14}/> Add</button>
-          </>
-        }>
-          <div className="space-y-3 text-sm">
-            <div>
-              <label className="block text-xs font-medium text-ink mb-1">Name</label>
-              <input className="input w-full" placeholder="My Webhook" value={webhookForm.name} onChange={e => setWebhookForm({ ...webhookForm, name: e.target.value })} />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-ink mb-1">URL</label>
-              <input className="input w-full font-mono" placeholder="https://example.com/webhook" value={webhookForm.url} onChange={e => setWebhookForm({ ...webhookForm, url: e.target.value })} />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-ink mb-1">Events</label>
-              <div className="space-y-1">
-                {['employee.created', 'employee.updated', 'employee.deleted'].map(evt => (
-                  <label key={evt} className="flex items-center gap-2 text-xs">
-                    <input
-                      type="checkbox"
-                      checked={webhookForm.events.includes(evt)}
-                      onChange={e => {
-                        const events = e.target.checked
-                          ? [...webhookForm.events, evt]
-                          : webhookForm.events.filter(x => x !== evt);
-                        setWebhookForm({ ...webhookForm, events });
-                      }}
-                    />
-                    <span className="font-mono">{evt}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-             <div>
-               <label className="block text-xs font-medium text-ink mb-1">Secret</label>
-               <div className="flex gap-2">
-                 <input
-                   className="input w-full font-mono"
-                   type={webhookFormSecretVisible ? 'text' : 'password'}
-                   value={webhookForm.secret}
-                   onChange={e => setWebhookForm({ ...webhookForm, secret: e.target.value })}
-                 />
-                 <button type="button" className="btn btn-ghost btn-sm" onClick={() => setWebhookFormSecretVisible(!webhookFormSecretVisible)} title={webhookFormSecretVisible ? 'Hide' : 'Reveal'}>
-                   {webhookFormSecretVisible ? '🙈' : '👁️'}
-                 </button>
-                 <button type="button" className="btn btn-ghost btn-sm" onClick={() => setWebhookForm({ ...webhookForm, secret: generateSecret() })} title="Regenerate">↻</button>
-               </div>
-               <p className="text-[11px] text-muted mt-1">Auto-generated 24-character hex secret. You can edit or regenerate it.</p>
-             </div>
-          </div>
-        </Modal>
-
-
-
-        {createdWebhook && (
-          <Modal open={!!createdWebhook} onClose={() => setCreatedWebhook(null)} title="Webhook Created" size="sm" footer={
-            <button className="btn btn-primary gap-2" onClick={() => setCreatedWebhook(null)}>Save Secret</button>
-          }>
-             <div className="space-y-3 text-sm">
-               <p className="text-xs text-muted">Save this secret now. It will not be shown again.</p>
-               <div className="flex gap-2">
-                 <input
-                   className="input flex-1 font-mono text-xs"
-                   type={revealWebhookSecret ? 'text' : 'password'}
-                   readOnly
-                   value={createdWebhook.secret}
-                 />
-                 <button type="button" className="btn btn-ghost btn-sm" onClick={() => setRevealWebhookSecret(!revealWebhookSecret)} title={revealWebhookSecret ? 'Hide' : 'Reveal'}>
-                   {revealWebhookSecret ? '🙈' : '👁️'}
-                 </button>
-                 <button type="button" className="btn btn-ghost btn-sm" onClick={() => { navigator.clipboard.writeText(createdWebhook.secret); setCopyWebhookSecret(true); setTimeout(() => setCopyWebhookSecret(false), 1500); }} title="Copy">
-                   {copyWebhookSecret ? '✓' : '📋'}
-                 </button>
-               </div>
-               <p className="text-xs text-muted">Use this secret in IMS as <span className="font-mono">HRMS_WEBHOOK_SECRET</span>.</p>
-             </div>
-          </Modal>
-        )}
-
-         {rotateSecretTarget && (
-           <ConfirmDialog
-             open={!!rotateSecretTarget}
-             onClose={() => setRotateSecretTarget(null)}
-              onConfirm={async () => {
-                try {
-                  const res = await integrationsApi.rotateWebhookSecret(rotateSecretTarget.id);
-                  toast('Secret rotated. Save the new secret.', 'success');
-                  setRotateSecretTarget(null);
-                  integrationsApi.listWebhooks().then(setWebhooks).catch(() => toast('Failed to refresh webhooks', 'error'));
-                } catch (e) {
-                  toast(e?.response?.data?.error?.message || 'Failed to rotate secret', 'error');
-                  setRotateSecretTarget(null);
-                }
-              }}
-             title="Rotate webhook secret?"
-             message={`This will generate a new secret for "${rotateSecretTarget.name}". The old secret will stop working immediately.`}
-             confirmLabel="Rotate"
-             danger
-           />
-         )}
-
-         {disableWebhookTarget && (
-           <ConfirmDialog
-             open={!!disableWebhookTarget}
-             onClose={() => setDisableWebhookTarget(null)}
-             onConfirm={confirmDisableWebhook}
-             title={disableWebhookTarget.isActive ? 'Disable webhook?' : 'Activate webhook?'}
-             message={`${disableWebhookTarget.isActive ? 'Disable' : 'Activate'} "${disableWebhookTarget.name}"? ${disableWebhookTarget.isActive ? 'It will stop receiving events.' : 'It will resume receiving events.'}`}
-             confirmLabel={disableWebhookTarget.isActive ? 'Disable' : 'Activate'}
-             danger={disableWebhookTarget.isActive}
-           />
-         )}
-
-         {deleteWebhookTarget && (
-           <ConfirmDialog
-             open={!!deleteWebhookTarget}
-             onClose={() => setDeleteWebhookTarget(null)}
-             onConfirm={confirmDeleteWebhook}
-             title="Delete webhook?"
-             message={`Permanently delete "${deleteWebhookTarget.name}"? This cannot be undone.`}
-             confirmLabel="Delete"
-             danger
-           />
-         )}
-
-         <ConfirmDialog open={!!deleteKeyTarget} onClose={() => setDeleteKeyTarget(null)} onConfirm={confirmDeleteApiKey} title="Delete API key" message={`Permanently delete "${deleteKeyTarget?.name}"? This cannot be undone.`} confirmLabel="Delete" danger />
 
     </Layout>
   );

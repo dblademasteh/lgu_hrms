@@ -92,14 +92,44 @@ The Settings page consists of seven primary tabs:
 
 ## Integrations Settings
 
+**SUPER_ADMIN only** (backend mounts `requireRole('SUPER_ADMIN')` on every management route; the tab is filtered out of the tab list for other roles).
+
+Rendered by `frontend/src/components/Integrations.jsx`, extracted from this page. It has two views:
+
+### Setup view (default) — `IntegrationSetupWizard`
+A six-step wizard for `PAYROLL`, `ATTENDANCE` and `LEAVE`:
+
+| # | Step | Gate to advance |
+|---|------|-----------------|
+| 1 | Choose integration type | a type is chosen |
+| 2 | Register external system | an `ExternalSystem` of that type exists |
+| 3 | Issue credentials | an active key holds every `requiredScopes` entry |
+| 4 | Verify | connectivity probe **and** scoped read both pass (key pasted once, never stored) |
+| 5 | Events (skipped for `LEAVE`) | a webhook covers ≥1 recommended event |
+| 6 | Monitor | — |
+
+Scope chips, recommended events, endpoint lists and environment variables all come from `GET /api/v1/integrations/catalog` (backed by `backend/src/shared/integrationCatalog.js`), so the UI cannot drift from server validation.
+
+Full flow, chart and verification results: `src/docs/INTEGRATION_SETUP.md`.
+
+### Advanced view
+The raw list + modal management surface (previously the whole tab):
+
+- **API Keys** — list, create (validated against the catalog scopes), activate/deactivate, delete
+- **Webhooks** — add, edit events, send test event, rotate secret, disable, delete
+- **External Systems** — add/edit/delete, mark synced
+
 ### API Keys
 - **Purpose:** External HR systems access to employee data
 - **Lifecycle:** Create → Store securely → Rotate every 90 days
-- **Frontend:** Settings → Integrations → API Keys tab shows existing keys, create new keys, revoke keys
+- **Frontend:** Settings → Integrations → Advanced → API Keys
 - **Backend Endpoints:**
+  - `GET /api/v1/integrations/catalog` - Scope/event/type catalog (SUPER_ADMIN)
   - `GET /api/v1/integrations/keys` - List API keys for current tenant
-  - `POST /api/v1/integrations/keys` - Create new API key
-  - `DELETE /api/v1/integrations/keys/:id` - Revoke API key
+  - `POST /api/v1/integrations/keys` - Create new API key (scope enum validated)
+  - `PATCH /api/v1/integrations/keys/:id/revoke` - Deactivate
+  - `PATCH /api/v1/integrations/keys/:id/reactivate` - Re-enable
+  - `DELETE /api/v1/integrations/keys/:id` - Revoke (soft) or hard-delete with `?hard=true`
 - **Frontend API Client:** `frontend/src/api/integrations.js`
 - **Security Notes:**
   - Key is only returned once at creation time
@@ -109,14 +139,10 @@ The Settings page consists of seven primary tabs:
   - 90-day rotation recommended
 
 ### Webhooks
-- **Purpose:** Subscribe to employee events: `created`, `updated`, `deleted`
-- **Payload:** Includes `tenantId`, `employeeId`, `changedFields`, `timestamp`, `actorUserId`
-- **Future:** Webhook management UI to be implemented
-- **External Systems Status:**
-  - Prime HR • Connected
-  - CSC Portal • Pending
-  - Payroll • Connected
-- **Events:** `employee.created`, `employee.updated`, `employee.deleted`
+- **Purpose:** Subscribe to domain events (11 catalogued: `employee.created|updated|deleted`, `attendance.created|updated|bulk_updated`, `payroll.period.created|closed`, `payroll.run.created|approved|posted`)
+- **Payload:** Includes `event`, `tenantId`, the event payload, and `timestamp`
+- **Signature:** HMAC-SHA256 in the `X-HRMS-Signature` header; `POST /integrations/webhooks/:id/test` sends a sample
+- **Events:** see `WEBHOOK_EVENTS` in `backend/src/shared/integrationCatalog.js` (source of truth, rendered in the UI)
 - **Management:** Dedicated webhook management page
 
 ### External Systems Status
