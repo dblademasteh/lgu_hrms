@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Landmark, User, Lock, Eye, EyeOff, ArrowRight, ShieldCheck, Server, FileCheck, Sun, Moon, UserCheck, GraduationCap, Target, Award, Hash, ChevronDown } from 'lucide-react';
+import { User, Lock, Eye, EyeOff, ArrowRight, ShieldCheck, Server, FileCheck, Sun, Moon, UserCheck, GraduationCap, Target, Award, Hash, ChevronDown } from 'lucide-react';
+import logoIcon from '../assets/logo-icon.svg';
 import { useAuthStore } from '../stores/authStore.js';
 import { useToast } from '../components/Toast.jsx';
 import { useTheme, toggleTheme } from '../theme.js';
@@ -96,9 +97,7 @@ export default function Login() {
       <section className="relative hidden lg:flex flex-col justify-between overflow-hidden bg-surface border-r border-line p-10 xl:p-14" aria-label="About PRIME-HRM">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl bg-ink text-bg grid place-items-center" aria-hidden="true">
-              <Landmark size={22} strokeWidth={1.75} />
-            </div>
+            <img src={logoIcon} alt="LGU HRMS logo" className="w-11 h-11" aria-hidden="true" />
             <div>
               <p className="font-display font-bold text-ink leading-tight">LGU HRMS</p>
               <p className="mono-label text-[10px]">CSC PRIME-HRM &middot; 4 pillars</p>
@@ -175,7 +174,7 @@ export default function Login() {
 
         <div className="w-full max-w-md">
           <div className="flex lg:hidden items-center gap-3 mb-8">
-            <div className="w-10 h-10 rounded-[10px] bg-accent text-accent-ink flex items-center justify-center font-display font-bold" aria-hidden="true">L</div>
+            <img src={logoIcon} alt="LGU HRMS logo" className="w-10 h-10" aria-hidden="true" />
             <div>
               <p className="font-display text-xl font-bold text-ink">LGU HRMS</p>
               <p className="text-sm text-muted">Human Resource Management System</p>

@@ -77,8 +77,23 @@ Rules:
 
 Use these before writing any new CSS; extend `index.css` only when a pattern repeats ≥3×.
 
+### Logo & Brand
+Asset files (all in `frontend/src/assets/`):
+- `logo.svg` — Full logo: shield (governance) + capitol building with columns + two human figures (HR) + "LGU HRMS" text + tagline.
+- `logo-icon.svg` — Icon-only variant (shield + building + people): used in login desktop/mobile headers, dashboard sidebar header, and app header.
+- `public/icon.svg` — Favicon: simplified capitol building inside shield, 64×64.
+
+| Layer | Visual | Tokens | Meaning |
+|-------|--------|--------|---------|
+| Shield | Indigo gradient | `#3730a3 → #1d4ed8` (accent) | Trust, stability, governance |
+| Capitol building | Teal | `#0f766e` (accent-secondary) | Local government / institution |
+| Columns | Dark teal | `#134e5e` | Structure, rule of law |
+| People figures | White | `#ffffff` | HR, people-first approach |
+
+The logo is theme-agnostic (fixed colors work on both light and dark surfaces). Use `<img src={logoIcon} alt="LGU HRMS" />` with semantic sizing classes (`w-8 h-8` for headers, `w-10 h-10` for sidebar).
+
 ### Icons
-All icons use `lucide-react` (MIT, tree-shakable). No custom SVGs unless the icon set is missing a concept. Icons are decorative unless paired with accessible label. Icon-only buttons require `aria-label`. Size tokens: 16px for inline text, 20px for toolbar, 24px for sidebar. Color follows text tokens: `text-muted` default, `text-ink` on hover/active, semantic on status. Do not stroke icons with hardcoded hex.
+All icons use `lucide-react` (MIT, tree-shakable). No custom SVGs unless the icon set is missing a concept. Icons are decorative unless paired with accessible label. Icon-only buttons require `aria-label`. Size tokens: 16px for inline text, 20px for toolbar, 24px for sidebar. Color follows text tokens: `text-muted` default, `text-ink` on hover/active, semantic on status. Do not stroke icons with hardcoded hex. The **logo** is the one exception — a custom SVG brand mark, not a UI icon.
 
 ### Buttons — `.btn` + variants
 Inline-flex, gap 0.5rem, Inter 600 @ 0.875rem, radius **10px**, hairline border, padding 0.625rem × 1rem, 150ms transitions, `:active` presses down 1px.

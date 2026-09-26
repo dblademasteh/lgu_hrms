@@ -5,6 +5,7 @@ import {
   ShieldCheck, BarChart3, UserCog, Landmark, Settings as SettingsIcon, ShieldAlert, HelpCircle,
   Search, ChevronDown, Database, File, ClipboardList, FileText, Trophy, Calendar, Star
 } from 'lucide-react';
+import logoIcon from '../assets/logo-icon.svg';
 import { useAuthStore } from '../stores/authStore.js';
 import { useSidebarStyle } from '../sidebarStyle.js';
 import { ROLE_RANK, ROLE_BADGE_TONES, useUserCapabilities } from '../config/permissions.js';
@@ -178,7 +179,7 @@ function ClassicSidebar({ collapsed, visibleGroups, expanded }) {
     <aside className={`bg-surface border-r border-line hidden md:flex flex-col shrink-0 transition-[width] duration-200 ${collapsed ? 'w-[72px]' : 'w-[260px]'}`}>
       <div className={`flex items-center gap-3 px-4 py-3 border-b border-line ${!expanded ? 'justify-center' : ''}`}>
         <div className="w-10 h-10 rounded-[12px] bg-ink text-bg grid place-items-center">
-          <Landmark size={20} />
+          <img src={logoIcon} alt="LGU HRMS" className="w-8 h-8" aria-hidden="true" />
         </div>
         {expanded && (
           <div className="min-w-0">
@@ -286,7 +287,7 @@ function DockSidebar({ collapsed, visibleGroups, role }) {
     <aside className="bg-surface border-r border-line hidden md:flex shrink-0 overflow-hidden">
       <div className="w-[76px] shrink-0 flex flex-col items-center py-3 border-r border-line/60">
         <div className="w-11 h-11 rounded-2xl bg-ink text-bg grid place-items-center shadow-sm" title="LGU HRMS">
-          <Landmark size={20} />
+          <img src={logoIcon} alt="LGU HRMS" className="w-8 h-8" aria-hidden="true" />
         </div>
 
         <nav className="flex-1 flex flex-col items-center gap-1.5 mt-5 w-full px-2 overflow-y-auto hide-scrollbar" aria-label="Module groups">
@@ -412,7 +413,7 @@ function RailSidebar({ visibleGroups, role }) {
   return (
     <aside className="bg-surface border-r border-line hidden md:flex flex-col items-center shrink-0 w-[72px] py-3">
       <div className="w-11 h-11 rounded-2xl bg-ink text-bg grid place-items-center shadow-sm" title={`LGU HRMS · ${role || 'STAFF'}`}>
-        <Landmark size={20} />
+        <img src={logoIcon} alt="LGU HRMS" className="w-8 h-8" aria-hidden="true" />
       </div>
       <nav className="flex-1 flex flex-col items-center gap-1.5 mt-5 w-full px-2 overflow-y-auto hide-scrollbar" aria-label="All modules">
         {flat.map(i => {
@@ -491,7 +492,7 @@ function AccordionSidebar({ collapsed, visibleGroups, role }) {
     return (
       <aside className="bg-surface border-r border-line hidden md:flex flex-col items-center shrink-0 w-[72px] py-3">
         <div className="w-11 h-11 rounded-2xl bg-ink text-bg grid place-items-center" title="LGU HRMS">
-          <Landmark size={20} />
+          <img src={logoIcon} alt="LGU HRMS" className="w-8 h-8" aria-hidden="true" />
         </div>
         <nav className="flex-1 flex flex-col items-center gap-1.5 mt-5 w-full px-2 overflow-y-auto hide-scrollbar" aria-label="All modules">
           {flat.map(i => {
@@ -517,7 +518,7 @@ function AccordionSidebar({ collapsed, visibleGroups, role }) {
     <aside className="bg-surface border-r border-line hidden md:flex flex-col shrink-0 w-[260px]">
       <div className="flex items-center gap-3 px-4 py-3 border-b border-line">
         <div className="w-10 h-10 rounded-[12px] bg-ink text-bg grid place-items-center">
-          <Landmark size={20} />
+          <img src={logoIcon} alt="LGU HRMS" className="w-8 h-8" aria-hidden="true" />
         </div>
         <div className="min-w-0">
           <p className="font-display font-bold text-ink leading-tight truncate">LGU HRMS</p>

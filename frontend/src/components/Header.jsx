@@ -5,6 +5,7 @@ import { useAuthStore } from '../stores/authStore.js';
 import { useNotifications, useInAppEnabled } from '../hooks/useNotifications.js';
 import { useToast } from '../components/Toast.jsx';
 import { Search, Bell, Sun, Moon, LogOut, User, Menu, ChevronDown, Home, CheckCheck, Trash2, Inbox, HelpCircle, Building2 } from 'lucide-react';
+import logoIcon from '../assets/logo-icon.svg';
 import { switchRole } from '../api/dev.js';
 import { tenantsApi } from '../api/tenants.js';
 
@@ -128,6 +129,7 @@ export default function Header({ onToggleSidebar }) {
           >
             <Menu size={20} />
           </button>
+          <img src={logoIcon} alt="LGU HRMS" className="w-8 h-8 hidden sm:block" aria-hidden="true" />
           <div className="hidden sm:flex items-center gap-2 text-muted">
             <Home size={16} />
             <span className="mono-label">/</span>

@@ -1,0 +1,62 @@
+<!-- LGU HRMS Logo Icon (no text)
+     Shield (governance) + Capitol building with columns + two human figures (HR/people)
+     For: login header badge, header bar, favicon, sidebar -->
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  viewBox="0 0 512 512"
+  width="512"
+  height="512"
+  role="img"
+  aria-labelledby="title desc"
+>
+  <title id="title">LGU HRMS</title>
+  <desc id="desc">Shield with capitol building, columns, and two human figures</desc>
+
+  <defs>
+    <linearGradient id="shieldGradientIcon" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%"  stop-color="#3730a3" />
+      <stop offset="100%" stop-color="#1d4ed8" />
+    </linearGradient>
+  </defs>
+
+  <!-- Shield shape -->
+  <path
+    d="M256 20
+       L440 120
+       V240
+       C440 360 360 460 256 500
+       C152 460 72 360 72 240
+       V120Z"
+    fill="url(#shieldGradientIcon)"
+    stroke="url(#shieldGradientIcon)"
+    stroke-width="4"
+    filter="drop-shadow(0 4px 8px rgba(16,24,42,0.15))"
+  />
+
+  <!-- Capitol building with columns -->
+  <rect x="172" y="200" width="168" height="130" fill="#0f766e" rx="4" />
+  <!-- Dome -->
+  <path
+    d="M256 185
+       C230 195 210 215 210 240
+       C210 265 230 285 256 285
+       C282 285 302 265 302 240
+       C302 215 282 195 256 185Z"
+    fill="#0f766e"
+    stroke="#0d6b5e"
+    stroke-width="2"
+  />
+  <!-- Columns (4) -->
+  <line x1="185" y1="210" x2="185" y2="315" stroke="#134e5e" stroke-width="6" rx="3" />
+  <line x1="223" y1="210" x2="223" y2="315" stroke="#134e5e" stroke-width="6" rx="3" />
+  <line x1="289" y1="210" x2="289" y2="315" stroke="#134e5e" stroke-width="6" rx="3" />
+  <line x1="327" y1="210" x2="327" y2="315" stroke="#134e5e" stroke-width="6" rx="3" />
+
+  <!-- Two human figures (people/HR) -->
+  <!-- Person 1 -->
+  <circle cx="216" cy="265" r="10" fill="white" />
+  <path d="M216 275 C208 282 200 292 200 302 L200 310 L232 310 L232 302 C232 292 224 282 216 275Z" fill="white" />
+  <!-- Person 2 -->
+  <circle cx="296" cy="265" r="10" fill="white" />
+  <path d="M296 275 C288 282 280 292 280 302 L280 310 L312 310 L312 302 C312 292 304 282 296 275Z" fill="white" />
+</svg>
