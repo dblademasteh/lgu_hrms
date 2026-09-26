@@ -1,5 +1,16 @@
 # User & Roles System Analysis
 
+> **⚠️ PARTIALLY SUPERSEDED (2026-09-26).** This document predates the
+> capability/permission matrix. Several statements below are now wrong —
+> notably §4.1 (`requireRole()` is no longer the primary gate), §6.1/§6.2 and
+> §8 Issue 5 (passwords are randomly generated, not `"changeme"`), §8 Issue 3
+> (role changes *are* audited), and §10 (database counts and tenant names).
+>
+> Read [`USER_ROLES_SPEC.md`](./USER_ROLES_SPEC.md) for the current,
+> code-cited specification. Section 10 of that file lists every discrepancy.
+> Sections 1–3 (data model, relationships) and 5 (ESS workflow) remain broadly
+> accurate and are still useful.
+
 ## 1. Core Concept: Two Separate Tables
 
 ### User Table (Authentication & Authorization)
