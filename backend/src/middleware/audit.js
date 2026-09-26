@@ -7,9 +7,27 @@ import { prisma } from '../lib/prisma.js';
  * - Never blocks the response and never throws: audit failures are logged to
  *   stderr instead of being silently swallowed.
  */
+/**
+ * Full request path with any query string stripped.
+ *
+ * `req.originalUrl` is the only URL Express leaves intact for the entire
+ * request lifecycle. `req.path` and `req.baseUrl` are rewritten as the request
+ * descends through mounted routers (`router.use('/users', ...)` rewrites
+ * `req.url` to `/`) and are only restored while unwinding after an error. So at
+ * the moment `res.send` fires they disagree depending on the outcome: a
+ * successful write logged `action: "POST /"` with `entity: "users"`, while a
+ * failed one logged `action: "POST /api/v1/users"` with `entity: "root"`.
+ * Deriving both fields from the original URL makes them agree in every case.
+ */
+function originalPath(req) {
+  const url = req.originalUrl || req.url || '';
+  const q = url.indexOf('?');
+  return q === -1 ? url : url.slice(0, q);
+}
+
 function entityOf(req) {
-  const base = (req.baseUrl || '').replace('/api/v1/', '').replace(/^\//, '');
-  return base || 'root';
+  const path = originalPath(req).replace(/^\/api\/v1(?=\/|$)/, '');
+  return path.split('/').filter(Boolean)[0] || 'root';
 }
 
 function entityIdOf(req) {
@@ -47,7 +65,7 @@ export function auditLog(req, res, next) {
         prisma.auditLog.create({
           data: {
             userId: req.user.id,
-            action: `${req.method} ${req.path}`,
+            action: `${req.method} ${originalPath(req)}`,
             entity: entityOf(req),
             entityId: String(entityIdOf(req)),
             before: before ?? undefined,
