@@ -253,6 +253,7 @@ export const databaseController = {
   },
 
   // Export table data as CSV or JSON
+  // CSV includes UTF-8 BOM for multibyte names, proper type handling.
   async exportData(req, res) {
     const { name } = req.params;
     const { format = 'csv' } = req.query;
@@ -270,9 +271,9 @@ export const databaseController = {
     }
 
     if (filtered.length === 0) {
-      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
       res.setHeader('Content-Disposition', `attachment; filename="${name.toLowerCase()}.csv"`);
-      return res.send('');
+      return res.send('\uFEFF');
     }
 
     const columns = Object.keys(filtered[0]);
@@ -281,15 +282,19 @@ export const databaseController = {
       const values = columns.map(col => {
         const val = row[col];
         if (val === null || val === undefined) return '';
+        if (val instanceof Date) return val.toISOString().slice(0, 10);
+        if (val !== null && typeof val === 'object') return JSON.stringify(val);
+        if (Buffer.isBuffer(val)) return '[binary]';
         const escaped = String(val).replace(/"/g, '""');
         return `"${escaped}"`;
       });
       csvRows.push(values.join(','));
     }
 
-    res.setHeader('Content-Type', 'text/csv');
+    // UTF-8 BOM so Excel opens multibyte chars (Philippine names) correctly.
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="${name.toLowerCase()}.csv"`);
-    res.send(csvRows.join('\n'));
+    res.send('\uFEFF' + csvRows.join('\n'));
   },
 
   // Table counts summary
