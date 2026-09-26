@@ -29,115 +29,62 @@ export const payrollRepository = {
       include: { period: true, items: { include: { deductionLines: true } }, ledgerEntries: true },
     });
   },
-  async createRun(req, data) {
-    const stamped = stampTenant(req, data);
-    return prisma.payrollRun.create({ data: stamped });
-  },
-  async updateRunStatus(req, id, status) {
-    const scope = withTenant(req, { id });
-    const existing = await prisma.payrollRun.findFirst({ where: scope });
-    if (!existing) {
-      const e = new Error('Payroll run not found');
-      e.status = 404;
-      throw e;
-    }
-    return prisma.payrollRun.update({ where: scope, data: { status } });
-  },
-  async findPeriodById(req, id) {
-    return prisma.payrollPeriod.findFirst({ where: withTenant(req, { id }) });
-  },
-  async createPeriod(req, data) {
-    return prisma.payrollPeriod.create({ data: stampTenant(req, data) });
-  },
   async findPeriodByName(req, name) {
     return prisma.payrollPeriod.findFirst({ where: withTenant(req, { name }) });
   },
-  async closePeriod(req, id) {
-    const existing = await prisma.payrollPeriod.findFirst({ where: withTenant(req, { id }) });
-    if (!existing) {
-      const e = new Error('Payroll period not found');
-      e.status = 404;
-      throw e;
-    }
-    return prisma.payrollPeriod.update({ where: withTenant(req, { id }), data: { status: 'CLOSED' } });
+
+  async findPeriodByExternalId(req, externalId) {
+    return prisma.payrollPeriod.findFirst({ where: withTenant(req, { externalId }) });
   },
-  async findRunByPeriod(req, periodId) {
-    return prisma.payrollRun.findFirst({ where: withTenant(req, { periodId }) });
+
+  async findRunByExternalId(req, externalId) {
+    return prisma.payrollRun.findFirst({ where: withTenant(req, { externalId }) });
   },
-  /** Regenerate contents of a DRAFT run (idempotent: wipes prior items/lines/payslips). */
-  async regenerateRun(req, run, built) {
-    const tenantId = req.tenantId ?? null;
-    return prisma.$transaction(async tx => {
-      if (built.itemIds.length > 0) {
-        await tx.payrollDeductionLine.deleteMany({ where: { tenantId, payrollItemId: { in: built.itemIds } } });
-        await tx.payslip.deleteMany({ where: { tenantId, payrollItemId: { in: built.itemIds } } });
-        await tx.payrollItem.deleteMany({ where: { tenantId, runId: run.id } });
-      }
-      const created = await tx.payrollItem.createManyAndReturn({
-        data: built.rows.map(i => ({
-          tenantId, runId: run.id, employeeId: i.employeeId,
-          basicPay: i.basicPay, allowances: i.allowances,
-          deductions: i.deductions, netPay: i.netPay,
-        })),
-        select: { id: true, employeeId: true },
-      });
-      const itemIdByEmployee = new Map(created.map(c => [c.employeeId, c.id]));
-      await tx.payrollDeductionLine.createMany({
-        data: built.rows.flatMap(i =>
-          i.lines.map(l => ({
-            tenantId, payrollItemId: itemIdByEmployee.get(i.employeeId), code: l.code,
-            description: l.description, employeeShare: l.employeeShare, employerShare: l.employerShare,
-            quantity: l.quantity ?? null,
-          }))
-        ),
-      });
-      await tx.payrollRun.update({ where: { id: run.id }, data: { generatedAt: new Date() } });
-      const reloaded = await tx.payrollRun.findFirst({
-        where: { id: run.id, tenantId },
-        include: { period: true, items: { include: { employee: true, deductionLines: true } }, ledgerEntries: true },
-      });
-      return reloaded;
-    });
+
+  async findItemByExternalId(req, externalId) {
+    return prisma.payrollItem.findFirst({ where: withTenant(req, { externalId }), include: { payslip: true } });
   },
-  /** Post an APPROVED run: ledger entries, payslip rows, mark loans paid, VL settled, status→POSTED. */
-  async postRun(req, run, posting) {
-    const tenantId = req.tenantId ?? null;
-    return prisma.$transaction(async tx => {
-      await tx.ledgerEntry.createMany({ data: posting.ledger });
-      await tx.payslip.createMany({
-        data: posting.itemIds.map(id => ({ tenantId, payrollItemId: id })),
-      });
-      if (posting.amortizationIds.length > 0) {
-        await tx.loanAmortization.updateMany({
-          where: { id: { in: posting.amortizationIds }, tenantId },
-          data: { paid: true },
-        });
-      }
-      if (posting.vlDebits.length > 0) {
-        for (const v of posting.vlDebits) {
-          await tx.leaveCredit.updateMany({
-            where: { tenantId, employeeId: v.employeeId, type: 'VACATION', year: v.year, balance: { gt: 0 } },
-            data: { balance: { decrement: Math.min(v.days, 999) } },
-          });
-        }
-      }
-      await tx.payrollRun.update({ where: { id: run.id }, data: { status: 'POSTED', postedAt: new Date() } });
-      return tx.payrollRun.findFirst({
-        where: { id: run.id, tenantId },
-        include: { period: true, items: { include: { employee: true, deductionLines: true } }, ledgerEntries: true },
-      });
-    });
-  },
-  async findPayrollItemForPrint(req, itemId, employeeId) {
-    const where = withTenant(req, { id: itemId });
-    if (employeeId) where.employeeId = employeeId;
+
+  async findPayslipByExternalId(req, externalId) {
     return prisma.payrollItem.findFirst({
-      where,
-      include: {
-        employee: { include: { position: true, department: true } },
-        run: { include: { period: true } },
-        deductionLines: true,
-      },
+      where: withTenant(req, { externalId }),
+      include: { payslip: true },
     });
+  },
+
+  async createPeriodExternal(req, data) {
+    return prisma.payrollPeriod.create({ data: stampTenant(req, { ...data, source: 'LGU_PAYROLL' }) });
+  },
+
+  async updatePeriodExternal(req, id, data) {
+    return prisma.payrollPeriod.update({ where: withTenant(req, { id }), data: { ...data, source: 'LGU_PAYROLL' } });
+  },
+
+  async createRunExternal(req, data) {
+    return prisma.payrollRun.create({ data: stampTenant(req, { ...data, source: 'LGU_PAYROLL' }) });
+  },
+
+  async updateRunExternal(req, id, data) {
+    return prisma.payrollRun.update({ where: withTenant(req, { id }), data: { ...data, source: 'LGU_PAYROLL' } });
+  },
+
+  async createItemExternal(req, data) {
+    return prisma.payrollItem.create({ data: stampTenant(req, { ...data, source: 'LGU_PAYROLL' }) });
+  },
+
+  async updateItemExternal(req, id, data) {
+    return prisma.payrollItem.update({ where: withTenant(req, { id }), data: { ...data, source: 'LGU_PAYROLL' } });
+  },
+
+  async createDeductionLinesExternal(req, lines) {
+    return prisma.payrollDeductionLine.createMany({ data: lines.map(l => stampTenant(req, l)) });
+  },
+
+  async createPayslipExternal(req, data) {
+    return prisma.payslip.create({ data: stampTenant(req, data) });
+  },
+
+  async updatePayslipExternal(req, id, data) {
+    return prisma.payslip.update({ where: withTenant(req, { id }), data });
   },
 };
