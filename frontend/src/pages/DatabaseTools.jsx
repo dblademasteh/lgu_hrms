@@ -30,6 +30,8 @@ export default function DatabaseTools() {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState({ vacuumRun: false, vacuumAnalyze: false, analyze: false, reindex: false });
   const [maintenanceResult, setMaintenanceResult] = useState(null);
+  const [migrationRunning, setMigrationRunning] = useState(false);
+  const [confirmRunMigrations, setConfirmRunMigrations] = useState(false);
 
   const loadAll = async () => {
     setLoading(true);
@@ -60,6 +62,20 @@ export default function DatabaseTools() {
   useEffect(() => {
     loadAll();
   }, []);
+
+  const runMigrations = async () => {
+    setMigrationRunning(true);
+    setConfirmRunMigrations(false);
+    try {
+      const res = await databaseApi.runMigrations();
+      toast(`Migrations applied: ${res.message || 'success'}`, 'success');
+      await loadAll();
+    } catch (e) {
+      toast(e?.response?.data?.error?.message || 'Migration failed', 'error');
+    } finally {
+      setMigrationRunning(false);
+    }
+  };
 
   const runBackup = async () => {
     try {
@@ -396,15 +412,23 @@ export default function DatabaseTools() {
               <p className="font-display font-semibold text-ink">Pending Migrations</p>
             </div>
             <p className="text-sm text-muted mb-3">
-              Run <code className="font-mono text-xs bg-bg px-1.5 py-0.5 rounded">cd backend && npx prisma migrate deploy</code> to apply these migrations.
+              {migrations.pending.length} migration{migrations.pending.length !== 1 ? 's' : ''} ready to apply.
             </p>
-            <div className="space-y-1">
+            <div className="space-y-1 mb-4">
               {migrations.pending.map(name => (
                 <div key={name} className="font-mono text-xs text-ink bg-bg px-2 py-1 rounded">
                   {name}
                 </div>
               ))}
             </div>
+            <button
+              type="button"
+              className="btn btn-warning gap-2"
+              disabled={migrationRunning}
+              onClick={() => setConfirmRunMigrations(true)}
+            >
+              {migrationRunning ? 'Running…' : 'Apply Migrations'}
+            </button>
           </div>
         )}
 
@@ -694,6 +718,16 @@ export default function DatabaseTools() {
           {activeTab === 'monitoring' && renderMonitoring()}
         </div>
       )}
+
+      <ConfirmDialog
+        open={confirmRunMigrations}
+        onClose={() => setConfirmRunMigrations(false)}
+        onConfirm={runMigrations}
+        title="Apply pending migrations?"
+        message="This will run `prisma migrate deploy` on the production database. This operation is irreversible — ensure you have a recent backup. Continue?"
+        confirmLabel="Apply"
+        danger
+      />
     </Layout>
   );
 }

@@ -5,6 +5,7 @@ export const databaseApi = {
   summary: () => api.get('/database/summary').then(r => r.data),
   health: () => api.get('/database/health').then(r => r.data),
   migrations: () => api.get('/database/migrations').then(r => r.data),
+  runMigrations: () => api.post('/database/migrations/run').then(r => r.data),
   backup: async () => {
     const res = await api.get('/database/backup', { responseType: 'blob' });
     const url = URL.createObjectURL(new Blob([res.data], { type: 'application/json' }));

@@ -375,6 +375,37 @@ export const databaseController = {
     } catch (e) { next(e); }
   },
 
+  // Run pending Prisma migrations via CLI.
+  // SUPER_ADMIN only (route-level gate). Best-effort: returns stdout/stderr.
+  async runMigrations(req, res, next) {
+    try {
+      const backendDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../');
+      execFile('npx', ['prisma', 'migrate', 'deploy'], {
+        cwd: backendDir,
+        timeout: 120000,
+        maxBuffer: 10 * 1024 * 1024,
+      }, (err, stdout, stderr) => {
+        if (err) {
+          return res.status(502).json({
+            error: {
+              code: 'MIGRATION_FAILED',
+              message: `Migration command failed: ${err.message || 'timeout or execution error'}.`,
+              stdout: stdout || '',
+              stderr: stderr || '',
+            },
+          });
+        }
+        res.json({
+          ok: true,
+          message: 'Migrations applied successfully',
+          stdout: stdout || '',
+          stderr: stderr || '',
+          appliedAt: new Date().toISOString(),
+        });
+      });
+    } catch (e) { next(e); }
+  },
+
   // Tenant-scoped SQL dump (INSERT statements) for ADMIN users.
   // Generates portable .sql from the current tenant's managed tables only.
   async tenantDump(req, res, next) {

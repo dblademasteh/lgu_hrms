@@ -18,6 +18,7 @@ router.get('/', databaseController.listTables);
 router.get('/summary', databaseController.summary);
 router.get('/health', databaseController.health);
 router.get('/migrations', databaseController.migrations);
+router.post('/migrations/run', databaseController.runMigrations);
 router.get('/:name/schema', databaseController.tableSchema);
 router.get('/:name/browse', databaseController.browse);
 router.get('/:name/dependents/:id', databaseController.dependents);
