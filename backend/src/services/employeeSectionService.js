@@ -173,7 +173,7 @@ export const employeeSectionService = {
     if (!existing) throw new AppError('Record not found', 404, 'NOT_FOUND');
     try {
       return await prisma[cfg.model].update({
-        where: { id: recordId },
+        where: { id: recordId, tenantId: req.tenantId },
         data: coerceDates(cfg, data),
       });
     } catch (e) {
@@ -188,7 +188,7 @@ export const employeeSectionService = {
     const existing = await prisma[cfg.model].findFirst({ where: withTenant(req, { id: recordId, employeeId }) });
     if (!existing) throw new AppError('Record not found', 404, 'NOT_FOUND');
     try {
-      await prisma[cfg.model].delete({ where: { id: recordId } });
+      await prisma[cfg.model].delete({ where: { id: recordId, tenantId: req.tenantId } });
     } catch (e) {
       prismaError(e, section);
     }

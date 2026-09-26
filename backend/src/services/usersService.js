@@ -63,6 +63,9 @@ export const usersService = {
   },
 
   async create(req, data) {
+    if (!req.tenantId) {
+      throw new AppError('Select a tenant scope first — user creation requires a tenant', 400, 'TENANT_REQUIRED');
+    }
     const { username, role, departmentId, displayName, email, contactNumber, externalId } = data;
     await this.assertLinkable(req, externalId);
     await this.assertRoleExists(role, req.tenantId);
@@ -77,6 +80,9 @@ export const usersService = {
   },
 
   async update(req, id, data) {
+    if (!req.tenantId) {
+      throw new AppError('Select a tenant scope first — user update requires a tenant', 400, 'TENANT_REQUIRED');
+    }
     const { passwordHash, pinHash, tenantId, ...rest } = data;
     if ('externalId' in rest) {
       const ext = rest.externalId?.trim();

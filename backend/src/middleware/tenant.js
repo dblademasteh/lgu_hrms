@@ -69,7 +69,12 @@ export function tenantContext(req, res, next) {
 export function withTenant(req, where = {}) {
   if (!req) return where;
   if (req.isSuperAdmin && !req.tenantId) return where;
-  if (!req.tenantId) return { ...where, tenantId: req.tenantId ?? null };
+  if (!req.tenantId) {
+    const err = new Error('Tenant context required');
+    err.status = 403;
+    err.code = 'TENANT_REQUIRED';
+    throw err;
+  }
   return { ...where, tenantId: req.tenantId };
 }
 
@@ -93,4 +98,10 @@ export const tenantRepository = {
   get: (id) => prisma.tenant.findUnique({ where: { id } }),
   create: (data) => prisma.tenant.create({ data }),
   update: (id, data) => prisma.tenant.update({ where: { id }, data }),
+  remove: (id, hard = false) => {
+    if (hard) {
+      return prisma.tenant.delete({ where: { id } });
+    }
+    return prisma.tenant.update({ where: { id }, data: { isActive: false } });
+  },
 };

@@ -47,6 +47,7 @@ export default function Users() {
   const [editingRole, setEditingRole] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [userSearch, setUserSearch] = useState('');
+  const [activeTab, setActiveTab] = useState('users');
   // Permission matrix — authoritative in the backend (RolePermission table).
   const [caps, setCaps] = useState([]);
   const [matrixRoles, setMatrixRoles] = useState([]);
@@ -54,6 +55,18 @@ export default function Users() {
   const [permissionDraft, setPermissionDraft] = useState({});
   const [dirtyRoles, setDirtyRoles] = useState({});
   const [permSaving, setPermSaving] = useState(false);
+  const [capSearch, setCapSearch] = useState('');
+
+  // DB stores status as 'ACTIVE'/'INACTIVE' (uppercase); the API contract
+  // enforces the same. Normalize here so seeded rows and toggles agree.
+  const isActive = u => String(u.status ?? '').toUpperCase() === 'ACTIVE';
+
+  const tabs = [
+    { id: 'users', label: 'Users', icon: UserCheck, count: list.filter(isActive).length },
+    { id: 'roles', label: 'Roles', icon: Shield, count: roles.length },
+    { id: 'permissions', label: 'Permissions Matrix', icon: Settings, count: caps.length },
+    ...(myRole === 'SUPER_ADMIN' ? [{ id: 'tenants', label: 'Tenants', icon: Building2, count: tenants?.length ?? 0 }] : []),
+  ];
 
   const syncMatrix = (rolesData = matrixRoles) => {
     const draft = {};
@@ -228,10 +241,6 @@ export default function Users() {
     }
   };
 
-  // DB stores status as 'ACTIVE'/'INACTIVE' (uppercase); the API contract
-  // enforces the same. Normalize here so seeded rows and toggles agree.
-  const isActive = u => String(u.status ?? '').toUpperCase() === 'ACTIVE';
-
   const toggleStatus = async u => {
     const next = isActive(u) ? 'INACTIVE' : 'ACTIVE';
     try {
@@ -259,201 +268,298 @@ export default function Users() {
 
   return (
     <Layout maxWidth="max-w-7xl">
-        <div className="flex items-end justify-between gap-4 mb-6">
-          <div>
-            <h1 className="font-display text-xl font-bold text-ink">Users &amp; Roles</h1>
-            <p className="text-sm text-muted mt-0.5">RBAC administration and permission matrix</p>
+      <div className="flex items-end justify-between gap-4 mb-6">
+        <div>
+          <h1 className="font-display text-xl font-bold text-ink">Users &amp; Roles</h1>
+          <p className="text-sm text-muted mt-0.5">RBAC administration and permission matrix</p>
+        </div>
+        {activeTab === 'users' && canManage && (
+          <button type="button" className="btn btn-primary gap-2" onClick={openAdd}>
+            <Plus size={16} />
+            Add User
+          </button>
+        )}
+      </div>
+
+      <div className="card mb-4">
+        <div className="flex items-center gap-1 p-1 bg-bg rounded-lg">
+          {tabs.map(tab => {
+            const Icon = tab.icon;
+            const tabActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-md text-sm font-medium transition-colors ${tabActive ? 'bg-surface text-ink shadow-sm' : 'text-muted hover:text-ink'}`}
+                aria-pressed={tabActive}
+              >
+                <Icon size={16} />
+                <span className="hidden sm:inline">{tab.label}</span>
+                {tab.count !== undefined && <span className={`mono-label text-xs px-1.5 py-0.5 rounded-full ${tabActive ? 'bg-accent/10 text-accent' : 'bg-line text-muted'}`}>{tab.count}</span>}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {activeTab === 'users' && (
+        <div className="card p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-display font-semibold text-ink">User Accounts</h3>
+            <span className="flex items-center gap-3 mono-label">
+              <span className="text-xs text-muted">{list.filter(isActive).length} active</span>
+              <input
+                className="input input-sm mono-label"
+                placeholder="Search users..."
+                value={userSearch}
+                onChange={e => setUserSearch(e.target.value)}
+                aria-label="Search users"
+              />
+              {myRole === 'SUPER_ADMIN' && tenants && (
+                <select
+                  className="select select-sm mono-label"
+                  value={tenantFilter ?? ''}
+                  onChange={e => setTenantFilter(e.target.value || null)}
+                  aria-label="Filter by tenant"
+                >
+                  <option value="">All tenants</option>
+                  {tenants.map(t => (
+                    <option key={t.id} value={t.id}>{t.code} · {t.name}</option>
+                  ))}
+                </select>
+              )}
+            </span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="overflow-auto">
+            {(() => {
+              const tenantFiltered = tenantFilter
+                ? list.filter(u => u.tenantId === tenantFilter)
+                : list;
+              const shown = userSearch
+                ? tenantFiltered.filter(u =>
+                    u.username.toLowerCase().includes(userSearch.toLowerCase()) ||
+                    u.role.toLowerCase().includes(userSearch.toLowerCase()) ||
+                    (u.linkedEmployee?.employeeNumber || '').toLowerCase().includes(userSearch.toLowerCase()) ||
+                    (u.linkedEmployee?.lastName || '').toLowerCase().includes(userSearch.toLowerCase())
+                  )
+                : tenantFiltered;
+              if (shown.length === 0) {
+                return (
+                  <div className="text-center py-12">
+                    <div className="mx-auto w-12 h-12 rounded-full bg-bg grid place-items-center mb-3">
+                      <UserCheck size={20} className="text-muted" />
+                    </div>
+                    <p className="text-sm font-medium text-ink">No users found</p>
+                    <p className="text-xs text-muted mt-1">{userSearch ? 'Try a different search term' : 'Create your first user to get started'}</p>
+                  </div>
+                );
+              }
+              return (
+                <table className="data-table">
+                  <thead>
+                    <tr><th>Username</th><th>Role</th><th>Department</th><th>Status</th><th className="text-right">Actions</th></tr>
+                  </thead>
+                  <tbody>
+                    {shown.map(u => (
+                      <tr key={u.id} className="hover:bg-bg/50 transition-colors">
+                        <td>
+                          <div className="font-medium">{u.username}</div>
+                          {u.linkedEmployee && (
+                            <div className="text-xs text-muted mt-0.5">{u.linkedEmployee.employeeNumber} · {u.linkedEmployee.lastName}, {u.linkedEmployee.firstName}</div>
+                          )}
+                        </td>
+                        <td>
+                          <span className={"badge " + (ROLE_BADGE_TONES[u.role] || 'badge-neutral')}>{u.role.replaceAll('_', ' ')}</span>
+                          {u.role === 'SUPER_ADMIN' && <span className="badge badge-success ml-1 mono-label text-[10px]">PLATFORM</span>}
+                        </td>
+                        <td className="font-mono text-sm">{u.department?.name ?? u.department ?? '—'}</td>
+                        <td><span className={"badge " + badgeTone(u.status)}>{u.status}</span></td>
+                        <td className="text-right">
+                          <span className="inline-flex gap-1">
+                            <button type="button" className="btn btn-ghost px-2 text-xs" onClick={() => openEdit(u)} aria-label={`Edit ${u.username}`}>
+                              <Edit size={14} />
+                              <span className="hidden sm:inline">Edit</span>
+                            </button>
+                            <button type="button" className="btn btn-ghost px-2 text-xs" onClick={() => setConfirm(u)} aria-label={isActive(u) ? `Deactivate ${u.username}` : `Activate ${u.username}`}>
+                              {isActive(u) ? <><UserCheck size={14} /> <span className="hidden sm:inline">Deactivate</span></> : <><Shield size={14} /> <span className="hidden sm:inline">Activate</span></>}
+                            </button>
+                            <button type="button" className="btn btn-ghost px-2 text-xs text-error" onClick={() => setDeleteConfirm(u)} aria-label={`Delete ${u.username}`}>
+                              <Trash2 size={14} />
+                              <span className="hidden sm:inline">Delete</span>
+                            </button>
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              );
+            })()}
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'roles' && (
+        <div className="card p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-display font-semibold text-ink">Roles</h3>
             {canManage && (
               <button type="button" className="btn btn-ghost gap-2" onClick={() => { setEditingRole(null); setRoleForm({ name: '', description: '' }); setShowRoleModal(true); }}>
                 <Settings size={16} />
                 Manage Roles
               </button>
             )}
-            <button type="button" className="btn btn-primary gap-2" onClick={openAdd}>
-              <Plus size={16} />
-              Add User
-            </button>
+          </div>
+          <div className="overflow-auto">
+            {rolesLoading ? (
+              <p className="text-sm text-muted text-center py-8">Loading roles...</p>
+            ) : roles.length === 0 ? (
+              <div className="text-center py-12">
+                <div className="mx-auto w-12 h-12 rounded-full bg-bg grid place-items-center mb-3">
+                  <Shield size={20} className="text-muted" />
+                </div>
+                <p className="text-sm font-medium text-ink">No roles yet</p>
+                <p className="text-xs text-muted mt-1">Create custom roles to define access levels</p>
+              </div>
+            ) : (
+              <div className="grid gap-2">
+                {roles.map(r => (
+                  <div key={r.name} className="flex items-center justify-between p-4 bg-bg rounded-lg border border-line hover:border-accent/30 transition-colors">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="font-medium text-ink text-sm">{r.name.replaceAll('_', ' ')}</p>
+                        {r.isSystem && <span className="badge badge-neutral text-[10px]">SYSTEM</span>}
+                      </div>
+                      <p className="text-xs text-muted mt-0.5 truncate">{r.description || 'No description'}</p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {!r.isSystem && canManage && (
+                        <>
+                          <button type="button" className="btn btn-ghost px-2 text-xs" onClick={() => openEditRole(r)}>
+                            <Edit size={14} /> <span className="hidden sm:inline">Edit</span>
+                          </button>
+                          <button type="button" className="btn btn-ghost px-2 text-xs text-error" onClick={() => handleDeleteRole(r)}>
+                            <Trash2 size={14} /> <span className="hidden sm:inline">Delete</span>
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
+      )}
 
-      <div className="card p-5 mb-4">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="font-display font-semibold text-ink">User Accounts</h3>
-          <span className="flex items-center gap-3 mono-label">
-            {list.filter(isActive).length} active
-            <input
-              className="input input-sm mono-label"
-              placeholder="Search users..."
-              value={userSearch}
-              onChange={e => setUserSearch(e.target.value)}
-              aria-label="Search users"
-            />
-            {myRole === 'SUPER_ADMIN' && tenants && (
-              <select
-                className="select select-sm mono-label"
-                value={tenantFilter ?? ''}
-                onChange={e => setTenantFilter(e.target.value || null)}
-                aria-label="Filter by tenant"
-              >
-                <option value="">All tenants</option>
-                {tenants.map(t => (
-                  <option key={t.id} value={t.id}>{t.code} · {t.name}</option>
-                ))}
-              </select>
-            )}
-          </span>
-        </div>
-        <div className="overflow-auto">
-          {(() => {
-            const tenantFiltered = tenantFilter
-              ? list.filter(u => u.tenantId === tenantFilter)
-              : list;
-            const shown = userSearch
-              ? tenantFiltered.filter(u =>
-                  u.username.toLowerCase().includes(userSearch.toLowerCase()) ||
-                  u.role.toLowerCase().includes(userSearch.toLowerCase()) ||
-                  (u.linkedEmployee?.employeeNumber || '').toLowerCase().includes(userSearch.toLowerCase()) ||
-                  (u.linkedEmployee?.lastName || '').toLowerCase().includes(userSearch.toLowerCase())
+      {activeTab === 'permissions' && (
+        <div className="card p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-display font-semibold text-ink">Permissions Matrix</h3>
+            <div className="flex items-center gap-2">
+              {editingPermissions ? (
+                <>
+                  <button type="button" className="btn btn-ghost text-xs" onClick={() => syncMatrix()} disabled={permSaving}>
+                    Reset
+                  </button>
+                  <button type="button" className="btn btn-primary text-xs" onClick={savePermissions} disabled={permSaving}>
+                    {permSaving ? 'Saving...' : 'Save Permissions'}
+                  </button>
+                </>
+              ) : (
+                canManage && (
+                  <button type="button" className="btn btn-ghost text-xs" onClick={() => setEditingPermissions(true)}>
+                    Edit Permissions
+                  </button>
                 )
-              : tenantFiltered;
-            return (
+              )}
+            </div>
+          </div>
+          <p className="text-xs text-muted mb-4">Capabilities are enforced server-side. Edits apply immediately — custom roles only gain access to a capability once granted here.</p>
+          {caps.length === 0 ? (
+            <div className="text-center py-12">
+              <div className="mx-auto w-12 h-12 rounded-full bg-bg grid place-items-center mb-3">
+                <Settings size={20} className="text-muted" />
+              </div>
+              <p className="text-sm font-medium text-ink">No capabilities loaded</p>
+              <p className="text-xs text-muted mt-1">Check backend configuration</p>
+            </div>
+          ) : (
+            <div className="overflow-auto">
               <table className="data-table">
                 <thead>
-                  <tr><th>Username</th><th>Role</th><th>Tenant</th><th>Department</th><th>Linked Employee (ESS)</th><th>Status</th><th className="text-right">Actions</th></tr>
+                  <tr>
+                    <th className="min-w-[200px]">Capability</th>
+                    {(matrixRoles || []).map(r => <th key={r.id} className="text-center min-w-[100px]">{r.name.replaceAll('_', ' ')}</th>)}
+                  </tr>
                 </thead>
                 <tbody>
-                  {shown.map(u => (
-                    <tr key={u.id}>
-                      <td className="font-mono">{u.username}</td>
-                      <td>
-                        <span className={"badge " + (ROLE_BADGE_TONES[u.role] || 'badge-neutral')}>{u.role}</span>
-                        {u.role === 'SUPER_ADMIN' && <span className="badge badge-success ml-1 mono-label">PLATFORM</span>}
-                      </td>
-                      <td className="font-mono text-xs">
-                        {u.tenantId
-                          ? u.tenantId.slice(0, 8) + '…'
-                          : <span className="text-muted">unscoped</span>}
-                      </td>
-                      <td className="font-mono">{u.department?.name ?? u.department ?? '—'}</td>
-                      <td>
-                        {u.linkedEmployee
-                          ? <span className="font-mono text-xs">{u.linkedEmployee.employeeNumber} · {u.linkedEmployee.lastName}, {u.linkedEmployee.firstName}</span>
-                          : <span className="text-muted text-xs">—</span>}
-                      </td>
-                      <td><span className={"badge " + badgeTone(u.status)}>{u.status}</span></td>
-                      <td className="text-right">
-                        <span className="inline-flex gap-1">
-                          <button type="button" className="btn btn-ghost px-2 text-xs" onClick={() => openEdit(u)}>
-                            <Edit size={14} />
-                            Edit
-                          </button>
-                          <button type="button" className="btn btn-ghost px-2 text-xs" onClick={() => setConfirm(u)}>
-                            {isActive(u) ? <><UserCheck size={14} /> Deactivate</> : <><Shield size={14} /> Activate</>}
-                          </button>
-                          <button type="button" className="btn btn-ghost px-2 text-xs text-error" onClick={() => setDeleteConfirm(u)}>
-                            Delete
-                          </button>
-                        </span>
-                      </td>
+                  {caps.map(({ key, label }) => (
+                    <tr key={key} className="hover:bg-bg/50 transition-colors">
+                      <td className="font-medium text-sm">{label}</td>
+                      {(matrixRoles || []).map(r => {
+                        const allowed = !!permissionDraft[r.name]?.[key];
+                        const canEdit = canManage && editingPermissions;
+                        return (
+                          <td key={r.id} className="text-center">
+                            {canEdit ? (
+                              <button
+                                type="button"
+                                className={`inline-flex items-center justify-center w-8 h-8 rounded-md transition-colors ${allowed ? 'bg-success/10 text-success hover:bg-success/20' : 'bg-line text-muted hover:bg-line/80'}`}
+                                onClick={() => togglePermission(r.name, key)}
+                                aria-label={allowed ? `${r.name} ${label}: allowed` : `${r.name} ${label}: denied`}
+                                aria-pressed={allowed}
+                              >
+                                {allowed ? '✓' : '·'}
+                              </button>
+                            ) : (
+                              <span className={`inline-flex items-center justify-center w-8 h-8 ${allowed ? 'text-success' : 'text-muted'}`} aria-label={allowed ? 'Allowed' : 'Denied'}>
+                                {allowed ? '✓' : '·'}
+                              </span>
+                            )}
+                          </td>
+                        );
+                      })}
                     </tr>
                   ))}
-                  {shown.length === 0 && (
-                    <tr><td colSpan={7} className="text-center text-muted py-4">No users match your search.</td></tr>
-                  )}
                 </tbody>
               </table>
-            );
-          })()}
+            </div>
+          )}
         </div>
-      </div>
+      )}
 
-      <div className="card p-5">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="font-display font-semibold text-ink">Permissions Matrix</h3>
-          <div className="flex items-center gap-2">
-            {editingPermissions ? (
-              <>
-                <button type="button" className="btn btn-ghost text-xs" onClick={() => syncMatrix()} disabled={permSaving}>
-                  Reset
-                </button>
-                <button type="button" className="btn btn-primary text-xs" onClick={savePermissions} disabled={permSaving}>
-                  {permSaving ? 'Saving...' : 'Save Permissions'}
-                </button>
-              </>
-            ) : (
-              canManage && (
-                <button type="button" className="btn btn-ghost text-xs" onClick={() => setEditingPermissions(true)}>
-                  Edit Permissions
-                </button>
-              )
-            )}
-          </div>
-        </div>
-        <p className="text-xs text-muted mb-3">Capabilities are enforced server-side. Edits apply immediately — custom roles only gain access to a capability once granted here. Reset restores the loaded state, Save persists to all changed roles.</p>
-        <div className="overflow-auto">
-          <table className="data-table">
-            <thead>
-              <tr><th>Capability</th>{(matrixRoles || []).map(r => <th key={r.id} className="text-center">{(r.name || '').replaceAll('_', ' ')}</th>)}</tr>
-            </thead>
-            <tbody>
-              {caps.map(({ key, label }) => (
-                <tr key={key}>
-                  <td className="font-medium">{label}</td>
-                  {(matrixRoles || []).map(r => {
-                    const allowed = !!permissionDraft[r.name]?.[key];
-                    const canEdit = canManage && editingPermissions;
-                    return (
-                      <td key={r.id} className="text-center">
-                        {canEdit ? (
-                          <button
-                            type="button"
-                            className={"btn btn-ghost px-2 py-1 text-xs " + (allowed ? 'text-success' : 'text-muted')}
-                            onClick={() => togglePermission(r.name, key)}
-                            aria-label={allowed ? `${r.name} ${label}: allowed` : `${r.name} ${label}: denied`}
-                          >
-                            {allowed ? '✓' : '·'}
-                          </button>
-                        ) : (
-                          allowed
-                            ? <span className="text-success font-bold" aria-label="Allowed">✓</span>
-                            : <span className="text-muted" aria-label="Denied">·</span>
-                        )}
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))}
-              {caps.length === 0 && (
-                <tr><td className="text-muted text-sm py-4">No capabilities loaded.</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {myRole === 'SUPER_ADMIN' && (
-        <div className="card p-5 mt-4">
-          <div className="flex items-center justify-between mb-3">
+      {activeTab === 'tenants' && myRole === 'SUPER_ADMIN' && (
+        <div className="card p-5">
+          <div className="flex items-center justify-between mb-4">
             <h3 className="font-display font-semibold text-ink flex items-center gap-2"><Building2 size={16}/> Tenants</h3>
-            <span className="mono-label">{tenants?.length ?? '…'} registered</span>
+            <span className="mono-label text-xs text-muted">{tenants?.length ?? '…'} registered</span>
           </div>
-          <div className="overflow-auto mb-3">
-            <table className="data-table">
-              <thead><tr><th>Code</th><th>Name</th><th>Domain</th><th>Status</th></tr></thead>
-              <tbody>
-                {(tenants ?? []).map(t => (
-                  <tr key={t.id}>
-                    <td className="font-mono">{t.code}</td>
-                    <td className="font-medium">{t.name}</td>
-                    <td className="font-mono text-xs">{t.domain ?? '—'}</td>
-                    <td>{t.isActive ? <span className="badge badge-success">Active</span> : <span className="badge">Disabled</span>}</td>
-                  </tr>
-                ))}
-                {tenants?.length === 0 && <tr><td colSpan={4} className="text-muted text-sm">No tenants yet.</td></tr>}
-              </tbody>
-            </table>
+          <div className="overflow-auto mb-4">
+            {(tenants ?? []).length === 0 ? (
+              <div className="text-center py-12">
+                <div className="mx-auto w-12 h-12 rounded-full bg-bg grid place-items-center mb-3">
+                  <Building2 size={20} className="text-muted" />
+                </div>
+                <p className="text-sm font-medium text-ink">No tenants yet</p>
+                <p className="text-xs text-muted mt-1">Create your first tenant below</p>
+              </div>
+            ) : (
+              <table className="data-table">
+                <thead><tr><th>Code</th><th>Name</th><th>Domain</th><th>Status</th></tr></thead>
+                <tbody>
+                  {(tenants ?? []).map(t => (
+                    <tr key={t.id} className="hover:bg-bg/50 transition-colors">
+                      <td className="font-mono text-sm">{t.code}</td>
+                      <td className="font-medium">{t.name}</td>
+                      <td className="font-mono text-xs text-muted">{t.domain ?? '—'}</td>
+                      <td>{t.isActive ? <span className="badge badge-success">Active</span> : <span className="badge">Disabled</span>}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
           <form className="grid sm:grid-cols-4 gap-2" onSubmit={async e => {
             e.preventDefault();

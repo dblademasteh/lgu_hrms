@@ -97,7 +97,7 @@ router.post('/:id/sync', validate(syncBiometricDeviceSchema), async (req, res, n
     if (!device) {
       return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Device not found' } });
     }
-    const result = await syncDeviceById(device.id);
+    const result = await syncDeviceById(device.id, req);
     res.json(result);
   } catch (e) {
     next(e);

@@ -97,7 +97,7 @@ export async function upsertUserFromOidc({ tenantId, profile }) {
   }
   const resolvedTenantId = tenantId || 'tenant-default';
 
-  const existing = await prisma.user.findFirst({ where: { externalId: sub } });
+  const existing = await prisma.user.findFirst({ where: { externalId: sub, tenantId: resolvedTenantId } });
   if (existing) {
     await prisma.user.update({
       where: { id: existing.id },

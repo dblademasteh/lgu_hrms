@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { User, Search, Plus, RefreshCw, X, Save, CheckCircle, XCircle, Clock, Trash2, FileText, Briefcase } from 'lucide-react';
 import Layout from '../components/Layout.jsx';
-import Tabs from '../components/Tabs.jsx';
+import { TabsLegacy } from '../components/Tabs.jsx';
 import Modal from '../components/Modal.jsx';
 import ConfirmDialog from '../components/ConfirmDialog.jsx';
 import ApplicantPane from '../components/ApplicantPane.jsx';
@@ -591,7 +591,7 @@ export default function Recruitment() {
         </div>
       </div>
 
-      <Tabs tabs={tabs} label="Recruitment funnel sections" active={tab} onChange={selectTab} />
+      <TabsLegacy tabs={tabs} label="Recruitment funnel sections" active={tab} onChange={selectTab} />
 
       <Modal
         open={!!hireTarget}

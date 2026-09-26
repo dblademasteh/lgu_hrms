@@ -113,3 +113,13 @@ export const integrationsAttendanceBulkSchema = {
     })).min(1).max(1000),
   }),
 };
+
+export const integrationsAttendanceListSchema = {
+  query: z.object({
+    startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Expected YYYY-MM-DD'),
+    endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Expected YYYY-MM-DD'),
+    employeeNumber: z.string().optional(),
+    page: z.string().optional(),
+    limit: z.string().optional(),
+  }),
+};

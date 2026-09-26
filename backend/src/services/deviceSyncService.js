@@ -143,8 +143,8 @@ export async function syncDevice(req, device) {
   return result;
 }
 
-export async function syncDeviceById(deviceId) {
-  const device = await prisma.biometricDevice.findUnique({ where: { id: deviceId } });
+export async function syncDeviceById(deviceId, req) {
+  const device = await prisma.biometricDevice.findFirst({ where: withTenant(req, { id: deviceId }) });
   if (!device) {
     const err = new Error('Device not found');
     err.status = 404;

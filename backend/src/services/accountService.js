@@ -64,6 +64,7 @@ function calculateCompleteness(user) {
   if (user.displayName) score += 20;
   if (user.email) score += 20;
   if (user.contactNumber) score += 20;
-  if (user.avatarPath) score += 20;
+  if (user.emergencyContact) score += 10;
+  if (user.avatarPath) score += 10;
   return Math.min(100, score);
 }

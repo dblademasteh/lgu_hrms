@@ -63,3 +63,64 @@ If migrating existing data to multi-tenant:
 1. Assign `tenantId` to all existing rows
 2. Re-run migrations
 3. Update `User.tenantId` and `Employee.tenantId` to match
+
+## Deleting or Deactivating a Tenant
+
+### Soft Delete (Recommended)
+
+Soft delete sets `isActive = false` on the tenant. This prevents new logins and hides the tenant from active listings, but preserves all data.
+
+```bash
+DELETE /api/v1/tenants/:id
+Authorization: Bearer <SUPER_ADMIN_JWT>
+Content-Type: application/json
+
+{ "hardDelete": false }
+```
+
+**Response:**
+```json
+{
+  "ok": true,
+  "message": "Tenant deactivated"
+}
+```
+
+### Hard Delete (Permanent)
+
+Hard delete permanently removes the tenant and all associated data. This action is irreversible.
+
+```bash
+DELETE /api/v1/tenants/:id
+Authorization: Bearer <SUPER_ADMIN_JWT>
+Content-Type: application/json
+
+{ "hardDelete": true }
+```
+
+**Response:**
+```json
+{
+  "ok": true,
+  "message": "Tenant permanently deleted"
+}
+```
+
+### Safety Checks
+
+- Cannot delete the last active tenant
+- Only SUPER_ADMIN can delete tenants
+- All deletions are logged in `AuditLog`
+- Hard delete cascades to all tenant-scoped data
+
+### Reactivation
+
+To reactivate a soft-deleted tenant:
+
+```bash
+PATCH /api/v1/tenants/:id
+Authorization: Bearer <SUPER_ADMIN_JWT>
+Content-Type: application/json
+
+{ "isActive": true }
+```

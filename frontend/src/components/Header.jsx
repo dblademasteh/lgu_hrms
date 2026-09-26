@@ -59,10 +59,14 @@ export default function Header({ onToggleSidebar }) {
     return () => { cancelled = true; };
   }, [isSuperAdmin]);
 
+  useEffect(() => {
+    if (!user) return;
+    setDevRole(user.role);
+  }, [user?.role]);
+
   const switchTenant = (tenantId) => {
     setActiveTenant(tenantId);
     setTenantOpen(false);
-    window.location.reload();
   };
 
   useEffect(() => {
@@ -359,24 +363,27 @@ export default function Header({ onToggleSidebar }) {
                           id="dev-role-switch"
                           className="select w-full"
                           value={devRole}
-                          onChange={async (e) => {
-                            const next = e.target.value;
-                            try {
-                              setSwitchingRole(true);
-                              // Tenant roles minted from the platform account
-                              // must carry the active tenant scope (see
-                              // authService.switchRole).
-                              await switchUserRole(next, activeTenantId || undefined);
-                              window.location.reload();
-                            } catch (err) {
-                              // Revert to the real role and surface the failure —
-                              // never leave the select on a role the session didn't take.
-                              setDevRole(user?.role || '');
-                              toast(err.response?.data?.error?.message || 'Role switch failed', 'error');
-                            } finally {
-                              setSwitchingRole(false);
-                            }
-                          }}
+                           onChange={async (e) => {
+                             const next = e.target.value;
+                             try {
+                               setSwitchingRole(true);
+                               if (next !== 'SUPER_ADMIN' && !activeTenantId) {
+                                 toast('Select a tenant scope first — this role needs a tenant', 'error');
+                                 return;
+                               }
+                               if (next !== 'SUPER_ADMIN') {
+                                 localStorage.removeItem('lgu-active-tenant');
+                               }
+                               await switchUserRole(next, activeTenantId || undefined);
+                               setDevRole(next);
+                               toast(`Switched to ${next.replaceAll('_', ' ')}`, 'success');
+                             } catch (err) {
+                               setDevRole(user?.role || '');
+                               toast(err.response?.data?.error?.message || 'Role switch failed', 'error');
+                             } finally {
+                               setSwitchingRole(false);
+                             }
+                           }}
                           disabled={switchingRole}
                         >
                           <option value="SUPER_ADMIN">SUPER_ADMIN</option>

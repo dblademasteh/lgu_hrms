@@ -229,17 +229,18 @@ export const databaseController = {
     }
     try {
       const model = delegate(name);
-      const where = withTenant(req, { id: Number(id) || id });
-      const exists = await model.findFirst({ where });
+      const scopedWhere = withTenant(req, { id: Number(id) || id });
+      const exists = await model.findFirst({ where: scopedWhere });
       if (!exists) return res.status(404).json({ error: 'Record not found' });
+      const idWhere = { id: Number(id) || id };
       const hasSoftDelete = SOFT_DELETE_TABLES.includes(name);
       if (hasSoftDelete) {
         await model.update({
-          where: { id: Number(id) || id },
+          where: idWhere,
           data: { deletedAt: new Date() },
         });
       } else {
-        await model.delete({ where: { id: Number(id) || id } });
+        await model.delete({ where: idWhere });
       }
       res.status(204).send();
     } catch (e) {
@@ -438,9 +439,10 @@ export const databaseController = {
     try {
       const perTable = Math.min(Math.max(Number(req.query.limit) || 5000, 1), 50000);
       const tables = {};
+      const where = withTenant(req, {});
       for (const t of MANAGED_TABLES) {
         try {
-          const rows = await delegate(t.name).findMany({ take: perTable });
+          const rows = await delegate(t.name).findMany({ where, take: perTable });
           tables[t.name] = rows.map(_filterSensitive);
         } catch {
           tables[t.name] = null;
@@ -496,13 +498,16 @@ export const databaseController = {
   // EXPLAIN-wrapped on request. Every run is audit-logged by the global middleware.
   async query(req, res, next) {
     try {
+      if (req.isSuperAdmin && !req.tenantId) {
+        return res.status(403).json({ error: { code: 'TENANT_REQUIRED', message: 'Select a tenant scope first to run SQL queries' } });
+      }
       const { sql, explain = false } = req.body || {};
       if (typeof sql !== 'string' || !sql.trim()) {
         return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'sql is required' } });
       }
       const cleaned = sql.trim().replace(/;+\s*$/, '');
       if (/;/.test(cleaned)) {
-        return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'Single statement only � no semicolons' } });
+        return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'Single statement only — no semicolons' } });
       }
       if (!/^(select|with|explain)\s/i.test(cleaned)) {
         return res.status(400).json({ error: { code: 'FORBIDDEN', message: 'Read-only console: SELECT/WITH only' } });
@@ -651,16 +656,17 @@ export const databaseController = {
     try {
       const days = Math.min(Math.max(Number(req.query.days) || 90, 1), 3650);
       const cutoff = new Date(Date.now() - days * 86400000);
+      const where = withTenant(req, {});
       const [loginEvents, sessions, audit] = await Promise.all([
-        prisma.loginEvent.count({ where: { createdAt: { lt: cutoff } } }),
-        prisma.userSession.count({ where: { revokedAt: { not: null }, lastActive: { lt: cutoff } } }),
-        prisma.auditLog.count({ where: { timestamp: { lt: cutoff } } }).catch(() => -1),
+        prisma.loginEvent.count({ where: { ...where, createdAt: { lt: cutoff } } }),
+        prisma.userSession.count({ where: { ...where, revokedAt: { not: null }, lastActive: { lt: cutoff } } }),
+        prisma.auditLog.count({ where: { ...where, timestamp: { lt: cutoff } } }).catch(() => -1),
       ]);
-      const softDeleted = await prisma.employee.count({ where: { deletedAt: { not: null } } });
+      const softDeleted = await prisma.employee.count({ where: { ...where, deletedAt: { not: null } } });
       res.json({
         cutoff: cutoff.toISOString(), days,
         candidates: { loginEvents, revokedSessions: sessions, auditLogs: audit, softDeletedEmployees: softDeleted },
-        note: 'AuditLog purge is preview-only � the trail stays append-only. Export before any delete.',
+        note: 'AuditLog purge is preview-only — the trail stays append-only. Export before any delete.',
       });
     } catch (e) { next(e); }
   },
@@ -673,9 +679,10 @@ export const databaseController = {
         return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'scope must be loginEvents or revokedSessions' } });
       }
       const cutoff = new Date(Date.now() - Math.min(Math.max(Number(days) || 90, 1), 3650) * 86400000);
+      const where = withTenant(req, {});
       let deleted = 0;
-      if (scope === 'loginEvents') ({ count: deleted } = await prisma.loginEvent.deleteMany({ where: { createdAt: { lt: cutoff } } }));
-      else ({ count: deleted } = await prisma.userSession.deleteMany({ where: { revokedAt: { not: null }, lastActive: { lt: cutoff } } }));
+      if (scope === 'loginEvents') ({ count: deleted } = await prisma.loginEvent.deleteMany({ where: { ...where, createdAt: { lt: cutoff } } }));
+      else ({ count: deleted } = await prisma.userSession.deleteMany({ where: { ...where, revokedAt: { not: null }, lastActive: { lt: cutoff } } }));
       res.json({ scope, cutoff: cutoff.toISOString(), deleted });
     } catch (e) { next(e); }
   },

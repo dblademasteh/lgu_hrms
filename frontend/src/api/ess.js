@@ -5,4 +5,3 @@ export const getEssPayslips = () => api.get('/ess/payslips').then(r => r.data.pa
 export const getEssLeaveRequests = () => api.get('/ess/leave-requests').then(r => r.data.requests);
 export const createEssLeaveRequest = (payload) => api.post('/ess/leave-requests', payload).then(r => r.data.request);
 export const getEssAttendance = (month) => api.get('/ess/attendance', { params: { month } }).then(r => r.data.records);
-export const getEssPayslipPrint = (itemId) => api.get(`/ess/payslips/${itemId}/print`, { responseType: 'text' });

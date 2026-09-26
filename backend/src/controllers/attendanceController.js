@@ -193,5 +193,82 @@ export const attendanceController = {
     } catch (e) {
       next(e);
     }
+  },
+
+  // List attendance records for external payroll system (API-key authenticated).
+  async listForIntegration(req, res, next) {
+    try {
+      const { startDate, endDate, employeeNumber, page = '1', limit = '200' } = req.query;
+      const tenantId = req.tenantId;
+      
+      const where = {
+        tenantId,
+        date: {
+          gte: new Date(`${startDate}T00:00:00Z`),
+          lte: new Date(`${endDate}T23:59:59Z`),
+        },
+      };
+      
+      if (employeeNumber) {
+        const employee = await prisma.employee.findFirst({
+          where: { tenantId, employeeNumber },
+          select: { id: true },
+        });
+        if (!employee) {
+          return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Employee not found' } });
+        }
+        where.employeeId = employee.id;
+      }
+      
+      const pageNum = Math.max(1, parseInt(page));
+      const limitNum = Math.min(parseInt(limit), 500);
+      const skip = (pageNum - 1) * limitNum;
+      
+      const [items, total] = await Promise.all([
+        prisma.attendance.findMany({
+          where,
+          skip,
+          take: limitNum,
+          orderBy: { date: 'desc' },
+          include: {
+            employee: {
+              select: {
+                id: true,
+                employeeNumber: true,
+                firstName: true,
+                lastName: true,
+                middleName: true,
+                department: { select: { id: true, name: true, code: true } },
+                position: { select: { id: true, title: true } },
+              },
+            },
+          },
+        }),
+        prisma.attendance.count({ where }),
+      ]);
+      
+      res.json({
+        items: items.map(r => ({
+          id: r.id,
+          employeeNumber: r.employee?.employeeNumber,
+          firstName: r.employee?.firstName,
+          lastName: r.employee?.lastName,
+          middleName: r.employee?.middleName,
+          department: r.employee?.department ? { id: r.employee.department.id, name: r.employee.department.name, code: r.employee.department.code } : null,
+          position: r.employee?.position ? { id: r.employee.position.id, title: r.employee.position.title } : null,
+          date: r.date.toISOString().slice(0, 10),
+          timeIn: r.timeIn ? r.timeIn.toISOString() : null,
+          timeOut: r.timeOut ? r.timeOut.toISOString() : null,
+          hours: r.hours,
+          remark: r.remark,
+          source: r.source,
+        })),
+        total,
+        page: pageNum,
+        limit: limitNum,
+      });
+    } catch (e) {
+      next(e);
+    }
   }
 };

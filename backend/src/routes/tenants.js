@@ -75,4 +75,20 @@ router.patch('/:id', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+router.delete('/:id', async (req, res, next) => {
+  try {
+    const { hardDelete } = req.body || {};
+    const tenant = await tenantRepository.get(req.params.id);
+    if (!tenant) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Tenant not found' } });
+
+    const activeCount = await prisma.tenant.count({ where: { isActive: true } });
+    if (activeCount <= 1 && tenant.isActive) {
+      return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'Cannot delete the last active tenant' } });
+    }
+
+    await tenantRepository.remove(req.params.id, !!hardDelete);
+    res.json({ ok: true, message: hardDelete ? 'Tenant permanently deleted' : 'Tenant deactivated' });
+  } catch (e) { next(e); }
+});
+
 export default router;

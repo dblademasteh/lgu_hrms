@@ -2,6 +2,7 @@ import { attendanceRepository } from '../repositories/attendanceRepository.js';
 import { prisma } from '../lib/prisma.js';
 import { withTenant } from '../middleware/tenant.js';
 import { AppError } from '../lib/errors.js';
+import { dispatchWebhooks } from './webhookDispatch.js';
 import {
   manilaDateKey,
   dateKeyToUtc,
@@ -196,32 +197,34 @@ export const attendanceService = {
   async list(req, date) {
     return attendanceRepository.findAll(req, date);
   },
-  async create(req, data) {
-    const { date, timeIn, timeOut, hours, ...rest } = data;
-    const utcDate = toUtcDate(date);
-    if (isFutureDate(utcDate)) {
-      throw new AppError('Cannot create attendance for future dates', 400, 'FUTURE_DATE');
-    }
-    const employeeId = rest.employeeId;
-    let remark = data.remark || null;
-    if (!remark) {
-      const leaveRemark = await autoMarkLeave(prisma, req.tenantId, employeeId, utcDate);
-      if (leaveRemark) {
-        remark = leaveRemark;
-      } else if (timeIn) {
-        remark = await computeRemarkFromRules(prisma, req.tenantId, normalizeTimeField(timeIn, date), timeOut ? normalizeTimeField(timeOut, date) : null, hours);
-      }
-    }
-    return attendanceRepository.create(req, {
-      ...rest,
-      date: utcDate,
-      timeIn: normalizeTimeField(timeIn, date),
-      timeOut: normalizeTimeField(timeOut, date),
-      hours: hours ?? null,
-      remark,
-      source: 'MANUAL',
-    });
-  },
+   async create(req, data) {
+     const { date, timeIn, timeOut, hours, ...rest } = data;
+     const utcDate = toUtcDate(date);
+     if (isFutureDate(utcDate)) {
+       throw new AppError('Cannot create attendance for future dates', 400, 'FUTURE_DATE');
+     }
+     const employeeId = rest.employeeId;
+     let remark = data.remark || null;
+     if (!remark) {
+       const leaveRemark = await autoMarkLeave(prisma, req.tenantId, employeeId, utcDate);
+       if (leaveRemark) {
+         remark = leaveRemark;
+       } else if (timeIn) {
+         remark = await computeRemarkFromRules(prisma, req.tenantId, normalizeTimeField(timeIn, date), timeOut ? normalizeTimeField(timeOut, date) : null, hours);
+       }
+     }
+     const record = await attendanceRepository.create(req, {
+       ...rest,
+       date: utcDate,
+       timeIn: normalizeTimeField(timeIn, date),
+       timeOut: normalizeTimeField(timeOut, date),
+       hours: hours ?? null,
+       remark,
+       source: 'MANUAL',
+     });
+     dispatchWebhooks(req.tenantId, 'attendance.created', { attendanceId: record.id, employeeId: record.employeeId, date: manilaDateKey(record.date), timeIn: record.timeIn, timeOut: record.timeOut, hours: record.hours }).catch(() => {});
+     return record;
+   },
 
   async update(req, id, data) {
     const updateData = { ...data };
@@ -257,8 +260,12 @@ export const attendanceService = {
       if (ruleRemark) updateData.remark = ruleRemark;
     }
 
-    return attendanceRepository.update(req, id, updateData);
-  },
+     const record = await attendanceRepository.update(req, id, updateData);
+     if (record) {
+       dispatchWebhooks(req.tenantId, 'attendance.updated', { attendanceId: record.id, employeeId: record.employeeId, date: manilaDateKey(record.date), timeIn: record.timeIn, timeOut: record.timeOut, hours: record.hours }).catch(() => {});
+     }
+     return record;
+   },
 
   async remove(req, id) {
     return attendanceRepository.remove(req, id);
@@ -338,7 +345,12 @@ export const attendanceService = {
       throw new AppError(`Employee "${employeeNumber}" not found`, 404, 'EMPLOYEE_NOT_FOUND');
     }
     const punchAt = at ? new Date(at) : new Date();
-    return punchTransition(req, employee.id, punchType ?? null, punchAt, source ?? 'IMPORT', deviceId ?? null);
+    const result = await punchTransition(req, employee.id, punchType ?? null, punchAt, source ?? 'IMPORT', deviceId ?? null);
+    if (result.record) {
+      const dateKey = manilaDateKey(result.record.date);
+      dispatchWebhooks(req.tenantId, 'attendance.created', { attendanceId: result.record.id, employeeId: result.record.employeeId, date: dateKey, timeIn: result.record.timeIn, timeOut: result.record.timeOut, hours: result.record.hours }).catch(() => {});
+    }
+    return result;
   },
 
   // Bulk ingest attendance records from an external system.
@@ -402,19 +414,33 @@ export const attendanceService = {
       }
       return results;
     });
+    const createdOrUpdated = results.filter(r => r.status === 'created' || r.status === 'updated');
+    if (createdOrUpdated.length) {
+      dispatchWebhooks(req.tenantId, 'attendance.bulk_updated', { count: createdOrUpdated.length, records: createdOrUpdated }).catch(() => {});
+    }
     return results;
   },
 
   // Biometric punch in/out for employee self-service (and kiosk / device pulls).
   async biometricPunch(req, employeeId, punchType) {
-    return punchTransition(req, employeeId, punchType, new Date(), 'PUNCH', null);
+    const result = await punchTransition(req, employeeId, punchType, new Date(), 'PUNCH', null);
+    if (result.record) {
+      const dateKey = manilaDateKey(result.record.date);
+      dispatchWebhooks(req.tenantId, 'attendance.created', { attendanceId: result.record.id, employeeId: result.record.employeeId, date: dateKey, timeIn: result.record.timeIn, timeOut: result.record.timeOut, hours: result.record.hours }).catch(() => {});
+    }
+    return result;
   },
 
   // Ingest a punch event pulled from a ZK biometric terminal. IN/OUT is
   // inferred from row state on the same Asia/Manila calendar day as the punch;
   // `ref` records provenance as "DEVICE:<deviceId>:<logId>".
   async devicePunch(req, employeeId, at, ref) {
-    return punchTransition(req, employeeId, null, at, 'DEVICE', ref);
+    const result = await punchTransition(req, employeeId, null, at, 'DEVICE', ref);
+    if (result.record) {
+      const dateKey = manilaDateKey(result.record.date);
+      dispatchWebhooks(req.tenantId, 'attendance.created', { attendanceId: result.record.id, employeeId: result.record.employeeId, date: dateKey, timeIn: result.record.timeIn, timeOut: result.record.timeOut, hours: result.record.hours }).catch(() => {});
+    }
+    return result;
   },
 
   // Get attendance for specific employee (self-service)

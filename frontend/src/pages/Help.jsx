@@ -12,7 +12,7 @@ import { ROLE_BADGE_TONES } from '../config/permissions.js';
 const quickLinks = [
   { label: 'Dashboard', desc: 'Overview & metrics', icon: LayoutGrid, color: 'text-accent', chip: 'bg-accent/10', target: 'routes' },
   { label: 'Employees', desc: 'People management', icon: Users, color: 'text-success', chip: 'bg-success/10', target: 'modules' },
-  { label: 'Payroll', desc: 'Pay runs & payslips', icon: Banknote, color: 'text-accent', chip: 'bg-accent/10', target: 'modules' },
+  { label: 'Payroll', desc: 'Mirrored runs & payslips', icon: Banknote, color: 'text-accent', chip: 'bg-accent/10', target: 'modules' },
   { label: 'Attendance', desc: 'Time records & kiosk', icon: Clock, color: 'text-warning', chip: 'bg-warning/10', target: 'modules' },
   { label: 'Biometrics', desc: 'Device sync & enrolment', icon: Fingerprint, color: 'text-success', chip: 'bg-success/10', target: 'modules' },
   { label: 'Leave', desc: 'Requests & approvals', icon: Calendar, color: 'text-warning', chip: 'bg-warning/10', target: 'modules' },
@@ -130,16 +130,14 @@ export default function Help() {
           title: 'Payroll & Benefits',
           icon: Calendar,
           items: [
-            { label: 'Payroll - New Period', description: 'Set name, startDate, endDate, fiscalYear. Starts in DRAFT state.' },
-            { label: 'Payroll - Generate Run', description: 'Computes earnings, tardiness, loans, taxes per employee. Run listed by date.' },
-            { label: 'Payroll - Approve Run', description: 'DRAFT → APPROVED. Required before posting. Check items, click Approve.' },
-            { label: 'Payroll - Post Run', description: 'APPROVED → POSTED. Creates LedgerEntry, Payslip rows, marks loans paid. Irreversible.' },
-            { label: 'Payslips - Download', description: 'Print HTML via /payroll/payslips/:id/print or download from each row.' },
-            { label: 'Payroll - Bank Export', description: 'Export bank file from run detail. POSTED runs only.' },
+            { label: 'Payroll - Read-Only Mirror', description: 'Runs, items and payslip figures are received from lgu-payroll. All payroll writes are disabled in HRMS.' },
+            { label: 'Payroll - Sync from lgu-payroll', description: 'Pull the latest periods, runs, items and payslips. Also runs automatically on every payroll webhook.' },
+            { label: 'Payslips - View', description: 'View mirrored payslip figures read-only. Printable/PDF payslips are issued by lgu-payroll.' },
+            { label: 'LDDAP Bank Export', description: 'Produced by lgu-payroll, the system of record. HRMS does not generate bank files.' },
             { label: 'Bonuses - Add', description: 'Create bonus entry. Select period, enter amount and reason.' },
             { label: 'Loans - Create', description: 'Define employee loan. Amount, duration, interest rate, terms.' },
             { label: 'Loans - Repay', description: 'Deductions appear on payslips. Track principal and interest separately.' },
-            { label: 'Reports - Payroll Summary', description: 'Aggregated totals per POSTED run. CSV export available.' },
+            { label: 'Reports - Payroll Summary', description: 'Aggregated totals per mirrored run. CSV export available.' },
           ]
         },
         {
@@ -185,8 +183,7 @@ export default function Help() {
         { title: '/attendance/my', description: 'Your full attendance history for the selected period.' },
         { title: '/attendance/today', description: 'Today\'s punch events and computed hours.' },
         { title: '/kiosk', description: 'Login-less kiosk app for lobby terminals. Supports punch in/out and keypad entry.' },
-        { title: '/payroll', description: 'Create payroll periods, generate runs, approve, post, and download payslips.' },
-        { title: '/payroll/payslips/:id/print', description: 'Printable HTML payslip for a specific payroll item.' },
+    { title: '/payroll', description: 'Read-only view of payroll data mirrored from lgu-payroll. Sync manually or wait for the payroll webhook.' },
         { title: '/leave', description: 'Submit leave requests, track status, view balances and history.' },
         { title: '/attendance', description: 'Daily Time Record monitoring, overtime tracking, and attendance reports.' },
         { title: '/audit', description: 'Comprehensive audit log of all changes. Filter by user or date range.' },
@@ -259,9 +256,8 @@ export default function Help() {
           items: [
             { label: '/users & /roles', description: 'manageUsersAndRoles capability — ADMIN only by default.' },
             { label: '/employees', description: 'employeeRecordsCRUD — ADMIN + HR_MANAGER.' },
-            { label: '/payroll (GET)', description: 'payrollRead — ADMIN + HR_MANAGER + PAYROLL_OFFICER.' },
-            { label: '/payroll/runs POST/approve/post', description: 'payrollRuns — ADMIN + PAYROLL_OFFICER only.' },
-            { label: '/payroll/periods POST/close', description: 'payrollRuns — ADMIN + PAYROLL_OFFICER only.' },
+            { label: '/payroll (GET)', description: 'payrollRead — ADMIN + HR_MANAGER + PAYROLL_OFFICER. Read-only mirror of lgu-payroll.' },
+            { label: '/payroll/runs POST/approve/generate/post', description: 'Blocked — lgu-payroll is the system of record. Use /payroll/sync-from-payroll to pull the latest figures.' },
             { label: '/audit', description: 'auditTrail — ADMIN + AUDITOR only.' },
             { label: '/reports', description: 'reports — ADMIN + HR_MANAGER + PAYROLL_OFFICER + AUDITOR.' },
             { label: '/leave PATCH', description: 'leaveApproval — ADMIN + HR_MANAGER + DEPARTMENT_HEAD.' },
@@ -276,14 +272,12 @@ export default function Help() {
       icon: Banknote,
       items: [
         {
-          title: 'Payroll Lifecycle',
+          title: 'Payroll Lifecycle (in lgu-payroll)',
           items: [
-            { label: '1. Create Period', description: 'Payroll → New Period. Set start/end month and pay date. Period starts in DRAFT.' },
-            { label: '2. Generate Run', description: '<code>POST /payroll/runs/:id/generate</code> computes all items: monthlySalary, contribution/tax rules, attendance late/undertime, and loan amortizations — all in Prisma Decimal.' },
-            { label: '3. Review Items', description: 'Each employee payslip shows earnings, deductions, and net. Drill into /runs/:id for full deduction lines.' },
-            { label: '4. Approve Run', description: '<code>PATCH /payroll/runs/:id/approve</code> moves DRAFT → APPROVED. Only APPROVED runs can be posted.' },
-            { label: '5. Post Run', description: '<code>POST /payroll/runs/:id/post</code> appends LedgerEntry rows, creates Payslip rows, marks loan amortizations as paid, and sets status to POSTED. This is irreversible.' },
-            { label: '6. Print Payslips', description: 'Navigate to /payroll/payslips/:id/print for a printable HTML payslip.' },
+            { label: 'Owned by lgu-payroll', description: 'The entire payroll lifecycle — periods, run generation, approval, completion, payslips and the LDDAP bank export — happens in lgu-payroll, the system of record.' },
+            { label: 'HRMS receives the result', description: 'lgu-payroll fires a webhook on each payroll change; HRMS then pulls the affected periods, runs, items and payslips via <code>POST /payroll/sync-from-payroll</code>.' },
+            { label: 'No payroll writes in HRMS', description: 'Creating periods or runs, generating, approving, posting, appending deductions, and editing contribution/tax rules all return <code>409 PAYROLL_MANAGED_BY_LGU_PAYROLL</code>.' },
+            { label: 'Artifacts come from payroll', description: 'Official payslip PDFs and the LDDAP bank-credit file are generated in lgu-payroll. HRMS shows the mirrored figures read-only.' },
           ]
         },
         {

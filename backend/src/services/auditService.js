@@ -1,8 +1,9 @@
 import { prisma } from '../lib/prisma.js';
+import { withTenant } from '../middleware/tenant.js';
 
 export const auditService = {
-  async list({ entity, page, limit }) {
-    const where = entity && entity !== 'all' ? { entity } : {};
+  async list(req, { entity, page, limit }) {
+    const where = withTenant(req, entity && entity !== 'all' ? { entity } : {});
     const [logs, total] = await Promise.all([
       prisma.auditLog.findMany({
         where,

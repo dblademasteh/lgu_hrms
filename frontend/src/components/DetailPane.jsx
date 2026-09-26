@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Edit, History as HistoryIcon, Printer } from 'lucide-react';
-import Tabs from './Tabs.jsx';
+import { TabsLegacy } from './Tabs.jsx';
 import { badgeTone } from '../data/mock.js';
 import { api } from '../api/client.js';
 import { departmentsApi } from '../api/departments.js';
@@ -234,7 +234,7 @@ export default function DetailPane({ employee, onEdit, refreshKey = 0 }) {
               <p className="mono-label mt-1">{employee.employeeNumber}</p>
             </div>
           </div>
-          <Tabs tabs={tabs} label="Employee detail sections" active={activeTab} onChange={setActiveTab} />
+          <TabsLegacy tabs={tabs} label="Employee detail sections" active={activeTab} onChange={setActiveTab} />
           <div className="flex gap-2 mt-6">
             <button className="btn btn-primary flex-1 h-8 text-xs font-medium" onClick={()=>onEdit?.(employee)}><Edit size={14}/> Edit</button>
             <button className="btn btn-secondary flex-1 h-8 text-xs font-medium" onClick={()=>window.print()}><Printer size={14}/> Print</button>
