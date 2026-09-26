@@ -307,7 +307,7 @@ export default function Users() {
         <div className="card p-5">
           {/* ── KPI Stat Cards ── */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-            <div className="stat">
+            <div className="card stat p-5">
               <div className="flex items-center gap-2 mb-2">
                 <div className="w-8 h-8 rounded-lg bg-accent/10 text-accent grid place-items-center" aria-hidden="true">
                   <UserCheck size={16} />
@@ -320,7 +320,7 @@ export default function Users() {
                 <span className="badge badge-error text-xs">{list.filter(u => !isActive(u)).length} inactive</span>
               </div>
             </div>
-            <div className="stat">
+            <div className="card stat p-5">
               <div className="flex items-center gap-2 mb-2">
                 <div className="w-8 h-8 rounded-lg bg-success/10 text-success grid place-items-center" aria-hidden="true">
                   <UserCheck size={16} />
@@ -329,7 +329,7 @@ export default function Users() {
               </div>
               <div className="stat-value text-success">{list.filter(isActive).length}</div>
             </div>
-            <div className="stat">
+            <div className="card stat p-5">
               <div className="flex items-center gap-2 mb-2">
                 <div className="w-8 h-8 rounded-lg bg-error/10 text-error grid place-items-center" aria-hidden="true">
                   <ShieldOff size={16} />
@@ -338,7 +338,7 @@ export default function Users() {
               </div>
               <div className="stat-value text-error">{list.filter(u => !isActive(u)).length}</div>
             </div>
-            <div className="stat">
+            <div className="card stat p-5">
               <div className="flex items-center gap-2 mb-2">
                 <div className="w-8 h-8 rounded-lg bg-accent-secondary/10 text-accent-secondary grid place-items-center" aria-hidden="true">
                   <Shield size={16} />
@@ -452,7 +452,7 @@ export default function Users() {
         <div className="card p-5">
           {/* ── KPI Stat Cards ── */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
-            <div className="stat">
+            <div className="card stat p-5">
               <div className="flex items-center gap-2 mb-2">
                 <div className="w-8 h-8 rounded-lg bg-accent/10 text-accent grid place-items-center" aria-hidden="true">
                   <Shield size={16} />
@@ -465,7 +465,7 @@ export default function Users() {
                 <span className="badge text-xs">{roles.filter(r => !r.isSystem).length} custom</span>
               </div>
             </div>
-            <div className="stat">
+            <div className="card stat p-5">
               <div className="flex items-center gap-2 mb-2">
                 <div className="w-8 h-8 rounded-lg bg-success/10 text-success grid place-items-center" aria-hidden="true">
                   <Shield size={16} />
@@ -475,7 +475,7 @@ export default function Users() {
               <div className="stat-value text-success">{roles.filter(r => r.isSystem).length}</div>
               <p className="text-xs text-muted mt-1">Pre-defined, not deletable</p>
             </div>
-            <div className="stat">
+            <div className="card stat p-5">
               <div className="flex items-center gap-2 mb-2">
                 <div className="w-8 h-8 rounded-lg bg-warning/10 text-warning grid place-items-center" aria-hidden="true">
                   <Settings size={16} />
@@ -542,7 +542,7 @@ export default function Users() {
         <div className="card p-5">
           {/* ── KPI Stat Cards ── */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
-            <div className="stat">
+            <div className="card stat p-5">
               <div className="flex items-center gap-2 mb-2">
                 <div className="w-8 h-8 rounded-lg bg-accent/10 text-accent grid place-items-center" aria-hidden="true">
                   <BarChart3 size={16} />
@@ -551,7 +551,7 @@ export default function Users() {
               </div>
               <div className="stat-value">{caps.length}</div>
             </div>
-            <div className="stat">
+            <div className="card stat p-5">
               <div className="flex items-center gap-2 mb-2">
                 <div className="w-8 h-8 rounded-lg bg-success/10 text-success grid place-items-center" aria-hidden="true">
                   <Shield size={16} />
@@ -561,7 +561,7 @@ export default function Users() {
               <div className="stat-value text-success">{matrixRoles.length}</div>
               <p className="text-xs text-muted mt-1">{(matrixRoles || []).filter(r => Object.values(r.permissions || {}).some(Boolean)).length} with capabilities</p>
             </div>
-            <div className="stat">
+            <div className="card stat p-5">
               <div className="flex items-center gap-2 mb-2">
                 <div className="w-8 h-8 rounded-lg bg-warning/10 text-warning grid place-items-center" aria-hidden="true">
                   <Settings size={16} />
