@@ -48,6 +48,8 @@ export default function Settings() {
   const [showProfileEdit, setShowProfileEdit] = useState(false);
   const [showDeactivateConfirm, setShowDeactivateConfirm] = useState(false);
   const [showRevokeAllConfirm, setShowRevokeAllConfirm] = useState(false);
+  const [migrationRunning, setMigrationRunning] = useState(false);
+  const [confirmRunMigrations, setConfirmRunMigrations] = useState(false);
 
   const ADMIN_ROLES = ['ADMIN', 'SUPER_ADMIN'];
   const isAdmin = ADMIN_ROLES.includes(currentRole);
@@ -368,6 +370,20 @@ export default function Settings() {
     }
   };
 
+  const handleRunMigrations = async () => {
+    setMigrationRunning(true);
+    setConfirmRunMigrations(false);
+    try {
+      const res = await databaseApi.runMigrations();
+      toast(`Migrations applied: ${res.message || 'success'}`, 'success');
+      databaseApi.migrations().then(mig => setDbOps(prev => ({ ...prev, migrations: mig }))).catch(() => {});
+    } catch (e) {
+      toast(e?.response?.data?.error?.message || 'Migration failed', 'error');
+    } finally {
+      setMigrationRunning(false);
+    }
+  };
+
   const handleDbPrev = () => setDbBrowseSkip(s => Math.max(0, s - dbBrowseTake));
   const handleDbNext = () => {
     if (dbBrowseSkip + dbBrowseTake < dbRecordCount) setDbBrowseSkip(s => s + dbBrowseTake);
@@ -608,15 +624,25 @@ export default function Settings() {
                       <p className="font-display font-semibold text-ink">Pending migrations</p>
                     </div>
                     <p className="text-sm text-muted mb-3">
-                      Run <code className="font-mono text-xs bg-bg px-1.5 py-0.5 rounded border border-line">npx prisma migrate deploy</code> on the server.
+                      {dbOps.migrations.pending.length} migration{dbOps.migrations.pending.length !== 1 ? 's are' : ' is'} ready to apply.
                     </p>
-                    <div className="space-y-1">
+                    <div className="space-y-1 mb-4">
                       {dbOps.migrations.pending.map(name => (
                         <div key={name} className="font-mono text-xs text-ink bg-bg px-2 py-1 rounded border border-line">
                           {name}
                         </div>
                       ))}
                     </div>
+                    {isSuperAdmin && (
+                      <button
+                        type="button"
+                        className="btn btn-warning btn-sm gap-2"
+                        disabled={migrationRunning}
+                        onClick={() => setConfirmRunMigrations(true)}
+                      >
+                        {migrationRunning ? 'Applying…' : 'Apply Migrations'}
+                      </button>
+                    )}
                   </div>
                 )}
 
@@ -1722,6 +1748,16 @@ export default function Settings() {
           </div>
         </Modal>
 
+
+      <ConfirmDialog
+        open={confirmRunMigrations}
+        onClose={() => setConfirmRunMigrations(false)}
+        onConfirm={handleRunMigrations}
+        title="Apply pending migrations?"
+        message="This will run `prisma migrate deploy` on the database. This operation is irreversible — ensure you have a recent backup. Continue?"
+        confirmLabel="Apply"
+        danger
+      />
 
     </Layout>
   );
