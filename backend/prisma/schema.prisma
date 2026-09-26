@@ -301,11 +301,15 @@ model PayrollPeriod {
   createdAt  DateTime            @default(now()) @db.Timestamptz(6)
   tenantId   String?
   status     PayrollPeriodStatus @default(OPEN)
+  externalId String?
+  source     PayrollSource       @default(LOCAL)
   tenant     Tenant?             @relation(fields: [tenantId], references: [id])
   runs       PayrollRun[]
 
   @@unique([tenantId, name])
   @@index([tenantId])
+  @@index([tenantId, externalId])
+  @@index([tenantId, source])
 }
 
 model PayrollRun {
@@ -318,6 +322,8 @@ model PayrollRun {
   tenantId      String?
   generatedAt   DateTime?
   postedAt      DateTime?
+  externalId    String?
+  source        PayrollSource @default(LOCAL)
   ledgerEntries LedgerEntry[]
   items         PayrollItem[]
   period        PayrollPeriod @relation(fields: [periodId], references: [id])
@@ -325,6 +331,8 @@ model PayrollRun {
 
   @@index([tenantId, periodId])
   @@index([tenantId, createdAt])
+  @@index([tenantId, externalId])
+  @@index([tenantId, source])
 }
 
 model PayrollItem {
@@ -337,6 +345,8 @@ model PayrollItem {
   netPay         Decimal                @db.Decimal(12, 2)
   createdAt      DateTime               @default(now()) @db.Timestamptz(6)
   tenantId       String?
+  externalId     String?
+  source         PayrollSource          @default(LOCAL)
   deductionLines PayrollDeductionLine[]
   employee       Employee               @relation(fields: [employeeId], references: [id])
   run            PayrollRun             @relation(fields: [runId], references: [id])
@@ -344,6 +354,8 @@ model PayrollItem {
   payslip        Payslip?
 
   @@index([tenantId, runId])
+  @@index([tenantId, externalId])
+  @@index([tenantId, source])
 }
 
 model PayrollDeductionLine {
@@ -367,10 +379,12 @@ model Payslip {
   generatedAt   DateTime    @default(now()) @db.Timestamptz(6)
   pdfUrl        String?
   tenantId      String?
+  externalId    String?
   payrollItem   PayrollItem @relation(fields: [payrollItemId], references: [id])
   tenant        Tenant?     @relation(fields: [tenantId], references: [id])
 
   @@index([tenantId, payrollItemId])
+  @@index([tenantId, externalId])
 }
 
 model LedgerEntry {
@@ -951,7 +965,7 @@ model LoanAmortization {
   amount   Decimal  @db.Decimal(12, 2)
   paid     Boolean  @default(false)
   tenantId String?
-  loan     Loan     @relation(fields: [loanId], references: [id])
+  loan     Loan     @relation(fields: [loanId], references: [id], onDelete: Cascade)
   tenant   Tenant?  @relation(fields: [tenantId], references: [id])
 
   @@index([tenantId, paid, dueDate])
@@ -1398,6 +1412,11 @@ enum PayrollStatus {
 enum PayrollPeriodStatus {
   OPEN
   CLOSED
+}
+
+enum PayrollSource {
+  LOCAL
+  LGU_PAYROLL
 }
 
 enum LedgerType {

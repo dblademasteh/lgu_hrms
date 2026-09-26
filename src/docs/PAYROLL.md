@@ -1,8 +1,29 @@
 # Payroll — Deep Dive (Sep 2026)
 
+> **Sep 2026 update — payroll delegated to lgu-payroll.** HRMS no longer computes payroll. `payrollEngine.js` and every local write path (`/payroll/runs POST|approve|generate|post`, `/periods POST|close`, `/payroll-deduction` writes, `/rules` contributions+tax-brackets) are **deleted or refuse with 409** `PAYROLL_MANAGED_BY_LGU_PAYROLL` (`backend/src/middleware/payrollAuthority.js`). HRMS is now a **read-only mirror**: `POST /payroll/sync-from-payroll` pulls period/run/record changes from the tenant's lgu-payroll instance and upserts them by `externalId` (`source: LGU_PAYROLL`), lgu-payroll pushes lifecycle events to `POST /integrations/payroll/webhook`, and `GET /integrations/loans` (`loans:read`) exposes amortization schedules so lgu-payroll can deduct. See the "Delegation status" section below for how this reshuffles the findings, and `src/docs/PAYROLL_INTEGRATION.md` for the wire protocol.
+
 > Hardening pass over the **Payroll & Benefits** group: Payroll runs, periods, payslips, deduction lines, and the payroll-summary report.
 > Benchmark: CSC Memo Circulars (MC No. 8 s. 2014 divisor, MC No. 41 s. 1998 tardiness, DBM-CSC JC No. 2 s. 2015 overtime), BIR TRAIN withholding (2023), GSIS/Pag-IBIG/PhilHealth contribution rules, COA Payroll Register/Journal/Certificate of Compensation, PRIME-HRM.
 > Verify gates: `node --check`, `npm run build`, color lint.
+
+## Delegation status (Sep 2026)
+
+What the delegation did to the findings and plan above:
+
+| Item | Status |
+|---|---|
+| Engine + write paths (`createPeriod/closePeriod/createRun/approveRun/generateRun/postRun`, `computeRun`, dead controller handlers) | **Deleted** — not dormant; blocked routes answer 409 |
+| #1 rules leak (unscoped writes feeding payroll math) | Moot for payroll math — the engine is gone and contribution/tax-bracket writes are 409. Rules **reads** stay staff-wide (reference only); leave-rule config still drives accrual and was never payroll math |
+| #2 `LoanAmortization` never created | **Fixed** — `POST /loans` now generates the schedule (equal installments, last absorbs rounding remainder in Decimal, month-end clamped) and `LoanAmortization.loan` is `onDelete: Cascade`; loan `type` mirrors the Prisma `LoanType` enum (a contract drift made every creation 400) |
+| #6 manual deduction lines | Blocked — the endpoints appended lines without reconciling totals; mirrored lines come from lgu-payroll instead |
+| #7 ESS exposes DRAFT payslips | **Fixed** — `/ess/payslips` filters `run.status: 'POSTED'` |
+| #8 AuditLog bulk cap dead code | **Fixed** — `MAX_AUDIT_BODY_BYTES`/`summarizeObject` are reachable and cap `AuditLog.after` |
+| #11 `contracts/loans.js` money/type | **Fixed** — `type` mirrors `LoanType` |
+| #12 `postRun` over-marking amortizations | Engine deleted; the adapter's `_settleAmortizations` marks only run employees' unpaid rows due within the period, on POSTED transition |
+| #3 payslip print 401 | **Fixed** — `frontend/src/lib/print.js` fetch-blob (token attached by the axios client) |
+| #4 seed rules / #5 AttendanceRule route | Moot for the engine; `AttendanceRule` still drives attendance lateness/remarks |
+| #13 runs-list pagination | Superseded — the page is read-only; large tenants page through the API (`page/limit/summary`) |
+| BIR/GSIS/PhilHealth/Pag-IBIG/13th-month modeling | Lives in **lgu-payroll's** deduction catalogue now — HRMS's `ContributionRule`/`TaxBracket` are reference-only and their writes are 409 |
 
 ## Scope (surfaces)
 

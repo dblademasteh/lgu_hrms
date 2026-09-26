@@ -1,20 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { X, Plus, Check, ExternalLink, Printer, Lock, Download } from 'lucide-react';
+import { X, RefreshCw, ExternalLink, Info } from 'lucide-react';
 import Layout from '../components/Layout.jsx';
 import Modal from '../components/Modal.jsx';
-import ConfirmDialog from '../components/ConfirmDialog.jsx';
 import { badgeTone } from '../data/mock.js';
 import { payrollApi } from '../api/payroll.js';
 import { getLines } from '../api/payrollDeduction.js';
 import { useToast } from '../components/Toast.jsx';
-import { openHtmlInNewTab } from '../lib/print.js';
 import { useUserCapabilities } from '../config/permissions.js';
 import { useAuthStore } from '../stores/authStore.js';
 
 const peso = n => `₱ ${Number(n ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const sum = (items, key) => items.reduce((s, i) => s + Number(i?.[key] ?? 0), 0);
-
-const emptyPeriod = { name: '', startDate: '', endDate: '', fiscalYear: new Date().getFullYear() };
 
 export default function Payroll() {
   const toast = useToast();
@@ -25,16 +21,10 @@ export default function Payroll() {
   const [runs, setRuns] = useState([]);
   const [runTotal, setRunTotal] = useState(0);
   const [periods, setPeriods] = useState([]);
-  const [wizardOpen, setWizardOpen] = useState(false);
-  const [step, setStep] = useState(1);
-  const [periodId, setPeriodId] = useState('');
-  const [runDate, setRunDate] = useState('');
-  const [periodOpen, setPeriodOpen] = useState(false);
-  const [periodDraft, setPeriodDraft] = useState(emptyPeriod);
   const [detail, setDetail] = useState(null);
   const [payslip, setPayslip] = useState(null);
   const [payslipLines, setPayslipLines] = useState([]);
-  const [confirmAction, setConfirmAction] = useState(null);
+  const [syncing, setSyncing] = useState(false);
 
   const loadRuns = async () => {
     try {
@@ -74,99 +64,21 @@ export default function Payroll() {
     return () => { cancelled = true; };
   }, [payslip]);
 
-  const replaceRun = (updated, id) => {
-    setRuns(rr => rr.map(x => (x.id === id ? updated : x)));
-    setDetail(d => (d?.id === id ? updated : d));
-  };
-
-  const createPeriod = async () => {
-    if (!periodDraft.name || !periodDraft.startDate || !periodDraft.endDate || !periodDraft.fiscalYear) {
-      toast('Fill in period name, dates and fiscal year.', 'error');
-      return;
-    }
+  const syncNow = async () => {
+    setSyncing(true);
     try {
-      const r = await payrollApi.createPeriod(periodDraft);
-      setPeriods(pp => [r.data, ...pp]);
-      toast(`Payroll period "${r.data.name}" created.`, 'success');
-      setPeriodOpen(false);
-      setPeriodDraft(emptyPeriod);
+      const r = await payrollApi.syncFromPayroll();
+      const d = r.data ?? {};
+      toast(`Synced from lgu-payroll · ${d.processed ?? 0} change(s), ${d.errors ?? 0} error(s).`, d.errors ? 'error' : 'success');
+      await Promise.all([loadRuns(), loadPeriods()]);
     } catch (e) {
-      toast(e?.response?.data?.error?.message || 'Failed to create period', 'error');
-    }
-  };
-
-  const createRun = async () => {
-    if (!periodId || !runDate) {
-      toast('Pick a period and run date.', 'error');
-      return;
-    }
-    try {
-      const r = await payrollApi.createRun({ periodId, runDate });
-      setRuns(rr => [r.data, ...rr]);
-      toast('Payroll run created as DRAFT.', 'success');
-      setWizardOpen(false);
-      setStep(1);
-      setPeriodId('');
-      setRunDate('');
-    } catch (e) {
-      toast(e?.response?.data?.error?.message || 'Failed to create payroll run', 'error');
-    }
-  };
-
-  const runAction = async () => {
-    const target = confirmAction;
-    if (!target) return;
-    const { kind, run, item } = target;
-    try {
-      if (kind === 'approve') {
-        const r = await payrollApi.approveRun(run.id);
-        replaceRun(r.data, run.id);
-        toast('Payroll run approved.', 'success');
-      } else if (kind === 'generate') {
-        const r = await payrollApi.generateRun(run.id);
-        replaceRun(r.data, run.id);
-        toast(`Run generated for ${r.data.items?.length ?? 0} employee(s).`, 'success');
-      } else if (kind === 'post') {
-        const r = await payrollApi.postRun(run.id);
-        replaceRun(r.data, run.id);
-        toast(`Run posted — ledger written (${r.data.ledgerEntries?.length ?? 0} entries).`, 'success');
-      } else if (kind === 'close') {
-        await payrollApi.closePeriod(run.id);
-        await loadPeriods();
-        toast('Period closed — no more runs can be added.', 'success');
-      }
-    } catch (e) {
-      toast(e?.response?.data?.error?.message || 'Action failed', 'error');
+      toast(e?.response?.data?.error?.message || 'Sync from lgu-payroll failed', 'error');
     } finally {
-      setConfirmAction(null);
+      setSyncing(false);
     }
   };
 
-  const printPayslip = async item => {
-    try {
-      await openHtmlInNewTab(payrollApi.payslipPrint(item.id));
-    } catch {
-      toast('Payslip could not be opened', 'error');
-    }
-  };
-
-  const downloadBankExport = async run => {
-    try {
-      const res = await payrollApi.bankExport(run.id);
-      const blob = new Blob([res.data], { type: 'text/plain' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `LDDAP-${run.period?.name?.replace(/\s+/g, '-') || 'run'}-${String(run.id).slice(0, 8)}.txt`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      toast('Bank export downloaded', 'success');
-    } catch (e) {
-      toast(e?.response?.data?.error?.message || 'Bank export failed', 'error');
-    }
-  };
+  // Payslip documents and the LDDAP bank file are issued by lgu-payroll.
 
   const openDetail = async run => {
     setDetail(run);
@@ -183,57 +95,27 @@ export default function Payroll() {
   const latestNet = latestRun ? sum(latestRun.items ?? [], 'netPay') : 0;
   const latestHeadcount = latestRun ? (latestRun.items?.length ?? 0) : 0;
 
-  const runActions = (run, inModal = false) => (
-    <span className="inline-flex gap-1">
-      <button type="button" className="btn btn-ghost gap-1 px-2 text-xs" onClick={() => openDetail(run)}>
-        <ExternalLink size={14} />
-        View
-      </button>
-      {canRun && run.status === 'DRAFT' && (
-        <>
-          <button type="button" className="btn btn-ghost gap-1 px-2 text-xs" onClick={() => setConfirmAction({ kind: 'generate', run })}>
-            <Check size={14} />
-            Generate
-          </button>
-          <button type="button" className="btn btn-ghost gap-1 px-2 text-xs" onClick={() => setConfirmAction({ kind: 'approve', run })}>
-            <Check size={14} />
-            Approve
-          </button>
-        </>
-      )}
-      {canRun && run.status === 'APPROVED' && (
-        <button type="button" className="btn btn-ghost gap-1 px-2 text-xs" onClick={() => setConfirmAction({ kind: 'post', run })}>
-          <Lock size={14} />
-          Post
-        </button>
-      )}
-      {inModal && (run.status === 'POSTED') && (
-        <span className="badge bg-success/10 text-success border-success/20">Immutable</span>
-      )}
-    </span>
-  );
-
   return (
     <Layout maxWidth="max-w-7xl">
       <div className="flex items-end justify-between gap-4 mb-6">
         <div>
           <h1 className="font-display text-xl font-bold text-ink">Payroll</h1>
-          <p className="text-sm text-muted mt-0.5">Payroll periods, runs and ledger entries</p>
+          <p className="text-sm text-muted mt-0.5">Read-only mirror of payroll runs computed in lgu-payroll</p>
         </div>
-        <div className="flex gap-2">
-          {canRun && (
-            <button type="button" className="btn btn-ghost gap-2" onClick={() => { setPeriodDraft(emptyPeriod); setPeriodOpen(true); }}>
-              <Plus size={16} />
-              New Period
-            </button>
-          )}
-          {canRun && (
-            <button type="button" className="btn btn-primary gap-2" onClick={() => { setStep(1); setWizardOpen(true); }}>
-              <Plus size={16} />
-              New Payroll Run
-            </button>
-          )}
-        </div>
+        {canRun && (
+          <button type="button" className="btn btn-ghost gap-2" onClick={syncNow} disabled={syncing}>
+            <RefreshCw size={16} className={syncing ? 'animate-spin' : undefined} />
+            {syncing ? 'Syncing…' : 'Sync from lgu-payroll'}
+          </button>
+        )}
+      </div>
+
+      <div className="card p-4 mb-4 flex items-start gap-3">
+        <Info size={16} className="mt-0.5 shrink-0 text-accent" />
+        <p className="text-sm text-muted leading-5">
+          Figures here are mirrored from <span className="font-medium text-ink">lgu-payroll</span>, which is the system of record.
+          Runs, periods, approvals and posting are managed there. Use <span className="font-medium text-ink">Sync from lgu-payroll</span> to pull the latest changes.
+        </p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
@@ -252,12 +134,12 @@ export default function Payroll() {
       <div className="card p-5 mb-4">
         <div className="flex items-center justify-between mb-3">
           <h3 className="font-display font-semibold text-ink">Payroll Periods</h3>
-          <span className="mono-label">Closed periods are locked</span>
+          <span className="mono-label">Mirrored from lgu-payroll</span>
         </div>
         <div className="overflow-auto">
           <table className="data-table">
             <thead>
-              <tr><th>Period</th><th>Fiscal Year</th><th>Start</th><th>End</th><th>Status</th><th></th></tr>
+              <tr><th>Period</th><th>Fiscal Year</th><th>Start</th><th>End</th><th>Status</th><th>Source</th></tr>
             </thead>
             <tbody>
               {periods.map(p => (
@@ -267,18 +149,11 @@ export default function Payroll() {
                   <td className="font-mono">{String(p.startDate).slice(0, 10)}</td>
                   <td className="font-mono">{String(p.endDate).slice(0, 10)}</td>
                   <td><span className={`badge ${badgeTone(p.status)}`}>{p.status}</span></td>
-                  <td className="text-right">
-                    {canRun && p.status === 'OPEN' && (
-                      <button type="button" className="btn btn-ghost gap-1 px-2 text-xs" onClick={() => setConfirmAction({ kind: 'close', run: p })}>
-                        <Lock size={14} />
-                        Close
-                      </button>
-                    )}
-                  </td>
+                  <td className="font-mono text-xs text-muted">{p.source ?? 'LOCAL'}</td>
                 </tr>
               ))}
               {periods.length === 0 && (
-                <tr><td colSpan={6} className="text-muted text-sm">No payroll periods yet.</td></tr>
+                <tr><td colSpan={6} className="text-muted text-sm">No payroll periods mirrored yet.</td></tr>
               )}
             </tbody>
           </table>
@@ -288,12 +163,12 @@ export default function Payroll() {
       <div className="card p-5 mb-4">
         <div className="flex items-center justify-between mb-3">
           <h3 className="font-display font-semibold text-ink">Payroll Runs</h3>
-          <span className="mono-label">Ledger pattern · append-only</span>
+          <span className="mono-label">Mirrored from lgu-payroll</span>
         </div>
         <div className="overflow-auto">
           <table className="data-table">
             <thead>
-              <tr><th>Run</th><th>Period</th><th>Status</th><th className="text-right">Employees</th><th className="text-right">Net Pay</th><th></th></tr>
+              <tr><th>Run</th><th>Period</th><th>Status</th><th>Source</th><th className="text-right">Employees</th><th className="text-right">Net Pay</th><th></th></tr>
             </thead>
             <tbody>
               {runs.map(r => {
@@ -303,14 +178,20 @@ export default function Payroll() {
                     <td className="font-mono">{String(r.id).slice(0, 8)}</td>
                     <td className="font-medium">{r.period?.name ?? ''}</td>
                     <td><span className={`badge ${badgeTone(r.status)}`}>{r.status}</span></td>
+                    <td className="font-mono text-xs text-muted">{r.source ?? 'LOCAL'}</td>
                     <td className="font-mono text-right">{(r.items?.length ?? 0).toLocaleString()}</td>
                     <td className="font-mono text-right">{peso(net)}</td>
-                    <td className="text-right">{runActions(r)}</td>
+                    <td className="text-right">
+                      <button type="button" className="btn btn-ghost gap-1 px-2 text-xs" onClick={() => openDetail(r)}>
+                        <ExternalLink size={14} />
+                        View
+                      </button>
+                    </td>
                   </tr>
                 );
               })}
               {runs.length === 0 && (
-                <tr><td colSpan={6} className="text-muted text-sm">No payroll runs yet.</td></tr>
+                <tr><td colSpan={7} className="text-muted text-sm">No payroll runs mirrored yet.</td></tr>
               )}
             </tbody>
           </table>
@@ -352,107 +233,11 @@ export default function Payroll() {
       </div>
 
       <Modal
-        open={wizardOpen}
-        onClose={() => setWizardOpen(false)}
-        title="New Payroll Run"
-        size="lg"
-        footer={
-          <>
-            {step > 1 && <button type="button" className="btn btn-ghost gap-2" onClick={() => setStep(s => s - 1)}><X size={16} />Back</button>}
-            {step < 2 && (
-              <button type="button" className="btn btn-primary gap-2" onClick={() => setStep(s => s + 1)} disabled={!periodId || !runDate}>
-                <Check size={16} />
-                Next
-              </button>
-            )}
-            {step === 2 && <button type="button" className="btn btn-primary gap-2" onClick={createRun}><Plus size={16} />Create Run</button>}
-          </>
-        }
-      >
-        {step === 1 && (
-          <div className="space-y-3">
-            <div>
-              <label htmlFor="pr-period" className="block text-sm font-medium text-ink mb-1">Payroll Period *</label>
-              <select id="pr-period" className="select" value={periodId} onChange={e => setPeriodId(e.target.value)}>
-                <option value="" disabled>Select a period...</option>
-                {periods.filter(p => p.status === 'OPEN').map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </select>
-              {!periods.some(p => p.status === 'OPEN') && <p className="text-sm text-muted mt-1">No open periods — create one first.</p>}
-            </div>
-            <div>
-              <label htmlFor="pr-date" className="block text-sm font-medium text-ink mb-1">Run Date *</label>
-              <input id="pr-date" type="date" className="input" value={runDate} onChange={e => setRunDate(e.target.value)} />
-            </div>
-            <p className="mono-label mt-3">Step 1 of 2 · Period selection</p>
-          </div>
-        )}
-        {step === 2 && (
-          <dl className="text-sm space-y-2">
-            <div className="flex justify-between"><dt className="text-muted">Period</dt><dd className="font-medium">{periods.find(p => p.id === periodId)?.name ?? '—'}</dd></div>
-            <div className="flex justify-between"><dt className="text-muted">Run Date</dt><dd className="font-mono">{runDate || '—'}</dd></div>
-            <p className="mono-label pt-2">Step 2 of 2 · Run is created as DRAFT for generation.</p>
-          </dl>
-        )}
-      </Modal>
-
-      <Modal
-        open={periodOpen}
-        onClose={() => setPeriodOpen(false)}
-        title="New Payroll Period"
-        size="lg"
-        footer={
-          <>
-            <button type="button" className="btn btn-ghost gap-2" onClick={() => setPeriodOpen(false)}><X size={16} />Cancel</button>
-            <button type="button" className="btn btn-primary gap-2" onClick={createPeriod}><Plus size={16} />Create Period</button>
-          </>
-        }
-      >
-        <div className="space-y-3">
-          <div>
-            <label htmlFor="pp-name" className="block text-sm font-medium text-ink mb-1">Period Name *</label>
-            <input id="pp-name" type="text" className="input" placeholder="e.g. November 2026" value={periodDraft.name} onChange={e => setPeriodDraft(d => ({ ...d, name: e.target.value }))} />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label htmlFor="pp-start" className="block text-sm font-medium text-ink mb-1">Start Date *</label>
-              <input id="pp-start" type="date" className="input" value={periodDraft.startDate} onChange={e => setPeriodDraft(d => ({ ...d, startDate: e.target.value }))} />
-            </div>
-            <div>
-              <label htmlFor="pp-end" className="block text-sm font-medium text-ink mb-1">End Date *</label>
-              <input id="pp-end" type="date" className="input" value={periodDraft.endDate} onChange={e => setPeriodDraft(d => ({ ...d, endDate: e.target.value }))} />
-            </div>
-          </div>
-          <div>
-            <label htmlFor="pp-fy" className="block text-sm font-medium text-ink mb-1">Fiscal Year *</label>
-            <input id="pp-fy" type="number" min="2000" max="2100" className="input" value={periodDraft.fiscalYear} onChange={e => setPeriodDraft(d => ({ ...d, fiscalYear: Number(e.target.value) }))} />
-          </div>
-        </div>
-      </Modal>
-
-      <Modal
         open={!!detail}
         onClose={() => setDetail(null)}
         title={`Payroll Run · ${detail?.period?.name ?? ''}`}
         footer={
-          <>
-            <button type="button" className="btn btn-ghost gap-2" onClick={() => setConfirmAction({ kind: 'generate', run: detail })} disabled={!canRun || detail?.status !== 'DRAFT'}>
-              <Check size={16} />
-              Generate Items
-            </button>
-            {detail?.status === 'DRAFT' && (
-              <button type="button" className="btn btn-ghost gap-2" onClick={() => setConfirmAction({ kind: 'approve', run: detail })} disabled={!canRun}>
-                <Check size={16} />
-                Approve Run
-              </button>
-            )}
-            {(detail?.status === 'APPROVED' || detail?.status === 'POSTED') && (
-              <button type="button" className="btn btn-outline gap-2" onClick={() => downloadBankExport(detail)} disabled={!canRun}>
-                <Download size={14} />
-                Bank Export
-              </button>
-            )}
-            <button type="button" className="btn btn-primary gap-2" onClick={() => setDetail(null)}><X size={16} /> Close</button>
-          </>
+          <button type="button" className="btn btn-primary gap-2" onClick={() => setDetail(null)}><X size={16} /> Close</button>
         }
       >
         {detail && (
@@ -482,7 +267,7 @@ export default function Payroll() {
                 </table>
               </div>
             ) : (
-              <p className="text-sm text-muted">No payroll items yet — run Generate Items.</p>
+              <p className="text-sm text-muted">No payroll items mirrored for this run.</p>
             )}
           </div>
         )}
@@ -494,13 +279,7 @@ export default function Payroll() {
         title="Payslip"
         size="sm"
         footer={
-          <>
-            <button type="button" className="btn btn-ghost gap-2" onClick={() => payslip && printPayslip(payslip)}>
-              <Printer size={16} />
-              Print
-            </button>
-            <button type="button" className="btn btn-primary gap-2" onClick={() => setPayslip(null)}><X size={16} /> Close</button>
-          </>
+          <button type="button" className="btn btn-primary gap-2" onClick={() => setPayslip(null)}><X size={16} /> Close</button>
         }
       >
         {payslip && (
@@ -533,24 +312,6 @@ export default function Payroll() {
           </div>
         )}
       </Modal>
-
-      <ConfirmDialog
-        open={!!confirmAction}
-        onClose={() => setConfirmAction(null)}
-        onConfirm={runAction}
-        title="Confirm payroll action"
-        message={
-          confirmAction?.kind === 'generate'
-            ? `${confirmAction?.run?.period?.name ?? 'This run'} will have items computed from each employee's monthly salary, contribution/tax rules, due loan amortizations and tardiness deductions. Existing items are replaced.`
-            : confirmAction?.kind === 'approve'
-              ? `${confirmAction?.run?.period?.name ?? 'This run'} will move from DRAFT to APPROVED. Runs with no generated items cannot be approved.`
-              : confirmAction?.kind === 'post'
-                ? `${confirmAction?.run?.period?.name ?? 'This run'} will move to POSTED: an append-only ledger is written, payslips are issued and due loan amortizations are marked paid. POSTED runs are immutable.`
-                : `${confirmAction?.run?.name ?? 'This period'} will be closed and can no longer receive new runs.`
-        }
-        confirmLabel="Confirm"
-        danger={confirmAction?.kind === 'post' || confirmAction?.kind === 'close'}
-      />
     </Layout>
   );
 }
