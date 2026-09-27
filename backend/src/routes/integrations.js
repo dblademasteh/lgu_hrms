@@ -156,8 +156,14 @@ router.post('/leave/test', (req, res) => {
   res.json({ ok: true, message: 'Leave integration endpoint reachable', tenantId: req.tenantContext.tenantId });
 });
 
-// Integration management is SUPER_ADMIN only (JWT required)
-router.use(requireAuth, requireRole('SUPER_ADMIN'));
+// Integration management requires a JWT. SUPER_ADMIN manages across tenants;
+// tenant ADMIN manages their own tenant's credentials (these routes are all
+// tenantContext-scoped, so a tenant admin is the intended operator). Gating on
+// SUPER_ADMIN alone made Settings → Integrations return 403 for every tenant
+// admin, so the documented "create a key in Settings → Integrations" flow was
+// impossible. See middleware/rbac.js — SUPER_ADMIN is always admitted, so
+// listing ADMIN here widens access without weakening the platform role.
+router.use(requireAuth, requireRole('SUPER_ADMIN', 'ADMIN'));
 
 // Setup catalog: the wizard renders scopes/events/endpoints from here so the
 // UI can never drift from what the server enforces.
